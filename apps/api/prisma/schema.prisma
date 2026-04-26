@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Business {
+  id          String   @id @default(uuid())
+  name        String
+  category    String
+  address     String
+  xrplAddress String   @unique
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  escrows     Escrow[] @relation("BusinessEscrows")
+}
+
+model Consumer {
+  id          String   @id @default(uuid())
+  name        String
+  xrplAddress String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  escrows     Escrow[] @relation("ConsumerEscrows")
+}
+
+model Escrow {
+  id              String        @id @default(uuid())
+  consumerId      String
+  businessId      String
+  consumerAddress String
+  businessAddress String
+  totalAmount     Float
+  monthlyAmount   Float
+  months          Int
+  status          String        @default("active")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  consumer        Consumer      @relation("ConsumerEscrows", fields: [consumerId], references: [id])
+  business        Business      @relation("BusinessEscrows", fields: [businessId], references: [id])
+  entries         EscrowEntry[]
+}
+
+model EscrowEntry {
+  id          String   @id @default(uuid())
+  escrowId    String
+  month       Int
+  sequence    Int
+  amount      String
+  finishAfter Int
+  cancelAfter Int
+  status      String   @default("pending")
+  txHash      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  escrow      Escrow   @relation(fields: [escrowId], references: [id])
+}

@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "PrepaidShield",
+    "slug": "prepaid-shield",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "prepaidshield",
+    "platforms": ["ios", "android"],
+    "ios": {
+      "bundleIdentifier": "com.prepaidshield.app"
+    },
+    "android": {
+      "package": "com.prepaidshield.app"
+    }
+  }
+}
