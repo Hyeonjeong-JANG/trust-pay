@@ -5,14 +5,17 @@ import {
   Param,
   Body,
   UsePipes,
+  UseGuards,
 } from '@nestjs/common';
 import { EscrowService } from './escrow.service';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import { FinishEscrowDto } from './dto/finish-escrow.dto';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { createEscrowSchema, finishEscrowSchema } from '@prepaid-shield/validators';
+import { AuthGuard } from '../common/auth.guard';
 
 @Controller('escrow')
+@UseGuards(AuthGuard)
 export class EscrowController {
   constructor(private readonly escrowService: EscrowService) {}
 

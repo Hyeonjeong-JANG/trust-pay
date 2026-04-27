@@ -1,4 +1,5 @@
 import type { LoginResponse, EscrowRecord, BusinessDashboard, Business, BalanceResponse } from '@prepaid-shield/shared-types';
+import { useAuthStore } from '../store/auth';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -8,6 +9,7 @@ export type ApiErrorCode =
   | 'TIMEOUT'
   | 'XRPL_TIMEOUT'
   | 'INSUFFICIENT_BALANCE'
+  | 'UNAUTHORIZED'
   | 'VALIDATION'
   | 'NOT_FOUND'
   | 'SERVER';
@@ -17,6 +19,7 @@ const ERROR_MESSAGES: Record<ApiErrorCode, string> = {
   TIMEOUT: '서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.',
   XRPL_TIMEOUT: 'XRPL 블록체인 응답 지연 중입니다. 잠시 후 다시 시도해주세요.',
   INSUFFICIENT_BALANCE: 'RLUSD 잔액이 부족합니다. 충전 후 다시 시도해주세요.',
+  UNAUTHORIZED: '인증이 필요합니다. 다시 로그인해주세요.',
   VALIDATION: '입력값을 확인해주세요.',
   NOT_FOUND: '요청한 정보를 찾을 수 없습니다.',
   SERVER: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
@@ -46,6 +49,7 @@ function classifyError(status: number, body: any): ApiError {
   const msg = body?.message || '';
   const msgLower = typeof msg === 'string' ? msg.toLowerCase() : '';
 
+  if (status === 401) return new ApiError('UNAUTHORIZED', msg, status);
   if (status === 400) {
     if (msgLower.includes('insufficient') || msgLower.includes('balance') || msgLower.includes('잔액')) {
       return new ApiError('INSUFFICIENT_BALANCE', msg, status);
@@ -72,10 +76,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+  const { userId, role } = useAuthStore.getState();
+  const authHeaders: Record<string, string> = {};
+  if (userId) authHeaders['x-user-id'] = userId;
+  if (role) authHeaders['x-user-role'] = role;
+
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       signal: controller.signal,
       ...options,
     });
