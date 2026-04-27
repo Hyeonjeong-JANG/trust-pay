@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
@@ -8,7 +9,7 @@ import { CryptoService } from '../common/crypto.service';
 describe('AuthService', () => {
   let service: AuthService;
   let prisma: { consumer: any; business: any };
-  let xrplService: { createWallet: jest.Mock; setTrustLine: jest.Mock };
+  let xrplService: { createWallet: jest.Mock; setTrustLine: jest.Mock; issueRLUSD: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -28,6 +29,7 @@ describe('AuthService', () => {
         secret: 'sTestSecret123',
       }),
       setTrustLine: jest.fn().mockResolvedValue('TX_HASH'),
+      issueRLUSD: jest.fn().mockResolvedValue('TX_ISSUE_HASH'),
     };
 
     const module = await Test.createTestingModule({
@@ -36,6 +38,7 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: XrplService, useValue: xrplService },
         { provide: CryptoService, useValue: { encrypt: jest.fn((v: string) => 'encrypted:' + v), decrypt: jest.fn((v: string) => v.replace('encrypted:', '')) } },
+        { provide: ConfigService, useValue: { get: jest.fn((key: string) => key === 'rlusd.fundingAmount' ? '10000' : undefined) } },
       ],
     }).compile();
 

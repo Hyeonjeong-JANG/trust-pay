@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
 import { CryptoService } from '../common/crypto.service';
@@ -18,6 +19,7 @@ export class AuthService {
     private prisma: PrismaService,
     private xrplService: XrplService,
     private crypto: CryptoService,
+    private configService: ConfigService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -45,6 +47,14 @@ export class AuthService {
       const { wallet, address: xrplAddress, secret: xrplSecret } =
         await this.xrplService.createWallet();
       await this.xrplService.setTrustLine(wallet);
+
+      // Auto-fund RLUSD for testnet (non-fatal if it fails)
+      try {
+        const fundingAmount = this.configService.get<string>('rlusd.fundingAmount') ?? '10000';
+        await this.xrplService.issueRLUSD(xrplAddress, fundingAmount);
+      } catch (err) {
+        this.logger.warn(`RLUSD auto-funding failed for ${xrplAddress}: ${err}`);
+      }
 
       consumer = await this.prisma.consumer.create({
         data: {

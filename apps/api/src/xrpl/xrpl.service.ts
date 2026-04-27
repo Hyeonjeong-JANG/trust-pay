@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Client, Wallet } from 'xrpl';
+import { Client, Wallet, Payment, IssuedCurrencyAmount } from 'xrpl';
 import { XrplEscrowClient, EscrowResult, CreateWalletResult, isoToRippleTime, monthsFromNow, currencyToHex } from '@prepaid-shield/xrpl-client';
 import { randomUUID } from 'crypto';
 
@@ -56,6 +56,40 @@ export class XrplService implements OnModuleDestroy {
     });
   }
 
+  async issueRLUSD(recipientAddress: string, amount: string): Promise<string> {
+    if (this.isDemoMode) {
+      this.logger.log(`[DEMO] Issued ${amount} RLUSD to ${recipientAddress}`);
+      return `DEMO_ISSUE_${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
+    }
+
+    const issuerSeed = this.configService.get<string>('rlusd.issuerSeed');
+    if (!issuerSeed) {
+      this.logger.warn('RLUSD_ISSUER_SEED not set — skipping RLUSD issuance');
+      return '';
+    }
+
+    const client = await this.getClient();
+    const issuerWallet = Wallet.fromSeed(issuerSeed);
+    const currency = this.configService.get<string>('rlusd.currency')!;
+
+    const paymentAmount: IssuedCurrencyAmount = {
+      currency: currencyToHex(currency),
+      issuer: issuerWallet.address,
+      value: amount,
+    };
+
+    const tx: Payment = {
+      TransactionType: 'Payment',
+      Account: issuerWallet.address,
+      Destination: recipientAddress,
+      Amount: paymentAmount,
+    };
+
+    const response = await client.submitAndWait(tx, { wallet: issuerWallet });
+    this.logger.log(`Issued ${amount} RLUSD to ${recipientAddress}: ${response.result.hash}`);
+    return response.result.hash;
+  }
+
   async createMonthlyEscrows(
     senderWallet: Wallet,
     destinationAddress: string,
@@ -81,7 +115,7 @@ export class XrplService implements OnModuleDestroy {
     }
 
     const client = await this.getClient();
-    const demoMode = this.isDemoMode;
+    const fastMode = this.configService.get<boolean>('escrowFastMode') ?? this.isDemoMode;
     const currency = this.configService.get<string>('rlusd.currency')!;
     const issuer = this.configService.get<string>('rlusd.issuer')!;
 
@@ -93,7 +127,7 @@ export class XrplService implements OnModuleDestroy {
       months,
       currency,
       issuer,
-      demoMode,
+      demoMode: fastMode,
     });
   }
 
