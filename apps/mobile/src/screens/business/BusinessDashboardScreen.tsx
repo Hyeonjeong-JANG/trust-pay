@@ -5,6 +5,7 @@ import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
+import type { EscrowRecord, EscrowEntry } from '@prepaid-shield/shared-types';
 
 export function BusinessDashboardScreen() {
   const userId = useAuthStore((s) => s.userId);
@@ -93,9 +94,9 @@ export function BusinessDashboardScreen() {
       </Text>
       <FlatList
         data={dashboard?.escrows ?? []}
-        keyExtractor={(item: any) => item.id}
-        renderItem={({ item }: { item: any }) => {
-          const pendingEntries = item.entries?.filter((e: any) => e.status === 'pending') ?? [];
+        keyExtractor={(item: EscrowRecord) => item.id}
+        renderItem={({ item }: { item: EscrowRecord & { consumer?: { id: string; name: string } } }) => {
+          const pendingEntries = item.entries?.filter((e: EscrowEntry) => e.status === 'pending') ?? [];
           const nextEntry = pendingEntries[0];
           return (
             <View style={styles.card}>
