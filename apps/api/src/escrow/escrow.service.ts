@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
+import { CryptoService } from '../common/crypto.service';
 import { Wallet } from 'xrpl';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 
@@ -13,6 +14,7 @@ export class EscrowService {
     private prisma: PrismaService,
     private xrplService: XrplService,
     private configService: ConfigService,
+    private crypto: CryptoService,
   ) {}
 
   async create(dto: CreateEscrowDto) {
@@ -29,8 +31,8 @@ export class EscrowService {
     const monthlyAmount = dto.totalAmount / dto.months;
     const issuer = this.configService.get<string>('rlusd.issuer')!;
 
-    // Reconstruct sender wallet from stored secret
-    const senderWallet = Wallet.fromSeed(consumer.xrplSecret);
+    // Reconstruct sender wallet from encrypted secret
+    const senderWallet = Wallet.fromSeed(this.crypto.decrypt(consumer.xrplSecret));
 
     const escrowResults = await this.xrplService.createMonthlyEscrows(
       senderWallet,
@@ -93,7 +95,7 @@ export class EscrowService {
     const business = await this.prisma.business.findUnique({
       where: { id: escrow.businessId },
     });
-    const wallet = Wallet.fromSeed(business!.xrplSecret);
+    const wallet = Wallet.fromSeed(this.crypto.decrypt(business!.xrplSecret));
 
     const txHash = await this.xrplService.finishEscrow(
       wallet,
@@ -131,7 +133,7 @@ export class EscrowService {
     const consumer = await this.prisma.consumer.findUnique({
       where: { id: escrow.consumerId },
     });
-    const wallet = Wallet.fromSeed(consumer!.xrplSecret);
+    const wallet = Wallet.fromSeed(this.crypto.decrypt(consumer!.xrplSecret));
 
     const pendingEntries = escrow.entries.filter((e) => e.status === 'pending');
 

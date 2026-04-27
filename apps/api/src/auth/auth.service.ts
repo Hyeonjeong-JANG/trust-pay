@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
+import { CryptoService } from '../common/crypto.service';
 
 interface LoginDto {
   phone?: string;
@@ -16,6 +17,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private xrplService: XrplService,
+    private crypto: CryptoService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -50,7 +52,7 @@ export class AuthService {
           phone: dto.phone,
           email: dto.email,
           xrplAddress,
-          xrplSecret,
+          xrplSecret: this.crypto.encrypt(xrplSecret),
         },
       });
 

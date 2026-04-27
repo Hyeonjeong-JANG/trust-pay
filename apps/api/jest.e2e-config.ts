@@ -8,6 +8,8 @@ const config: Config = {
     '^.+\\.ts$': 'ts-jest',
   },
   testEnvironment: 'node',
+  // Run sequentially to prevent jest.mock() pollution across suites
+  maxWorkers: 1,
   moduleNameMapper: {
     '^@prepaid-shield/(.*)$': '<rootDir>/../../packages/$1/src',
   },

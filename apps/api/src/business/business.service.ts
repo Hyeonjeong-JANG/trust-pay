@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
+import { CryptoService } from '../common/crypto.service';
 
 @Injectable()
 export class BusinessService {
@@ -9,6 +10,7 @@ export class BusinessService {
   constructor(
     private prisma: PrismaService,
     private xrplService: XrplService,
+    private crypto: CryptoService,
   ) {}
 
   async register(data: { name: string; category: string; address: string; phone?: string; email?: string }) {
@@ -24,7 +26,7 @@ export class BusinessService {
         phone: data.phone,
         email: data.email,
         xrplAddress,
-        xrplSecret,
+        xrplSecret: this.crypto.encrypt(xrplSecret),
       },
     });
 
