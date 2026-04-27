@@ -15,6 +15,8 @@ import type { ApiError } from '../../api/client';
 import { ErrorView } from '../../components/ErrorView';
 import type { EscrowEntry } from '@prepaid-shield/shared-types';
 import type { ScreenProps } from '../../navigation/types';
+import type { EscrowRecord } from '@prepaid-shield/shared-types';
+type EscrowWithRelations = EscrowRecord & { business?: { name: string }; consumer?: { name: string } };
 
 const STATUS_COLORS: Record<string, string> = {
   pending: '#FF9500',
@@ -40,11 +42,12 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   const { id } = route.params;
   const queryClient = useQueryClient();
 
-  const { data: escrow, isLoading, isError, error, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['escrow', id],
     queryFn: () => api.getEscrow(id),
     retry: 2,
   });
+  const escrow = data as EscrowWithRelations | undefined;
 
   const cancelMutation = useMutation({
     mutationFn: () => api.cancelEscrow(id),
@@ -89,7 +92,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   return (
     <View style={styles.container}>
       <View style={styles.summaryCard}>
-        <Text style={styles.businessName}>{(escrow as any).business?.name ?? '사업자'}</Text>
+        <Text style={styles.businessName}>{escrow.business?.name ?? '사업자'}</Text>
         <View style={styles.statusBadge}>
           <Text style={styles.statusText}>{STATUS_KO[escrow.status] ?? escrow.status}</Text>
         </View>

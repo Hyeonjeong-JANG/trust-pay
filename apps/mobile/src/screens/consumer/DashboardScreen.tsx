@@ -6,6 +6,8 @@ import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import type { EscrowEntry } from '@prepaid-shield/shared-types';
 import type { ScreenProps } from '../../navigation/types';
+import type { EscrowRecord } from '@prepaid-shield/shared-types';
+type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
 
 const STATUS_KO: Record<string, string> = {
   active: '진행중',
@@ -66,9 +68,9 @@ export function ConsumerDashboardScreen({ navigation }: ScreenProps<'ConsumerDas
       ) : null}
       <Text style={styles.title}>내 선불 보호</Text>
       <FlatList
-        data={escrows}
+        data={escrows as EscrowWithBusiness[]}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
+        renderItem={({ item }: { item: EscrowWithBusiness }) => {
           const released = item.entries.filter((e: EscrowEntry) => e.status === 'released').length;
           return (
             <TouchableOpacity
@@ -76,7 +78,7 @@ export function ConsumerDashboardScreen({ navigation }: ScreenProps<'ConsumerDas
               onPress={() => navigation.navigate('EscrowDetail', { id: item.id })}
             >
               <View style={styles.cardHeader}>
-                <Text style={styles.businessName}>{(item as any).business?.name ?? '사업자'}</Text>
+                <Text style={styles.businessName}>{item.business?.name ?? '사업자'}</Text>
                 <View style={[styles.badge, item.status === 'active' ? styles.badgeActive : styles.badgeDone]}>
                   <Text style={styles.badgeText}>{STATUS_KO[item.status] ?? item.status}</Text>
                 </View>
