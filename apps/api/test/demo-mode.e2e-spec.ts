@@ -89,6 +89,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('에스크로 생성 — 3개월 150,000 RLUSD (데모 모드: 월 2분)', async () => {
     const res = await request(app.getHttpServer())
       .post('/escrow')
+      .set('x-user-id', consumerId)
+      .set('x-user-role', 'consumer')
       .send({
         consumerId,
         businessId,
@@ -117,6 +119,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('에스크로 상세 조회 — 관계 데이터 포함', async () => {
     const res = await request(app.getHttpServer())
       .get(`/escrow/${escrowId}`)
+      .set('x-user-id', consumerId)
+      .set('x-user-role', 'consumer')
       .expect(200);
 
     expect(res.body.id).toBe(escrowId);
@@ -129,6 +133,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('소비자별 에스크로 목록 조회', async () => {
     const res = await request(app.getHttpServer())
       .get(`/escrow/consumer/${consumerId}`)
+      .set('x-user-id', consumerId)
+      .set('x-user-role', 'consumer')
       .expect(200);
 
     expect(res.body).toHaveLength(1);
@@ -139,6 +145,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('에스크로 릴리즈 — Month 1 (사업자가 월 대금 수령)', async () => {
     const res = await request(app.getHttpServer())
       .post(`/escrow/${escrowId}/finish`)
+      .set('x-user-id', businessId)
+      .set('x-user-role', 'business')
       .send({ entryMonth: 1 })
       .expect(201);
 
@@ -148,6 +156,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('릴리즈 후 상태 확인 — Month 1 released, 나머지 pending', async () => {
     const res = await request(app.getHttpServer())
       .get(`/escrow/${escrowId}`)
+      .set('x-user-id', consumerId)
+      .set('x-user-role', 'consumer')
       .expect(200);
 
     const entries = res.body.entries.sort((a: any, b: any) => a.month - b.month);
@@ -160,6 +170,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('중복 릴리즈 방지 — 이미 릴리즈된 항목 거부', async () => {
     const res = await request(app.getHttpServer())
       .post(`/escrow/${escrowId}/finish`)
+      .set('x-user-id', businessId)
+      .set('x-user-role', 'business')
       .send({ entryMonth: 1 })
       .expect(400);
 
@@ -170,6 +182,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('에스크로 취소 — 남은 pending 항목 환불', async () => {
     const res = await request(app.getHttpServer())
       .post(`/escrow/${escrowId}/cancel`)
+      .set('x-user-id', consumerId)
+      .set('x-user-role', 'consumer')
       .expect(201);
 
     expect(res.body.cancelled).toBe(2); // month 2, 3
@@ -178,6 +192,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('취소 후 상태 확인 — cancelled, pending 없음', async () => {
     const res = await request(app.getHttpServer())
       .get(`/escrow/${escrowId}`)
+      .set('x-user-id', consumerId)
+      .set('x-user-role', 'consumer')
       .expect(200);
 
     expect(res.body.status).toBe('cancelled');
@@ -191,6 +207,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('사업자 대시보드 — 수령/대기 금액 집계', async () => {
     const res = await request(app.getHttpServer())
       .get(`/business/${businessId}/dashboard`)
+      .set('x-user-id', businessId)
+      .set('x-user-role', 'business')
       .expect(200);
 
     expect(res.body.business.name).toBe('데모카페');
@@ -203,6 +221,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('사업자 목록 — xrplSecret 미노출', async () => {
     const res = await request(app.getHttpServer())
       .get('/business')
+      .set('x-user-id', consumerId)
+      .set('x-user-role', 'consumer')
       .expect(200);
 
     expect(res.body.length).toBeGreaterThanOrEqual(1);

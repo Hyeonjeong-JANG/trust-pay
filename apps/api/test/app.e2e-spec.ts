@@ -174,6 +174,8 @@ describe('PrepaidShield E2E', () => {
     it('should return active businesses', async () => {
       const res = await request(app.getHttpServer())
         .get('/business')
+        .set('x-user-id', consumerUserId)
+        .set('x-user-role', 'consumer')
         .expect(200);
 
       expect(Array.isArray(res.body)).toBe(true);
@@ -187,6 +189,8 @@ describe('PrepaidShield E2E', () => {
     it('should create escrow with monthly entries', async () => {
       const res = await request(app.getHttpServer())
         .post('/escrow')
+        .set('x-user-id', consumerUserId)
+        .set('x-user-role', 'consumer')
         .send({
           consumerId: consumerUserId,
           businessId,
@@ -206,6 +210,8 @@ describe('PrepaidShield E2E', () => {
     it('should reject with invalid consumerId (Zod validates UUID)', async () => {
       await request(app.getHttpServer())
         .post('/escrow')
+        .set('x-user-id', 'test-user')
+        .set('x-user-role', 'consumer')
         .send({
           consumerId: 'non-existent',
           businessId,
@@ -221,6 +227,8 @@ describe('PrepaidShield E2E', () => {
     it('should return escrow with entries and relations', async () => {
       const res = await request(app.getHttpServer())
         .get(`/escrow/${escrowId}`)
+        .set('x-user-id', consumerUserId)
+        .set('x-user-role', 'consumer')
         .expect(200);
 
       expect(res.body.id).toBe(escrowId);
@@ -232,6 +240,8 @@ describe('PrepaidShield E2E', () => {
     it('should 404 for non-existent escrow', async () => {
       await request(app.getHttpServer())
         .get('/escrow/non-existent-id')
+        .set('x-user-id', 'test-user')
+        .set('x-user-role', 'consumer')
         .expect(404);
     });
   });
@@ -241,6 +251,8 @@ describe('PrepaidShield E2E', () => {
     it('should return escrows for consumer', async () => {
       const res = await request(app.getHttpServer())
         .get(`/escrow/consumer/${consumerUserId}`)
+        .set('x-user-id', consumerUserId)
+        .set('x-user-role', 'consumer')
         .expect(200);
 
       expect(Array.isArray(res.body)).toBe(true);
@@ -255,6 +267,8 @@ describe('PrepaidShield E2E', () => {
     it('should release month 1 entry', async () => {
       const res = await request(app.getHttpServer())
         .post(`/escrow/${escrowId}/finish`)
+        .set('x-user-id', businessId)
+        .set('x-user-role', 'business')
         .send({ entryMonth: 1 })
         .expect(201);
 
@@ -264,6 +278,8 @@ describe('PrepaidShield E2E', () => {
     it('should reject re-releasing month 1', async () => {
       await request(app.getHttpServer())
         .post(`/escrow/${escrowId}/finish`)
+        .set('x-user-id', businessId)
+        .set('x-user-role', 'business')
         .send({ entryMonth: 1 })
         .expect(400);
     });
@@ -271,6 +287,8 @@ describe('PrepaidShield E2E', () => {
     it('should verify entry status after release', async () => {
       const res = await request(app.getHttpServer())
         .get(`/escrow/${escrowId}`)
+        .set('x-user-id', consumerUserId)
+        .set('x-user-role', 'consumer')
         .expect(200);
 
       const entry1 = res.body.entries.find((e: any) => e.month === 1);
@@ -285,6 +303,8 @@ describe('PrepaidShield E2E', () => {
     it('should cancel remaining pending entries', async () => {
       const res = await request(app.getHttpServer())
         .post(`/escrow/${escrowId}/cancel`)
+        .set('x-user-id', consumerUserId)
+        .set('x-user-role', 'consumer')
         .expect(201);
 
       // month 1 was released, so only 2 pending entries should be cancelled
@@ -294,6 +314,8 @@ describe('PrepaidShield E2E', () => {
     it('should verify escrow status is cancelled', async () => {
       const res = await request(app.getHttpServer())
         .get(`/escrow/${escrowId}`)
+        .set('x-user-id', consumerUserId)
+        .set('x-user-role', 'consumer')
         .expect(200);
 
       expect(res.body.status).toBe('cancelled');
@@ -307,6 +329,8 @@ describe('PrepaidShield E2E', () => {
     it('should return aggregated dashboard data', async () => {
       const res = await request(app.getHttpServer())
         .get(`/business/${businessId}/dashboard`)
+        .set('x-user-id', businessId)
+        .set('x-user-role', 'business')
         .expect(200);
 
       expect(res.body.business.name).toBe('테스트카페');
