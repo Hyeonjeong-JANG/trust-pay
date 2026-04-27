@@ -2,16 +2,19 @@ import React from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import type { ApiError } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
+import { ErrorView } from '../../components/ErrorView';
 
 export function BusinessDashboardScreen() {
   const userId = useAuthStore((s) => s.userId);
   const queryClient = useQueryClient();
 
-  const { data: dashboard, isLoading } = useQuery({
+  const { data: dashboard, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['businessDashboard', userId],
     queryFn: () => api.getBusinessDashboard(userId!),
     enabled: !!userId,
+    retry: 2,
   });
 
   const finishMutation = useMutation({
@@ -19,9 +22,12 @@ export function BusinessDashboardScreen() {
       api.finishEscrow(escrowId, month),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
-      Alert.alert('Success', 'Payment released');
+      Alert.alert('릴리즈 완료', '월 대금이 수령되었습니다.');
     },
-    onError: (err: Error) => Alert.alert('Error', err.message),
+    onError: (err: Error) => {
+      const apiErr = err as ApiError;
+      Alert.alert('릴리즈 실패', apiErr.userMessage ?? err.message);
+    },
   });
 
   if (isLoading) {
@@ -30,6 +36,10 @@ export function BusinessDashboardScreen() {
         <ActivityIndicator size="large" color="#4A90D9" />
       </View>
     );
+  }
+
+  if (isError) {
+    return <ErrorView error={error} onRetry={() => refetch()} />;
   }
 
   return (

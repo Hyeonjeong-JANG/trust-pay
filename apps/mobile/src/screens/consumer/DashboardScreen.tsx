@@ -3,15 +3,17 @@ import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator }
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
+import { ErrorView } from '../../components/ErrorView';
 import type { EscrowRecord, EscrowEntry } from '@prepaid-shield/shared-types';
 
 export function ConsumerDashboardScreen({ navigation }: any) {
   const userId = useAuthStore((s) => s.userId);
 
-  const { data: escrows, isLoading } = useQuery({
+  const { data: escrows, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['consumerEscrows', userId],
     queryFn: () => api.getConsumerEscrows(userId!),
     enabled: !!userId,
+    retry: 2,
   });
 
   if (isLoading) {
@@ -20,6 +22,10 @@ export function ConsumerDashboardScreen({ navigation }: any) {
         <ActivityIndicator size="large" color="#4A90D9" />
       </View>
     );
+  }
+
+  if (isError) {
+    return <ErrorView error={error} onRetry={() => refetch()} />;
   }
 
   return (

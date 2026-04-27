@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import type { ApiError } from '../../api/client';
+import { ErrorView } from '../../components/ErrorView';
 import type { EscrowEntry } from '@prepaid-shield/shared-types';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -28,9 +30,10 @@ export function EscrowDetailScreen({ route, navigation }: any) {
   const { id } = route.params;
   const queryClient = useQueryClient();
 
-  const { data: escrow, isLoading } = useQuery({
+  const { data: escrow, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['escrow', id],
     queryFn: () => api.getEscrow(id),
+    retry: 2,
   });
 
   const cancelMutation = useMutation({
@@ -40,7 +43,10 @@ export function EscrowDetailScreen({ route, navigation }: any) {
       queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
       Alert.alert('Cancelled', `${data.cancelled} entries refunded`);
     },
-    onError: (err: Error) => Alert.alert('Error', err.message),
+    onError: (err: Error) => {
+      const apiErr = err as ApiError;
+      Alert.alert('취소 실패', apiErr.userMessage ?? err.message);
+    },
   });
 
   const handleCancel = () => {
@@ -54,12 +60,16 @@ export function EscrowDetailScreen({ route, navigation }: any) {
     );
   };
 
-  if (isLoading || !escrow) {
+  if (isLoading || (!escrow && !isError)) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#4A90D9" />
       </View>
     );
+  }
+
+  if (isError || !escrow) {
+    return <ErrorView error={error ?? new Error('데이터를 불러올 수 없습니다.')} onRetry={() => refetch()} />;
   }
 
   const released = escrow.entries.filter((e: EscrowEntry) => e.status === 'released').length;

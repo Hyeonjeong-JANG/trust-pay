@@ -36,7 +36,9 @@ export function LoginScreen() {
       setAuth(data.role, data.userId, data.name);
     },
     onError: (err: Error) => {
-      Alert.alert('Login Failed', err.message);
+      const apiErr = err as import('../api/client').ApiError;
+      const title = apiErr.code === 'NETWORK' ? '네트워크 오류' : '로그인 실패';
+      Alert.alert(title, apiErr.userMessage ?? err.message);
     },
   });
 

@@ -2,12 +2,14 @@ import React from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { ErrorView } from '../../components/ErrorView';
 import type { Business } from '@prepaid-shield/shared-types';
 
 export function BusinessSelectScreen({ navigation }: any) {
-  const { data: businesses, isLoading } = useQuery({
+  const { data: businesses, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['businesses'],
     queryFn: () => api.getBusinesses(),
+    retry: 2,
   });
 
   if (isLoading) {
@@ -16,6 +18,10 @@ export function BusinessSelectScreen({ navigation }: any) {
         <ActivityIndicator size="large" color="#4A90D9" />
       </View>
     );
+  }
+
+  if (isError) {
+    return <ErrorView error={error} onRetry={() => refetch()} />;
   }
 
   return (

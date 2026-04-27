@@ -34,7 +34,12 @@ export function PaymentScreen({ route, navigation }: any) {
       navigation.navigate('ConsumerDashboard');
     },
     onError: (err: Error) => {
-      Alert.alert('Error', err.message);
+      const apiErr = err as import('../../api/client').ApiError;
+      Alert.alert(
+        '에스크로 생성 실패',
+        apiErr.userMessage ?? err.message,
+        apiErr.isRetryable ? [{ text: '확인' }, { text: '재시도', onPress: () => mutation.mutate() }] : undefined,
+      );
     },
   });
 
