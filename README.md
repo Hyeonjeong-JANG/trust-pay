@@ -6,6 +6,19 @@ XRPL 기반 선불금 보호 플랫폼 — 소비자의 선불 결제를 RLUSD T
 
 헬스장, 학원 등 선불 결제 후 사업자 폐업 시 소비자가 환불받지 못하는 문제를 해결합니다.
 
+## 핵심 가치
+
+<p align="center">
+  <img src="docs/assets/core-values.png" alt="핵심 가치" width="600" />
+</p>
+
+| 가치 | 설명 |
+|---|---|
+| 안전한 보호 | 폐업 리스크 제거 — Token Escrow로 자동 환불 |
+| 가치 안정성 | RLUSD 스테이블코인으로 가격 변동 없음 |
+| 거래 투명성 | 모든 거래가 블록체인에 기록 |
+| 상호 이익 | 소비자 신뢰 확보 + 사업자 인증 마크 |
+
 ## 솔루션
 
 - **RLUSD** 스테이블코인으로 가격 변동 없이 결제
@@ -48,6 +61,9 @@ XRPL 기반 선불금 보호 플랫폼 — 소비자의 선불 결제를 RLUSD T
 | POST | `/escrow` | 에스크로 생성 (RLUSD Token Escrow) |
 | GET | `/escrow/:id` | 에스크로 상세 |
 | POST | `/escrow/:id/finish` | 월별 정산 실행 |
+| POST | `/escrow/:id/cancel` | 에스크로 환불 |
+| GET | `/escrow/consumer/:id` | 소비자별 에스크로 목록 |
+| GET | `/business/:id/dashboard` | 사업자 대시보드 |
 
 ## 시작하기
 
@@ -87,10 +103,6 @@ pnpm dev:mobile
 ### Trust Line
 
 RLUSD를 주고받기 위해 각 지갑에 issuer에 대한 Trust Line을 자동 설정합니다.
-
-## 프로그램
-
-KFIP 2026 (Korea Fintech Innovation Program) — 3개월 액셀러레이터
 
 ## 라이선스
 
