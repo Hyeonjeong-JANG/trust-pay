@@ -7,11 +7,15 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "build": "echo 'mobile build: expo export handled separately'",
+    "build:dev": "eas build --profile development --platform all",
+    "build:preview": "eas build --profile preview --platform all",
+    "build:prod": "eas build --profile production --platform all",
     "test": "jest",
     "clean": "rm -rf .expo dist"
   },
   "dependencies": {
     "@prepaid-shield/shared-types": "workspace:*",
+    "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-community/netinfo": "^12.0.1",
     "@react-navigation/bottom-tabs": "^7.0.0",
     "@react-navigation/native": "^7.0.0",
@@ -20,6 +24,7 @@
     "expo": "~52.0.0",
     "expo-clipboard": "~7.0.1",
     "expo-router": "~4.0.0",
+    "expo-splash-screen": "~0.29.24",
     "expo-status-bar": "~2.0.0",
     "react": "18.3.1",
     "react-native": "0.76.6",

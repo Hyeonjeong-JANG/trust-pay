@@ -15,6 +15,7 @@ import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
+import { BalanceCardSkeleton, BusinessSummaryRowSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowRecord, EscrowEntry } from '@prepaid-shield/shared-types';
 
@@ -57,8 +58,13 @@ export function BusinessDashboardScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.container}>
+        <View style={styles.listContent}>
+          <BalanceCardSkeleton />
+          <BusinessSummaryRowSkeleton />
+          <EscrowCardSkeleton />
+          <EscrowCardSkeleton />
+        </View>
       </View>
     );
   }

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,17 +6,19 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Platform,
+  TextInput,
+  ScrollView,
   RefreshControl,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
+import { BalanceCardSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowEntry } from '@prepaid-shield/shared-types';
 import type { ConsumerTabProps } from '../../navigation/types';
-import type { EscrowRecord } from '@prepaid-shield/shared-types';
+import type { EscrowRecord, EscrowStatus } from '@prepaid-shield/shared-types';
 type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
 
 const STATUS_KO: Record<string, string> = {
@@ -31,8 +33,19 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   cancelled: { bg: colors.escrow.cancelledBg, text: colors.escrow.cancelled },
 };
 
+type StatusFilter = 'all' | EscrowStatus;
+
+const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'active', label: '진행중' },
+  { key: 'completed', label: '완료' },
+  { key: 'cancelled', label: '취소됨' },
+];
+
 export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>) {
   const userId = useAuthStore((s) => s.userId);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const { data: escrows, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['consumerEscrows', userId],
@@ -48,6 +61,23 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
     retry: 1,
   });
 
+  const filteredEscrows = useMemo(() => {
+    if (!escrows) return [];
+    let result = escrows as EscrowWithBusiness[];
+    if (statusFilter !== 'all') {
+      result = result.filter((e) => e.status === statusFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter((e) =>
+        (e.business?.name ?? '').toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [escrows, statusFilter, searchQuery]);
+
+  const isFiltered = searchQuery.trim() !== '' || statusFilter !== 'all';
+
   const onRefresh = useCallback(() => {
     refetch();
     refetchBalance();
@@ -55,8 +85,12 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.container}>
+        <View style={styles.listContent}>
+          <BalanceCardSkeleton />
+          <EscrowCardSkeleton />
+          <EscrowCardSkeleton />
+        </View>
       </View>
     );
   }
@@ -68,7 +102,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
   return (
     <View style={styles.container}>
       <FlatList
-        data={escrows as EscrowWithBusiness[]}
+        data={filteredEscrows}
         keyExtractor={(item) => item.id}
         refreshControl={
           <RefreshControl
@@ -100,7 +134,59 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
                 </Text>
               </View>
             ) : null}
-            <Text style={styles.sectionTitle}>내 선불 보호</Text>
+
+            {/* 검색 바 */}
+            <View style={styles.searchBar}>
+              <Text style={styles.searchIcon}>🔍</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="사업자명 검색..."
+                placeholderTextColor={colors.gray400}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+                  <Text style={styles.clearBtn}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* 필터 칩 */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.filterRow}
+              contentContainerStyle={styles.filterRowContent}
+            >
+              {FILTER_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    styles.filterChip,
+                    statusFilter === opt.key && styles.filterChipActive,
+                  ]}
+                  onPress={() => setStatusFilter(opt.key)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      statusFilter === opt.key && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitle}>내 선불 보호</Text>
+              {isFiltered && (
+                <Text style={styles.resultCount}>{filteredEscrows.length}건</Text>
+              )}
+            </View>
           </>
         }
         renderItem={({ item }: { item: EscrowWithBusiness }) => {
@@ -135,10 +221,16 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIcon}>
-              <Text style={styles.emptyIconText}>📋</Text>
+              <Text style={styles.emptyIconText}>{isFiltered ? '🔍' : '📋'}</Text>
             </View>
-            <Text style={styles.emptyTitle}>에스크로가 없습니다</Text>
-            <Text style={styles.emptyDesc}>아래 + 버튼을 눌러 첫 선불 보호를 시작하세요</Text>
+            <Text style={styles.emptyTitle}>
+              {isFiltered ? '검색 결과가 없습니다' : '에스크로가 없습니다'}
+            </Text>
+            <Text style={styles.emptyDesc}>
+              {isFiltered
+                ? '다른 검색어나 필터를 시도해보세요'
+                : '아래 + 버튼을 눌러 첫 선불 보호를 시작하세요'}
+            </Text>
           </View>
         }
         contentContainerStyle={styles.listContent}
@@ -156,7 +248,6 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
   listContent: { padding: spacing.lg, paddingBottom: 100 },
   balanceCard: {
     backgroundColor: colors.primary,
@@ -180,12 +271,66 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
     fontFamily: font.mono,
   },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+    ...shadow.sm,
+  },
+  searchIcon: { fontSize: 16, marginRight: spacing.sm },
+  searchInput: {
+    flex: 1,
+    fontSize: font.size.md,
+    color: colors.gray900,
+    paddingVertical: spacing.xs,
+  },
+  clearBtn: {
+    fontSize: font.size.md,
+    color: colors.gray400,
+    padding: spacing.xs,
+  },
+  filterRow: { marginBottom: spacing.md },
+  filterRowContent: { gap: spacing.sm },
+  filterChip: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterChipText: {
+    fontSize: font.size.sm,
+    color: colors.gray600,
+    fontWeight: font.weight.medium,
+  },
+  filterChipTextActive: {
+    color: colors.white,
+  },
+  sectionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    marginTop: spacing.sm,
+  },
   sectionTitle: {
     fontSize: font.size.xl,
     fontWeight: font.weight.bold,
     color: colors.gray900,
-    marginBottom: spacing.lg,
-    marginTop: spacing.sm,
+  },
+  resultCount: {
+    fontSize: font.size.sm,
+    color: colors.gray400,
+    fontWeight: font.weight.medium,
   },
   card: {
     backgroundColor: colors.white,

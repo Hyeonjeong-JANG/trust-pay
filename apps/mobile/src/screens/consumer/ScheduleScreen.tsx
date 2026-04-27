@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
+import { SummaryCardSkeleton, TimelineEntrySkeleton } from '../../components/Skeleton';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowEntry, EscrowRecord } from '@prepaid-shield/shared-types';
 import type { ConsumerTabProps } from '../../navigation/types';
@@ -91,8 +92,13 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.container}>
+        <View style={styles.listContent}>
+          <SummaryCardSkeleton />
+          <TimelineEntrySkeleton />
+          <TimelineEntrySkeleton />
+          <TimelineEntrySkeleton />
+        </View>
       </View>
     );
   }

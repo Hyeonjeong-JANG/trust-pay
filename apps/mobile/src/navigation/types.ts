@@ -19,6 +19,7 @@ export type BusinessTabParamList = {
 
 // Root stack (wraps everything)
 export type RootStackParamList = {
+  Onboarding: undefined;
   Login: undefined;
   ConsumerTabs: NavigatorScreenParams<ConsumerTabParamList>;
   BusinessSelect: undefined;
@@ -26,6 +27,7 @@ export type RootStackParamList = {
   EscrowDetail: { id: string };
   BusinessDetail: { businessId: string };
   BusinessTabs: NavigatorScreenParams<BusinessTabParamList>;
+  Notifications: undefined;
 };
 
 export type ScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<RootStackParamList, T>;

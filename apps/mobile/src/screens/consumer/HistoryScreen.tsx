@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
+import { HistoryCardSkeleton, SkeletonBox } from '../../components/Skeleton';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowRecord, EscrowEntry } from '@prepaid-shield/shared-types';
 import type { ConsumerTabProps } from '../../navigation/types';
@@ -86,8 +87,13 @@ export function HistoryScreen(_props: ConsumerTabProps<'History'>) {
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.container}>
+        <View style={styles.listContent}>
+          <SkeletonBox width={120} height={13} style={{ marginBottom: spacing.sm }} />
+          <HistoryCardSkeleton />
+          <HistoryCardSkeleton />
+          <HistoryCardSkeleton />
+        </View>
       </View>
     );
   }
