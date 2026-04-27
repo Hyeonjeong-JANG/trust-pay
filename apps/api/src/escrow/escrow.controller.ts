@@ -4,16 +4,20 @@ import {
   Get,
   Param,
   Body,
+  UsePipes,
 } from '@nestjs/common';
 import { EscrowService } from './escrow.service';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import { FinishEscrowDto } from './dto/finish-escrow.dto';
+import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { createEscrowSchema, finishEscrowSchema } from '@prepaid-shield/validators';
 
 @Controller('escrow')
 export class EscrowController {
   constructor(private readonly escrowService: EscrowService) {}
 
   @Post()
+  @UsePipes(new ZodValidationPipe(createEscrowSchema))
   create(@Body() dto: CreateEscrowDto) {
     return this.escrowService.create(dto);
   }
@@ -24,7 +28,10 @@ export class EscrowController {
   }
 
   @Post(':id/finish')
-  finish(@Param('id') id: string, @Body() dto: FinishEscrowDto) {
+  finish(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(finishEscrowSchema)) dto: FinishEscrowDto,
+  ) {
     return this.escrowService.finishEntry(id, dto.entryMonth);
   }
 
