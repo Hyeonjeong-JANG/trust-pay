@@ -23,10 +23,11 @@ export function ConsumerDashboardScreen({ navigation }: ScreenProps<'ConsumerDas
     retry: 2,
   });
 
-  const { data: balanceData } = useQuery({
+  const { data: balanceData, isLoading: balanceLoading, isError: balanceError } = useQuery({
     queryKey: ['balance', userId],
     queryFn: () => api.getBalance(userId!, 'consumer'),
     enabled: !!userId,
+    retry: 1,
   });
 
   if (isLoading) {
@@ -43,7 +44,16 @@ export function ConsumerDashboardScreen({ navigation }: ScreenProps<'ConsumerDas
 
   return (
     <View style={styles.container}>
-      {balanceData && (
+      {balanceLoading ? (
+        <View style={styles.balanceCard}>
+          <ActivityIndicator size="small" color="rgba(255,255,255,0.8)" />
+        </View>
+      ) : balanceError ? (
+        <View style={[styles.balanceCard, { backgroundColor: '#8E8E93' }]}>
+          <Text style={styles.balanceLabel}>RLUSD 잔액</Text>
+          <Text style={styles.balanceValue}>조회 실패</Text>
+        </View>
+      ) : balanceData ? (
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>RLUSD 잔액</Text>
           <Text style={styles.balanceValue}>
@@ -53,7 +63,7 @@ export function ConsumerDashboardScreen({ navigation }: ScreenProps<'ConsumerDas
             {balanceData.xrplAddress.slice(0, 8)}...{balanceData.xrplAddress.slice(-6)}
           </Text>
         </View>
-      )}
+      ) : null}
       <Text style={styles.title}>내 선불 보호</Text>
       <FlatList
         data={escrows}

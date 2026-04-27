@@ -17,10 +17,11 @@ export function BusinessDashboardScreen() {
     retry: 2,
   });
 
-  const { data: balanceData } = useQuery({
+  const { data: balanceData, isLoading: balanceLoading, isError: balanceError } = useQuery({
     queryKey: ['balance', userId],
     queryFn: () => api.getBalance(userId!, 'business'),
     enabled: !!userId,
+    retry: 1,
   });
 
   const finishMutation = useMutation({
@@ -51,7 +52,16 @@ export function BusinessDashboardScreen() {
 
   return (
     <View style={styles.container}>
-      {balanceData && (
+      {balanceLoading ? (
+        <View style={styles.balanceCard}>
+          <ActivityIndicator size="small" color="rgba(255,255,255,0.8)" />
+        </View>
+      ) : balanceError ? (
+        <View style={[styles.balanceCard, { backgroundColor: '#8E8E93' }]}>
+          <Text style={styles.balanceLabel}>RLUSD 잔액</Text>
+          <Text style={styles.balanceValue}>조회 실패</Text>
+        </View>
+      ) : balanceData ? (
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>RLUSD 잔액</Text>
           <Text style={styles.balanceValue}>
@@ -61,7 +71,7 @@ export function BusinessDashboardScreen() {
             {balanceData.xrplAddress.slice(0, 8)}...{balanceData.xrplAddress.slice(-6)}
           </Text>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
