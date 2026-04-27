@@ -64,7 +64,7 @@ describe('ConsumerDashboardScreen', () => {
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
-    expect(await findByText('아직 에스크로가 없습니다. +를 눌러 시작하세요.')).toBeTruthy();
+    expect(await findByText('에스크로가 없습니다')).toBeTruthy();
   });
 
   it('should render escrow cards with business name and amount', async () => {

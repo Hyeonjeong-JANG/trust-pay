@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import type { ApiError } from '../api/client';
+import { colors, spacing, radius, font } from '../theme';
 
 interface ErrorViewProps {
   error: Error;
@@ -14,10 +15,13 @@ export function ErrorView({ error, onRetry }: ErrorViewProps) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.icon}>!</Text>
+      <View style={styles.iconCircle}>
+        <Text style={styles.icon}>!</Text>
+      </View>
+      <Text style={styles.title}>문제가 발생했습니다</Text>
       <Text style={styles.message}>{message}</Text>
       {canRetry && onRetry && (
-        <TouchableOpacity style={styles.retryButton} onPress={onRetry}>
+        <TouchableOpacity style={styles.retryButton} onPress={onRetry} activeOpacity={0.8}>
           <Text style={styles.retryText}>다시 시도</Text>
         </TouchableOpacity>
       )}
@@ -36,37 +40,45 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: spacing.xxl,
+    backgroundColor: colors.background,
   },
-  icon: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#FF3B30',
+  iconCircle: {
     width: 72,
     height: 72,
-    lineHeight: 72,
-    textAlign: 'center',
     borderRadius: 36,
-    backgroundColor: '#FFF0F0',
-    overflow: 'hidden',
-    marginBottom: 16,
+    backgroundColor: colors.dangerLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  icon: {
+    fontSize: 32,
+    fontWeight: font.weight.bold,
+    color: colors.danger,
+  },
+  title: {
+    fontSize: font.size.lg,
+    fontWeight: font.weight.semibold,
+    color: colors.gray800,
+    marginBottom: spacing.sm,
   },
   message: {
-    fontSize: 15,
-    color: '#666',
+    fontSize: font.size.md,
+    color: colors.gray500,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   retryButton: {
-    backgroundColor: '#4A90D9',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.md,
+    borderRadius: radius.sm,
   },
   retryText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
+    color: colors.white,
+    fontSize: font.size.md,
+    fontWeight: font.weight.semibold,
   },
 });

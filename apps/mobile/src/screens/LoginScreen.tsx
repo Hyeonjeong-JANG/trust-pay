@@ -9,10 +9,12 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { colors, spacing, radius, font, shadow } from '../theme';
 
 type UserRole = 'consumer' | 'business';
 type LoginMethod = 'phone' | 'email';
@@ -51,158 +53,262 @@ export function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.inner}>
-        <Text style={styles.title}>PrepaidShield</Text>
-        <Text style={styles.subtitle}>XRPL 기반 RLUSD 선불 보호 서비스</Text>
-
-        {/* 역할 선택 */}
-        <View style={styles.segmentRow}>
-          {(['consumer', 'business'] as UserRole[]).map((r) => (
-            <TouchableOpacity
-              key={r}
-              style={[styles.segment, role === r && styles.segmentActive]}
-              onPress={() => setRole(r)}
-            >
-              <Text style={[styles.segmentText, role === r && styles.segmentTextActive]}>
-                {r === 'consumer' ? '소비자' : '사업자'}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.brandArea}>
+          <View style={styles.logoCircle}>
+            <Text style={styles.logoText}>PS</Text>
+          </View>
+          <Text style={styles.title}>PrepaidShield</Text>
+          <Text style={styles.subtitle}>XRPL 기반 RLUSD 선불 보호 서비스</Text>
         </View>
 
-        {/* 로그인 방식 선택 */}
-        <View style={styles.methodRow}>
-          {(['phone', 'email'] as LoginMethod[]).map((m) => (
-            <TouchableOpacity
-              key={m}
-              style={[styles.methodButton, method === m && styles.methodActive]}
-              onPress={() => setMethod(m)}
-            >
-              <Text style={[styles.methodText, method === m && styles.methodTextActive]}>
-                {m === 'phone' ? '전화번호' : '이메일'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <View style={styles.formCard}>
+          {/* 역할 선택 */}
+          <View style={styles.segmentRow}>
+            {(['consumer', 'business'] as UserRole[]).map((r) => (
+              <TouchableOpacity
+                key={r}
+                style={[styles.segment, role === r && styles.segmentActive]}
+                onPress={() => setRole(r)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.segmentIcon, role === r && styles.segmentIconActive]}>
+                  {r === 'consumer' ? '👤' : '🏪'}
+                </Text>
+                <Text style={[styles.segmentText, role === r && styles.segmentTextActive]}>
+                  {r === 'consumer' ? '소비자' : '사업자'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        {/* 입력 필드 */}
-        {method === 'phone' ? (
-          <>
-            <Text style={styles.label}>전화번호</Text>
-            <TextInput
-              style={styles.input}
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="010-1234-5678"
-              keyboardType="phone-pad"
-              autoComplete="tel"
-            />
-          </>
-        ) : (
-          <>
-            <Text style={styles.label}>이메일</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="user@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-            />
-          </>
-        )}
+          {/* 로그인 방식 선택 */}
+          <View style={styles.methodRow}>
+            {(['phone', 'email'] as LoginMethod[]).map((m) => (
+              <TouchableOpacity
+                key={m}
+                style={[styles.methodButton, method === m && styles.methodActive]}
+                onPress={() => setMethod(m)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.methodText, method === m && styles.methodTextActive]}>
+                  {m === 'phone' ? '전화번호' : '이메일'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        {role === 'consumer' && (
-          <>
-            <Text style={styles.label}>이름 (선택)</Text>
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-              placeholder="이름을 입력하세요"
-            />
-          </>
-        )}
-
-        {/* 로그인 버튼 */}
-        <TouchableOpacity
-          style={[styles.button, (!canSubmit || loginMutation.isPending) && styles.buttonDisabled]}
-          onPress={() => loginMutation.mutate()}
-          disabled={!canSubmit || loginMutation.isPending}
-        >
-          {loginMutation.isPending ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator color="#fff" size="small" />
-              <Text style={styles.buttonText}>
-                {role === 'consumer' ? ' 지갑 생성 중...' : ' 로그인 중...'}
-              </Text>
+          {/* 입력 필드 */}
+          {method === 'phone' ? (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>전화번호</Text>
+              <TextInput
+                style={[styles.input, phone && !isPhoneValid && styles.inputError]}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="010-1234-5678"
+                placeholderTextColor={colors.gray400}
+                keyboardType="phone-pad"
+                autoComplete="tel"
+              />
             </View>
           ) : (
-            <Text style={styles.buttonText}>로그인</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>이메일</Text>
+              <TextInput
+                style={[styles.input, email && !isEmailValid && styles.inputError]}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="user@example.com"
+                placeholderTextColor={colors.gray400}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+              />
+            </View>
           )}
-        </TouchableOpacity>
 
-        {role === 'consumer' && (
-          <Text style={styles.hint}>
-            첫 로그인 시 XRPL 지갑 + RLUSD 트러스트라인이 자동 생성됩니다
-          </Text>
-        )}
-        {role === 'business' && (
-          <Text style={styles.hint}>
-            사업자 계정은 관리자가 사전 등록해야 합니다
-          </Text>
-        )}
-      </View>
+          {role === 'consumer' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>이름 (선택)</Text>
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+                placeholder="이름을 입력하세요"
+                placeholderTextColor={colors.gray400}
+              />
+            </View>
+          )}
+
+          {/* 로그인 버튼 */}
+          <TouchableOpacity
+            style={[styles.button, (!canSubmit || loginMutation.isPending) && styles.buttonDisabled]}
+            onPress={() => loginMutation.mutate()}
+            disabled={!canSubmit || loginMutation.isPending}
+            activeOpacity={0.8}
+          >
+            {loginMutation.isPending ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.buttonText}>
+                  {role === 'consumer' ? ' 지갑 생성 중...' : ' 로그인 중...'}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.buttonText}>로그인</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.hint}>
+          {role === 'consumer'
+            ? '첫 로그인 시 XRPL 지갑 + RLUSD 트러스트라인이 자동 생성됩니다'
+            : '사업자 계정은 관리자가 사전 등록해야 합니다'}
+        </Text>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  inner: { flex: 1, justifyContent: 'center', padding: 24 },
-  title: { fontSize: 32, fontWeight: 'bold', textAlign: 'center', color: '#1a1a1a' },
-  subtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 36 },
-  segmentRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  container: { flex: 1, backgroundColor: colors.background },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: spacing.xxl,
+  },
+  brandArea: {
+    alignItems: 'center',
+    marginBottom: spacing.xxxl,
+  },
+  logoCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    ...shadow.md,
+  },
+  logoText: {
+    fontSize: font.size.xl,
+    fontWeight: font.weight.bold,
+    color: colors.white,
+    letterSpacing: 1,
+  },
+  title: {
+    fontSize: font.size.hero,
+    fontWeight: font.weight.bold,
+    color: colors.gray900,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: font.size.sm,
+    color: colors.gray500,
+    marginTop: spacing.xs,
+  },
+  formCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    ...shadow.sm,
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
   segment: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.gray200,
     alignItems: 'center',
+    backgroundColor: colors.white,
   },
-  segmentActive: { borderColor: '#4A90D9', backgroundColor: '#EBF3FB' },
-  segmentText: { fontSize: 16, color: '#666' },
-  segmentTextActive: { color: '#4A90D9', fontWeight: '600' },
-  methodRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  segmentActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  segmentIcon: { fontSize: 20, marginBottom: spacing.xs },
+  segmentIconActive: {},
+  segmentText: {
+    fontSize: font.size.md,
+    color: colors.gray500,
+    fontWeight: font.weight.medium,
+  },
+  segmentTextActive: {
+    color: colors.primary,
+    fontWeight: font.weight.semibold,
+  },
+  methodRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+  },
   methodButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: '#f0f0f0',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
   },
-  methodActive: { backgroundColor: '#4A90D9' },
-  methodText: { fontSize: 14, color: '#666' },
-  methodTextActive: { color: '#fff', fontWeight: '600' },
-  label: { fontSize: 14, fontWeight: '600', marginBottom: 4, color: '#333' },
+  methodActive: { backgroundColor: colors.primary },
+  methodText: {
+    fontSize: font.size.sm,
+    color: colors.gray500,
+    fontWeight: font.weight.medium,
+  },
+  methodTextActive: {
+    color: colors.white,
+    fontWeight: font.weight.semibold,
+  },
+  inputGroup: { marginBottom: spacing.lg },
+  label: {
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    marginBottom: spacing.xs,
+    color: colors.gray700,
+  },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: colors.gray200,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: font.size.md,
+    color: colors.gray800,
+    backgroundColor: colors.gray50,
+  },
+  inputError: {
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerLight,
   },
   button: {
-    backgroundColor: '#4A90D9',
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.md,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
+    ...shadow.sm,
   },
   buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  buttonText: {
+    color: colors.white,
+    fontSize: font.size.md,
+    fontWeight: font.weight.semibold,
+  },
   loadingRow: { flexDirection: 'row', alignItems: 'center' },
-  hint: { fontSize: 12, color: '#999', textAlign: 'center', marginTop: 12 },
+  hint: {
+    fontSize: font.size.xs,
+    color: colors.gray400,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    lineHeight: 16,
+  },
 });
