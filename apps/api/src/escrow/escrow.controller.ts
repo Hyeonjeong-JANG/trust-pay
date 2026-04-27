@@ -33,8 +33,8 @@ export class EscrowController {
     return this.escrowService.cancelEscrow(id);
   }
 
-  @Get('consumer/:address')
-  findByConsumer(@Param('address') address: string) {
-    return this.escrowService.findByConsumer(address);
+  @Get('consumer/:consumerId')
+  findByConsumer(@Param('consumerId') consumerId: string) {
+    return this.escrowService.findByConsumer(consumerId);
   }
 }

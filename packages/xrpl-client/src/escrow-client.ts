@@ -4,15 +4,19 @@ import {
   EscrowCreate,
   EscrowFinish,
   EscrowCancel,
+  TrustSet,
+  IssuedCurrencyAmount,
 } from 'xrpl';
-import { isoToRippleTime, monthsFromNow, xrpToDrops } from './utils';
+import { isoToRippleTime, monthsFromNow } from './utils';
 
-export interface CreateEscrowParams {
+export interface TokenEscrowParams {
   client: Client;
   senderWallet: Wallet;
   destinationAddress: string;
-  monthlyAmountXrp: string;
+  monthlyAmount: string;
   months: number;
+  currency: string;
+  issuer: string;
   demoMode?: boolean;
 }
 
@@ -39,25 +43,40 @@ export interface CancelEscrowParams {
   escrowSequence: number;
 }
 
+export interface SetTrustLineParams {
+  client: Client;
+  wallet: Wallet;
+  currency: string;
+  issuer: string;
+  limit: string;
+}
+
+export interface CreateWalletResult {
+  wallet: Wallet;
+  address: string;
+  secret: string;
+}
+
 export class XrplEscrowClient {
   /**
-   * Create monthly escrow entries on the XRPL.
-   * Each month gets its own EscrowCreate with staggered FinishAfter/CancelAfter.
+   * Create monthly Token Escrow entries on the XRPL (XLS-85).
+   * Each month gets its own EscrowCreate with RLUSD IssuedCurrencyAmount.
    */
   async createMonthlyEscrows(
-    params: CreateEscrowParams,
+    params: TokenEscrowParams,
   ): Promise<EscrowResult[]> {
     const {
       client,
       senderWallet,
       destinationAddress,
-      monthlyAmountXrp,
+      monthlyAmount,
       months,
+      currency,
+      issuer,
       demoMode = false,
     } = params;
 
     const results: EscrowResult[] = [];
-    const amountDrops = xrpToDrops(monthlyAmountXrp);
 
     for (let month = 1; month <= months; month++) {
       const finishDate = monthsFromNow(month, demoMode);
@@ -66,11 +85,17 @@ export class XrplEscrowClient {
       const finishAfter = isoToRippleTime(finishDate.toISOString());
       const cancelAfter = isoToRippleTime(cancelDate.toISOString());
 
+      const amount: IssuedCurrencyAmount = {
+        currency,
+        issuer,
+        value: monthlyAmount,
+      };
+
       const tx: EscrowCreate = {
         TransactionType: 'EscrowCreate',
         Account: senderWallet.address,
         Destination: destinationAddress,
-        Amount: amountDrops,
+        Amount: amount,
         FinishAfter: finishAfter,
         CancelAfter: cancelAfter,
       };
@@ -85,7 +110,7 @@ export class XrplEscrowClient {
       results.push({
         month,
         sequence,
-        amount: amountDrops,
+        amount: monthlyAmount,
         finishAfter,
         cancelAfter,
         txHash: response.result.hash,
@@ -96,7 +121,7 @@ export class XrplEscrowClient {
   }
 
   /**
-   * Finish (release) an escrow — business claims their monthly payment.
+   * Finish (release) a Token Escrow — business claims monthly RLUSD payment.
    * Only succeeds after FinishAfter time has passed.
    */
   async finishEscrow(params: FinishEscrowParams): Promise<string> {
@@ -114,7 +139,7 @@ export class XrplEscrowClient {
   }
 
   /**
-   * Cancel an escrow — consumer reclaims funds.
+   * Cancel a Token Escrow — consumer reclaims RLUSD funds.
    * Only succeeds after CancelAfter time has passed.
    */
   async cancelEscrow(params: CancelEscrowParams): Promise<string> {
@@ -129,5 +154,38 @@ export class XrplEscrowClient {
 
     const response = await client.submitAndWait(tx, { wallet });
     return response.result.hash;
+  }
+
+  /**
+   * Set a Trust Line so the wallet can hold RLUSD (or other issued tokens).
+   */
+  async setTrustLine(params: SetTrustLineParams): Promise<string> {
+    const { client, wallet, currency, issuer, limit } = params;
+
+    const tx: TrustSet = {
+      TransactionType: 'TrustSet',
+      Account: wallet.address,
+      LimitAmount: {
+        currency,
+        issuer,
+        value: limit,
+      },
+    };
+
+    const response = await client.submitAndWait(tx, { wallet });
+    return response.result.hash;
+  }
+
+  /**
+   * Create a new funded wallet on Testnet and return credentials.
+   * In production, this would use a different key generation approach.
+   */
+  async createWallet(client: Client): Promise<CreateWalletResult> {
+    const { wallet } = await client.fundWallet();
+    return {
+      wallet,
+      address: wallet.address,
+      secret: wallet.seed!,
+    };
   }
 }

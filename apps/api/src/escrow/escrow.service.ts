@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
 import { Wallet } from 'xrpl';
@@ -11,27 +12,29 @@ export class EscrowService {
   constructor(
     private prisma: PrismaService,
     private xrplService: XrplService,
+    private configService: ConfigService,
   ) {}
 
   async create(dto: CreateEscrowDto) {
     const consumer = await this.prisma.consumer.findUnique({
-      where: { xrplAddress: dto.consumerAddress },
+      where: { id: dto.consumerId },
     });
     if (!consumer) throw new NotFoundException('Consumer not found');
 
     const business = await this.prisma.business.findUnique({
-      where: { xrplAddress: dto.businessAddress },
+      where: { id: dto.businessId },
     });
     if (!business) throw new NotFoundException('Business not found');
 
     const monthlyAmount = dto.totalAmount / dto.months;
+    const issuer = this.configService.get<string>('rlusd.issuer')!;
 
-    // For prototype: use test wallet (in production, consumer signs client-side)
-    const senderWallet = await this.xrplService.fundTestWallet();
+    // Reconstruct sender wallet from stored secret
+    const senderWallet = Wallet.fromSeed(consumer.xrplSecret);
 
     const escrowResults = await this.xrplService.createMonthlyEscrows(
       senderWallet,
-      dto.businessAddress,
+      business.xrplAddress,
       String(monthlyAmount),
       dto.months,
     );
@@ -40,11 +43,12 @@ export class EscrowService {
       data: {
         consumerId: consumer.id,
         businessId: business.id,
-        consumerAddress: dto.consumerAddress,
-        businessAddress: dto.businessAddress,
+        consumerAddress: consumer.xrplAddress,
+        businessAddress: business.xrplAddress,
         totalAmount: dto.totalAmount,
         monthlyAmount,
         months: dto.months,
+        issuer,
         entries: {
           create: escrowResults.map((r) => ({
             month: r.month,
@@ -85,8 +89,11 @@ export class EscrowService {
       throw new BadRequestException(`Entry already ${entry.status}`);
     }
 
-    // For prototype: use test wallet
-    const wallet = await this.xrplService.fundTestWallet();
+    // Use business wallet for finish (business claims payment)
+    const business = await this.prisma.business.findUnique({
+      where: { id: escrow.businessId },
+    });
+    const wallet = Wallet.fromSeed(business!.xrplSecret);
 
     const txHash = await this.xrplService.finishEscrow(
       wallet,
@@ -120,7 +127,12 @@ export class EscrowService {
     });
     if (!escrow) throw new NotFoundException('Escrow not found');
 
-    const wallet = await this.xrplService.fundTestWallet();
+    // Use consumer wallet for cancel (consumer reclaims funds)
+    const consumer = await this.prisma.consumer.findUnique({
+      where: { id: escrow.consumerId },
+    });
+    const wallet = Wallet.fromSeed(consumer!.xrplSecret);
+
     const pendingEntries = escrow.entries.filter((e) => e.status === 'pending');
 
     for (const entry of pendingEntries) {
@@ -148,9 +160,9 @@ export class EscrowService {
     return { cancelled: pendingEntries.length };
   }
 
-  async findByConsumer(consumerAddress: string) {
+  async findByConsumer(consumerId: string) {
     return this.prisma.escrow.findMany({
-      where: { consumerAddress },
+      where: { consumerId },
       include: { entries: true, business: true },
     });
   }

@@ -1,5 +1,12 @@
 export { XrplEscrowClient } from './escrow-client';
-export type { EscrowResult, CreateEscrowParams, FinishEscrowParams, CancelEscrowParams } from './escrow-client';
+export type {
+  EscrowResult,
+  TokenEscrowParams,
+  FinishEscrowParams,
+  CancelEscrowParams,
+  SetTrustLineParams,
+  CreateWalletResult,
+} from './escrow-client';
 export { connectToTestnet, fundWallet } from './connection';
 export {
   isoToRippleTime,

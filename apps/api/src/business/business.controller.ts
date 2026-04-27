@@ -7,7 +7,7 @@ export class BusinessController {
 
   @Post()
   register(
-    @Body() dto: { name: string; category: string; address: string; xrplAddress: string },
+    @Body() dto: { name: string; category: string; address: string; phone?: string; email?: string },
   ) {
     return this.businessService.register(dto);
   }

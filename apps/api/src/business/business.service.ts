@@ -1,18 +1,45 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { XrplService } from '../xrpl/xrpl.service';
 
 @Injectable()
 export class BusinessService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(BusinessService.name);
 
-  async register(data: { name: string; category: string; address: string; xrplAddress: string }) {
-    return this.prisma.business.create({ data });
+  constructor(
+    private prisma: PrismaService,
+    private xrplService: XrplService,
+  ) {}
+
+  async register(data: { name: string; category: string; address: string; phone?: string; email?: string }) {
+    // Auto-create XRPL wallet + Trust Line
+    const { wallet, address: xrplAddress, secret: xrplSecret } = await this.xrplService.createWallet();
+    await this.xrplService.setTrustLine(wallet);
+
+    const business = await this.prisma.business.create({
+      data: {
+        name: data.name,
+        category: data.category,
+        address: data.address,
+        phone: data.phone,
+        email: data.email,
+        xrplAddress,
+        xrplSecret,
+      },
+    });
+
+    this.logger.log(`Registered business ${business.id} with XRPL address ${xrplAddress}`);
+
+    // Return without xrplSecret
+    const { xrplSecret: _, ...result } = business;
+    return result;
   }
 
   async findById(id: string) {
     const business = await this.prisma.business.findUnique({ where: { id } });
     if (!business) throw new NotFoundException('Business not found');
-    return business;
+    const { xrplSecret: _, ...result } = business;
+    return result;
   }
 
   async dashboard(id: string) {
@@ -46,6 +73,7 @@ export class BusinessService {
   }
 
   async findAll() {
-    return this.prisma.business.findMany({ where: { isActive: true } });
+    const businesses = await this.prisma.business.findMany({ where: { isActive: true } });
+    return businesses.map(({ xrplSecret: _, ...b }) => b);
   }
 }

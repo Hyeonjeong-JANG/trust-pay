@@ -12,7 +12,10 @@ model Business {
   name        String
   category    String
   address     String
+  phone       String?
+  email       String?
   xrplAddress String   @unique
+  xrplSecret  String
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -22,7 +25,10 @@ model Business {
 model Consumer {
   id          String   @id @default(uuid())
   name        String
+  phone       String?
+  email       String?
   xrplAddress String   @unique
+  xrplSecret  String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   escrows     Escrow[] @relation("ConsumerEscrows")
@@ -37,6 +43,8 @@ model Escrow {
   totalAmount     Float
   monthlyAmount   Float
   months          Int
+  currency        String        @default("RLUSD")
+  issuer          String
   status          String        @default("active")
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt

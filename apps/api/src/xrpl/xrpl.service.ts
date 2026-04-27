@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client, Wallet } from 'xrpl';
-import { XrplEscrowClient, EscrowResult } from '@prepaid-shield/xrpl-client';
+import { XrplEscrowClient, EscrowResult, CreateWalletResult } from '@prepaid-shield/xrpl-client';
 
 @Injectable()
 export class XrplService implements OnModuleDestroy {
@@ -21,27 +21,44 @@ export class XrplService implements OnModuleDestroy {
     return this.client;
   }
 
-  async fundTestWallet(): Promise<Wallet> {
+  async createWallet(): Promise<CreateWalletResult> {
     const client = await this.getClient();
-    const { wallet } = await client.fundWallet();
-    return wallet;
+    return this.escrowClient.createWallet(client);
+  }
+
+  async setTrustLine(wallet: Wallet): Promise<string> {
+    const client = await this.getClient();
+    const currency = this.configService.get<string>('rlusd.currency')!;
+    const issuer = this.configService.get<string>('rlusd.issuer')!;
+
+    return this.escrowClient.setTrustLine({
+      client,
+      wallet,
+      currency,
+      issuer,
+      limit: '1000000',
+    });
   }
 
   async createMonthlyEscrows(
     senderWallet: Wallet,
     destinationAddress: string,
-    monthlyAmountXrp: string,
+    monthlyAmount: string,
     months: number,
   ): Promise<EscrowResult[]> {
     const client = await this.getClient();
     const demoMode = this.configService.get<boolean>('demoMode') ?? false;
+    const currency = this.configService.get<string>('rlusd.currency')!;
+    const issuer = this.configService.get<string>('rlusd.issuer')!;
 
     return this.escrowClient.createMonthlyEscrows({
       client,
       senderWallet,
       destinationAddress,
-      monthlyAmountXrp,
+      monthlyAmount,
       months,
+      currency,
+      issuer,
       demoMode,
     });
   }

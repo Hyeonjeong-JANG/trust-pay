@@ -1,6 +1,6 @@
 export class CreateEscrowDto {
-  consumerAddress!: string;
-  businessAddress!: string;
+  consumerId!: string;
+  businessId!: string;
   totalAmount!: number;
   months!: number;
 }
