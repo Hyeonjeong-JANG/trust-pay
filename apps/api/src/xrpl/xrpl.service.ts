@@ -1,15 +1,21 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client, Wallet } from 'xrpl';
-import { XrplEscrowClient, EscrowResult, CreateWalletResult } from '@prepaid-shield/xrpl-client';
+import { XrplEscrowClient, EscrowResult, CreateWalletResult, isoToRippleTime, monthsFromNow } from '@prepaid-shield/xrpl-client';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class XrplService implements OnModuleDestroy {
   private client: Client | null = null;
   private readonly escrowClient = new XrplEscrowClient();
   private readonly logger = new Logger(XrplService.name);
+  private demoSequence = 1000;
 
   constructor(private configService: ConfigService) {}
+
+  private get isDemoMode(): boolean {
+    return this.configService.get<boolean>('demoMode') ?? false;
+  }
 
   async getClient(): Promise<Client> {
     if (!this.client || !this.client.isConnected()) {
@@ -22,11 +28,21 @@ export class XrplService implements OnModuleDestroy {
   }
 
   async createWallet(): Promise<CreateWalletResult> {
+    if (this.isDemoMode) {
+      const wallet = Wallet.generate();
+      this.logger.log(`[DEMO] Generated wallet ${wallet.address}`);
+      return { wallet, address: wallet.address, secret: wallet.seed! };
+    }
     const client = await this.getClient();
     return this.escrowClient.createWallet(client);
   }
 
   async setTrustLine(wallet: Wallet): Promise<string> {
+    if (this.isDemoMode) {
+      const hash = `DEMO_TRUST_${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
+      this.logger.log(`[DEMO] TrustLine set for ${wallet.address}`);
+      return hash;
+    }
     const client = await this.getClient();
     const currency = this.configService.get<string>('rlusd.currency')!;
     const issuer = this.configService.get<string>('rlusd.issuer')!;
@@ -46,8 +62,26 @@ export class XrplService implements OnModuleDestroy {
     monthlyAmount: string,
     months: number,
   ): Promise<EscrowResult[]> {
+    if (this.isDemoMode) {
+      const results: EscrowResult[] = [];
+      for (let month = 1; month <= months; month++) {
+        const finishDate = monthsFromNow(month, true);
+        const cancelDate = monthsFromNow(month + 1, true);
+        results.push({
+          month,
+          sequence: this.demoSequence++,
+          amount: monthlyAmount,
+          finishAfter: isoToRippleTime(finishDate.toISOString()),
+          cancelAfter: isoToRippleTime(cancelDate.toISOString()),
+          txHash: `DEMO_ESCROW_${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`,
+        });
+      }
+      this.logger.log(`[DEMO] Created ${months} escrow entries`);
+      return results;
+    }
+
     const client = await this.getClient();
-    const demoMode = this.configService.get<boolean>('demoMode') ?? false;
+    const demoMode = this.isDemoMode;
     const currency = this.configService.get<string>('rlusd.currency')!;
     const issuer = this.configService.get<string>('rlusd.issuer')!;
 
@@ -68,6 +102,11 @@ export class XrplService implements OnModuleDestroy {
     ownerAddress: string,
     escrowSequence: number,
   ): Promise<string> {
+    if (this.isDemoMode) {
+      const hash = `DEMO_FINISH_${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
+      this.logger.log(`[DEMO] Finished escrow seq ${escrowSequence}`);
+      return hash;
+    }
     const client = await this.getClient();
     return this.escrowClient.finishEscrow({
       client,
@@ -82,6 +121,11 @@ export class XrplService implements OnModuleDestroy {
     ownerAddress: string,
     escrowSequence: number,
   ): Promise<string> {
+    if (this.isDemoMode) {
+      const hash = `DEMO_CANCEL_${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
+      this.logger.log(`[DEMO] Cancelled escrow seq ${escrowSequence}`);
+      return hash;
+    }
     const client = await this.getClient();
     return this.escrowClient.cancelEscrow({
       client,
