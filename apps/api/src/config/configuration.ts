@@ -9,5 +9,5 @@ export default () => ({
     currency: process.env.RLUSD_CURRENCY || 'RLUSD',
   },
   demoMode: process.env.DEMO_MODE === 'true',
-  encryptionKey: process.env.ENCRYPTION_KEY || 'dev-only-change-in-production-32ch',
+  encryptionKey: process.env.ENCRYPTION_KEY || 'dev-only-key-change-in-prod-32ch',
 });
