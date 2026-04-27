@@ -21,6 +21,17 @@ export function xrpToDrops(xrp: string): string {
 }
 
 /**
+ * Convert a currency code to XRPL-compatible format.
+ * Standard 3-char codes (e.g. "USD") pass through as-is.
+ * Non-standard codes (e.g. "RLUSD") are encoded as 40-char hex strings.
+ */
+export function currencyToHex(currency: string): string {
+  if (currency.length === 3) return currency;
+  const hex = Buffer.from(currency, 'ascii').toString('hex').toUpperCase();
+  return hex.padEnd(40, '0');
+}
+
+/**
  * Calculate a date N months from now.
  * For demo mode, each "month" = 2 minutes.
  */

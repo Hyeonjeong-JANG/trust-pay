@@ -7,7 +7,7 @@ import {
   TrustSet,
   IssuedCurrencyAmount,
 } from 'xrpl';
-import { isoToRippleTime, monthsFromNow } from './utils';
+import { isoToRippleTime, monthsFromNow, currencyToHex } from './utils';
 
 export interface TokenEscrowParams {
   client: Client;
@@ -86,7 +86,7 @@ export class XrplEscrowClient {
       const cancelAfter = isoToRippleTime(cancelDate.toISOString());
 
       const amount: IssuedCurrencyAmount = {
-        currency,
+        currency: currencyToHex(currency),
         issuer,
         value: monthlyAmount,
       };
@@ -166,13 +166,27 @@ export class XrplEscrowClient {
       TransactionType: 'TrustSet',
       Account: wallet.address,
       LimitAmount: {
-        currency,
+        currency: currencyToHex(currency),
         issuer,
         value: limit,
       },
     };
 
     const response = await client.submitAndWait(tx, { wallet });
+    return response.result.hash;
+  }
+
+  /**
+   * Enable TrustLine Locking on an issuer account (required for XLS-85 Token Escrow).
+   * Must be called once on the issuer before any EscrowCreate with issued tokens.
+   */
+  async enableTokenEscrow(client: Client, issuerWallet: Wallet): Promise<string> {
+    const tx = {
+      TransactionType: 'AccountSet' as const,
+      Account: issuerWallet.address,
+      SetFlag: 17, // asfAllowTrustLineLocking
+    };
+    const response = await client.submitAndWait(tx, { wallet: issuerWallet });
     return response.result.hash;
   }
 

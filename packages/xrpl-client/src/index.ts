@@ -14,4 +14,5 @@ export {
   dropsToXrp,
   xrpToDrops,
   monthsFromNow,
+  currencyToHex,
 } from './utils';

@@ -18,8 +18,8 @@
 import { Client, Wallet } from 'xrpl';
 
 const TESTNET_URL = 'wss://s.altnet.rippletest.net:51233';
-// Testnet용 임의 발행자 (실제로 Trust Line만 확인)
-const RLUSD_CURRENCY = 'RLUSD';
+// RLUSD: 5-char currency → 40-char hex (XRPL non-standard currency encoding)
+const RLUSD_CURRENCY = Buffer.from('RLUSD', 'ascii').toString('hex').toUpperCase().padEnd(40, '0');
 
 // ─── Helpers ───
 function log(step: string, msg: string) {
@@ -68,6 +68,24 @@ async function main() {
     log('Step 2', `소비자 지갑: ${consumerWallet.address}`);
     log('Step 2', `사업자 지갑: ${businessWallet.address}`);
     log('Step 2', `발행자 지갑: ${issuerWallet.address}`);
+
+    // 2.5. Enable TrustLine Locking on issuer (required for XLS-85 Token Escrow)
+    console.log('\n--- 발행자 AccountSet (asfAllowTrustLineLocking) ---');
+    const accountSetRes = await client.submitAndWait(
+      {
+        TransactionType: 'AccountSet',
+        Account: issuerWallet.address,
+        SetFlag: 17, // asfAllowTrustLineLocking
+      },
+      { wallet: issuerWallet },
+    );
+    const accountSetMeta = accountSetRes.result.meta as any;
+    if (accountSetMeta?.TransactionResult === 'tesSUCCESS') {
+      log('Step 2.5', '발행자 TrustLine Locking 활성화 완료');
+    } else {
+      fail('Step 2.5', `발행자 AccountSet 실패: ${accountSetMeta?.TransactionResult}`);
+      throw new Error('AccountSet failed');
+    }
 
     // 3. Trust Lines
     console.log('\n--- Trust Line 설정 ---');
