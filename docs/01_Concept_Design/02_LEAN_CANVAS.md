@@ -1,6 +1,6 @@
 # Lean Canvas
 > Created: 2026-04-26 22:40
-> Last Updated: 2026-04-26 22:40
+> Last Updated: 2026-04-27
 
 ## 1. Problem (문제)
 
@@ -19,16 +19,16 @@
 
 ## 3. Unique Value Proposition (UVP)
 
-**"선불금을 블록체인 에스크로에 보관하여, 사업자 폐업 시 자동 환불"**
+**"선불금을 RLUSD 스테이블코인 에스크로에 보관하여, 가치 변동 없이 사업자 폐업 시 자동 환불"**
 
 - 기존: 돈을 사업자에게 넘긴 후 돌려받을 방법 없음
-- PrepaidShield: 돈이 XRPL Escrow에 있으므로 사업자가 받지 못한 금액은 자동 환불
+- PrepaidShield: 돈이 XRPL Token Escrow(XLS-85)에 RLUSD로 잠겨있으므로 가치 변동 없이 자동 환불
 
 ## 4. Solution (솔루션)
 
-1. 소비자가 선불금을 XRPL Escrow에 예치
-2. 매월 자동으로 사업자에게 정산 (EscrowFinish)
-3. 사업자 폐업 시 미정산 금액 자동 환불 (EscrowCancel)
+1. 소비자가 선불금을 RLUSD로 XRPL Token Escrow에 예치
+2. 매월 자동으로 사업자에게 RLUSD 정산 (EscrowFinish)
+3. 사업자 폐업 시 미정산 RLUSD 자동 환불 (EscrowCancel)
 
 ## 5. Channels (유통)
 
@@ -40,7 +40,7 @@
 
 | 단계 | 수익 모델 |
 |:---|:---|
-| MVP (해커톤) | 수익 모델 미적용 (프로토타입) |
+| MVP (KFIP 데모) | 수익 모델 미적용 (프로토타입) |
 | Phase 2 | Escrow 생성 시 수수료 (0.5~1%) |
 | Phase 3 | 사업자 월정액 구독 (인증 배지 + 대시보드) |
 
@@ -61,7 +61,8 @@
 
 ## 9. Unfair Advantage (경쟁 우위)
 
-- XRPL의 네이티브 Escrow 기능 활용 (스마트 컨트랙트 불필요, 프로토콜 레벨 보장)
+- XRPL Token Escrow(XLS-85, 2026.02 활성화) — 스마트 컨트랙트 없이 프로토콜 레벨에서 스테이블코인 에스크로 지원
+- RLUSD 스테이블코인으로 가치 변동 없는 선불금 보호 (XRP 변동성 문제 해결)
 - 블록체인 기반 투명성: 모든 거래 내역이 공개 원장에 기록
 - 사업자에게도 이익: "선불금 보호 인증"으로 소비자 신뢰 확보 -> 매출 증가
 

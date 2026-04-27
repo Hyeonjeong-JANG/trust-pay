@@ -1,6 +1,6 @@
 # QA Checklist
 > Created: 2026-04-26 22:50
-> Last Updated: 2026-04-26 22:50
+> Last Updated: 2026-04-27
 
 ## 1. Global Rubric Scorecard
 
@@ -8,7 +8,7 @@
 |:---|:---:|:---|
 | **Functionality** | - | MVP 기능 작동: 에스크로 생성/정산/환불 전체 플로우 |
 | **Potential Impact** | - | 선불 결제 피해 방지, XRPL 생태계 확장 |
-| **Novelty** | - | XRPL 네이티브 Escrow 활용 (스마트 컨트랙트 불필요) |
+| **Novelty** | - | XRPL Token Escrow(XLS-85) + RLUSD 스테이블코인 (스마트 컨트랙트 불필요) |
 | **UX** | - | API 400ms 이내, 직관적 모바일 UI |
 | **Open-source** | - | 모노레포 구조, 패키지 분리로 재사용 가능 |
 | **Business Plan** | - | 수수료 모델 + 사업자 구독 모델 설계됨 |
@@ -26,25 +26,29 @@
 
 ### 소비자 플로우
 - [ ] 앱 시작 -> LoginScreen 표시
-- [ ] Consumer 역할 선택 + XRPL 주소 입력 -> Dashboard 이동
+- [ ] Consumer 역할 선택 + 전화번호/이메일 입력 -> Dashboard 이동
+- [ ] 로그인 시 XRPL 지갑 자동 생성 + RLUSD Trust Line 설정
 - [ ] Dashboard에서 에스크로 목록 조회
-- [ ] 새 결제 생성 (금액 + 기간 입력)
+- [ ] 사업자 선택 -> 새 결제 생성 (RLUSD 금액 + 기간 입력)
 - [ ] 에스크로 생성 성공 알림
 - [ ] 에스크로 상세 조회 (월별 상태 표시)
-- [ ] 환불 요청 -> pending entry 환불 처리
+- [ ] 환불 요청 -> pending entry RLUSD 환불 처리
 
 ### 사업자 플로우
-- [ ] Business 역할 선택 + XRPL 주소 입력 -> Dashboard 이동
-- [ ] Dashboard에서 총 수령액 / 미정산액 표시
+- [ ] Business 역할 선택 + 전화번호/이메일 입력 -> Dashboard 이동
+- [ ] 등록 시 XRPL 지갑 자동 생성 + RLUSD Trust Line 설정
+- [ ] Dashboard에서 총 수령액 / 미정산액 표시 (RLUSD 단위)
 - [ ] 활성 에스크로 목록 표시
 - [ ] Release 버튼으로 월별 정산 실행
 - [ ] 정산 성공 알림 + 대시보드 갱신
 
 ### XRPL 연동
 - [ ] Testnet 연결 정상
-- [ ] EscrowCreate 트랜잭션 생성 및 기록
-- [ ] EscrowFinish 트랜잭션 실행 (finishAfter 경과 후)
-- [ ] EscrowCancel 트랜잭션 실행 (cancelAfter 경과 후)
+- [ ] 커스토디얼 지갑 생성 정상
+- [ ] RLUSD Trust Line 설정 정상
+- [ ] Token EscrowCreate (RLUSD) 트랜잭션 생성 및 기록
+- [ ] Token EscrowFinish 트랜잭션 실행 (finishAfter 경과 후)
+- [ ] Token EscrowCancel 트랜잭션 실행 (cancelAfter 경과 후)
 - [ ] Demo Mode 시간 압축 정상 동작
 
 ### API
@@ -61,8 +65,8 @@
 
 ### 보안
 - [ ] .env 파일 미커밋
-- [ ] 테스트 월렛 키가 코드에 노출되지 않음
-- [ ] [TODO] 인증/인가 미적용 (MVP 한계, 문서에 명시)
+- [ ] 커스토디얼 지갑 시크릿이 코드에 노출되지 않음 (DB 암호화 저장)
+- [ ] 전화번호/이메일 간편 인증 적용 (MVP)
 
 ### 코드 품질
 - [ ] TypeScript strict 모드 에러 없음

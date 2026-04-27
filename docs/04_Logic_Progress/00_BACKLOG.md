@@ -1,6 +1,6 @@
 # Backlog
 > Created: 2026-04-26 22:45
-> Last Updated: 2026-04-26 22:45
+> Last Updated: 2026-04-27
 
 ## Done
 
@@ -22,22 +22,31 @@
 - [x] Zustand 인증 스토어
 - [x] TanStack Query API 클라이언트
 - [x] Git 초기 커밋
-- [x] Layer 1~3 문서 작성
-- [x] Layer 4~5 문서 작성
+- [x] Layer 1~5 문서 작성
 - [x] 문서 커밋
+- [x] 설계 피벗: XRP → RLUSD + Token Escrow(XLS-85)
+- [x] 설계 피벗: XRPL 주소 로그인 → 전화번호/이메일 + 커스토디얼 지갑
+- [x] 전체 문서 업데이트 (RLUSD, 인증, 타임라인)
 
 ## In Progress
 
 ## ToDo — P0 (MVP 필수)
 
-- [ ] Consumer 등록 API 구현 (`POST /consumer`)
+- [ ] DB 스키마 마이그레이션 (phone/email/xrplSecret/currency/issuer 추가)
+- [ ] XRPL Token Escrow(XLS-85) 지원으로 xrpl-client 수정
+- [ ] Trust Line 설정 로직 추가 (RLUSD issuer)
+- [ ] 커스토디얼 지갑 생성 로직 (Testnet faucet + 지갑 암호화 저장)
+- [ ] 인증 API 구현 (`POST /auth/login`)
+- [ ] Consumer 등록 API 구현 (`POST /consumer`) — 지갑 자동 생성
+- [ ] Business 등록 API 수정 — 지갑 자동 생성
+- [ ] Escrow API 수정 — RLUSD Token Escrow로 전환
 - [ ] Zod 검증 파이프라인을 NestJS 컨트롤러에 연결
+- [ ] 모바일: 로그인 화면 변경 (전화번호/이메일 입력)
 - [ ] 모바일: 사업자 목록 선택 화면 추가
-- [ ] 모바일: Consumer 등록 플로우 추가 (로그인 시 자동 등록 또는 별도 화면)
 - [ ] 모바일: EscrowDetail 화면 (월별 상태 표시 + 환불 버튼)
 - [ ] 모바일: Consumer 환불 요청 UI (cancelEscrow 호출)
-- [ ] E2E 플로우 테스트: 생성 -> 정산 -> 완료
-- [ ] E2E 플로우 테스트: 생성 -> 폐업 환불
+- [ ] E2E 플로우 테스트: RLUSD 에스크로 생성 -> 정산 -> 완료
+- [ ] E2E 플로우 테스트: RLUSD 에스크로 생성 -> 폐업 환불
 - [ ] Demo Mode 시연 확인 (3분 내 전체 플로우)
 
 ## ToDo — P1 (완성도 향상)
@@ -51,14 +60,17 @@
 
 ## ToDo — P2 (Post-MVP)
 
-- [ ] XRPL 지갑 서명 기반 인증
-- [ ] JWT/세션 기반 API 인증
+- [ ] JWT 세션 기반 API 인증
+- [ ] OTP 인증 (SMS/이메일)
+- [ ] 사업자 온체인 Credentials 인증 (XRPL Credentials)
 - [ ] Push 알림 (정산 가능, 환불 완료)
 - [ ] 반응형 웹 버전
 - [ ] ESLint + Prettier 설정
 - [ ] 단위 테스트 작성 (Jest/Vitest)
 - [ ] 사업자 폐업 자동 감지 (공공데이터 API 연동)
 - [ ] 수수료 징수 로직
+- [ ] 비커스토디얼 지갑 전환 (HSM/MPC)
+- [ ] XRPL Mainnet 배포
 
 ## Related Documents
 - **Concept_Design**: [Product Specs](../01_Concept_Design/03_PRODUCT_SPECS.md) - MVP 기능 정의

@@ -1,6 +1,6 @@
 # Development Principles
 > Created: 2026-04-26 22:45
-> Last Updated: 2026-04-26 22:45
+> Last Updated: 2026-04-27
 
 ## 1. Architecture
 
@@ -24,7 +24,7 @@
 
 ```
 mobile --> api (REST API 호출)
-api --> xrpl-client (XRPL 트랜잭션)
+api --> xrpl-client (XRPL 트랜잭션: Token Escrow + Trust Lines)
 api --> validators (입력 검증) [TODO: 미연결]
 mobile --> shared-types (타입 공유)
 api --> shared-types (타입 공유)
@@ -85,13 +85,18 @@ AppModule
 ### 3.4 데이터 검증
 - Zod 스키마는 `packages/validators`에 정의됨
 - [TODO: High] API 컨트롤러에 Zod 검증 파이프라인 연결 필요
-- XRPL 주소 검증: `/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/`
-- 금액 제한: 최대 100,000,000 XRP, 최소 1 XRP
+- 금액 제한: 최대 100,000,000 RLUSD, 최소 1 RLUSD
 - 기간 제한: 1~24개월
 
 ### 3.5 인증/인가
-- [TODO: High] MVP 단계에서는 인증 미적용 (모든 엔드포인트 공개)
-- Production 시 XRPL 지갑 서명 기반 인증 필요
+- MVP: 전화번호/이메일 간편 인증 + 서버 커스토디얼 지갑
+- 서버가 사용자별 XRPL 지갑을 생성/관리 (사용자는 지갑 주소 몰라도 됨)
+- [TODO: Medium] Production 시 JWT 세션 + HSM/MPC 기반 키 관리로 전환
+
+### 3.6 XRPL 기능 활용
+- **Token Escrow (XLS-85)**: RLUSD 에스크로 생성/정산/환불 (2026.02 메인넷 활성화)
+- **Trust Lines**: RLUSD 수신을 위한 신뢰선 설정 (지갑 생성 시 자동)
+- Testnet에서 RLUSD issuer 주소 설정 필요 (환경변수: `RLUSD_ISSUER`)
 
 ### 3.6 커밋 컨벤션
 - `chore:` 설정/인프라 변경

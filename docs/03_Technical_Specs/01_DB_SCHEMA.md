@@ -1,6 +1,6 @@
 # DB Schema
 > Created: 2026-04-26 22:45
-> Last Updated: 2026-04-26 22:45
+> Last Updated: 2026-04-27
 
 ## 1. 개요
 
@@ -11,36 +11,42 @@
 ## 2. ER Diagram
 
 ```
-┌──────────────┐       ┌──────────────┐
-│   Consumer   │       │   Business   │
-│──────────────│       │──────────────│
-│ id       (PK)│       │ id       (PK)│
-│ name         │       │ name         │
-│ xrplAddress  │       │ category     │
-│ (unique)     │       │ address      │
-│ createdAt    │       │ xrplAddress  │
-│ updatedAt    │       │ (unique)     │
-└──────┬───────┘       │ isActive     │
-       │               │ createdAt    │
-       │ 1:N           │ updatedAt    │
-       │               └──────┬───────┘
-       │                      │ 1:N
-       v                      v
-┌─────────────────────────────────┐
-│            Escrow               │
-│─────────────────────────────────│
-│ id              (PK)            │
-│ consumerId      (FK -> Consumer)│
-│ businessId      (FK -> Business)│
-│ consumerAddress                 │
-│ businessAddress                 │
-│ totalAmount     (Float)         │
-│ monthlyAmount   (Float)         │
-│ months          (Int)           │
-│ status          (String)        │
-│ createdAt                       │
-│ updatedAt                       │
-└──────────────┬──────────────────┘
+┌──────────────────┐       ┌──────────────────┐
+│     Consumer     │       │     Business     │
+│──────────────────│       │──────────────────│
+│ id           (PK)│       │ id           (PK)│
+│ name             │       │ name             │
+│ phone            │       │ category         │
+│ email            │       │ address          │
+│ xrplAddress      │       │ phone            │
+│ (unique, auto)   │       │ email            │
+│ xrplSecret       │       │ xrplAddress      │
+│ (encrypted)      │       │ (unique, auto)   │
+│ createdAt        │       │ xrplSecret       │
+│ updatedAt        │       │ (encrypted)      │
+└──────┬───────────┘       │ isActive         │
+       │                   │ createdAt        │
+       │ 1:N               │ updatedAt        │
+       │                   └──────┬───────────┘
+       │                          │ 1:N
+       v                          v
+┌─────────────────────────────────────┐
+│              Escrow                 │
+│─────────────────────────────────────│
+│ id              (PK)                │
+│ consumerId      (FK -> Consumer)    │
+│ businessId      (FK -> Business)    │
+│ consumerAddress                     │
+│ businessAddress                     │
+│ totalAmount     (Float, RLUSD)      │
+│ monthlyAmount   (Float, RLUSD)      │
+│ months          (Int)               │
+│ currency        (String, "RLUSD")   │
+│ issuer          (String, RLUSD발행자)│
+│ status          (String)            │
+│ createdAt                           │
+│ updatedAt                           │
+└──────────────┬──────────────────────┘
                │ 1:N
                v
 ┌─────────────────────────────────┐
@@ -50,7 +56,7 @@
 │ escrowId    (FK -> Escrow)      │
 │ month       (Int)               │
 │ sequence    (Int)               │
-│ amount      (String)            │
+│ amount      (String, RLUSD)     │
 │ finishAfter (Int, Ripple epoch) │
 │ cancelAfter (Int, Ripple epoch) │
 │ status      (String)            │
@@ -70,7 +76,10 @@
 | name | String | required | 상호명 |
 | category | String | required | 업종 (gym, academy, salon 등) |
 | address | String | required | 사업장 주소 |
-| xrplAddress | String | unique | XRPL 수신 지갑 주소 |
+| phone | String | nullable | 연락처 (전화번호) |
+| email | String | nullable | 연락처 (이메일) |
+| xrplAddress | String | unique | XRPL 지갑 주소 (서버 자동 생성) |
+| xrplSecret | String | required | XRPL 지갑 시크릿 (암호화 저장) |
 | isActive | Boolean | default: true | 영업 상태 |
 | createdAt | DateTime | auto | 등록일시 |
 | updatedAt | DateTime | auto | 수정일시 |
@@ -81,7 +90,10 @@
 |:---|:---|:---|:---|
 | id | String | PK, UUID | 고유 식별자 |
 | name | String | required | 소비자 이름 |
-| xrplAddress | String | unique | XRPL 지갑 주소 |
+| phone | String | nullable | 전화번호 (로그인용) |
+| email | String | nullable | 이메일 (로그인용) |
+| xrplAddress | String | unique | XRPL 지갑 주소 (서버 자동 생성) |
+| xrplSecret | String | required | XRPL 지갑 시크릿 (암호화 저장) |
 | createdAt | DateTime | auto | 등록일시 |
 | updatedAt | DateTime | auto | 수정일시 |
 
@@ -94,9 +106,11 @@
 | businessId | String | FK -> Business | 사업자 참조 |
 | consumerAddress | String | required | 소비자 XRPL 주소 (역정규화) |
 | businessAddress | String | required | 사업자 XRPL 주소 (역정규화) |
-| totalAmount | Float | required | 총 에스크로 금액 (XRP) |
-| monthlyAmount | Float | required | 월별 정산 금액 (XRP) |
+| totalAmount | Float | required | 총 에스크로 금액 (RLUSD) |
+| monthlyAmount | Float | required | 월별 정산 금액 (RLUSD) |
 | months | Int | required | 총 개월 수 |
+| currency | String | default: "RLUSD" | 결제 토큰 (RLUSD) |
+| issuer | String | required | RLUSD 발행자 XRPL 주소 |
 | status | String | default: "active" | active / completed / cancelled |
 | createdAt | DateTime | auto | 생성일시 |
 | updatedAt | DateTime | auto | 수정일시 |
@@ -134,8 +148,11 @@ pending --> refunded   (EscrowCancel 성공)
 ## 5. 설계 결정
 
 - **역정규화**: Escrow에 consumerAddress/businessAddress를 중복 저장하여 JOIN 없이 주소 기반 조회 가능
-- **amount 타입**: EscrowEntry.amount는 String (drops 단위 정밀도 보존), Escrow.totalAmount/monthlyAmount는 Float (XRP 단위, UI 표시용)
+- **amount 타입**: EscrowEntry.amount는 String (정밀도 보존), Escrow.totalAmount/monthlyAmount는 Float (RLUSD 단위, UI 표시용)
 - **Ripple epoch**: finishAfter/cancelAfter는 Int (2000-01-01 기준 초 단위, XRPL 프로토콜 규격)
+- **커스토디얼 지갑**: xrplSecret은 서버에 암호화 저장 (MVP). Production에서는 HSM/MPC로 전환
+- **Trust Line**: 지갑 생성 시 RLUSD issuer에 대한 Trust Line 자동 설정
+- **currency/issuer**: Escrow에 토큰 정보 저장하여 Token Escrow(XLS-85) 트랜잭션 생성 시 사용
 
 ## 6. Related Documents
 - **Concept_Design**: [Product Specs](../01_Concept_Design/03_PRODUCT_SPECS.md) - 기능 명세

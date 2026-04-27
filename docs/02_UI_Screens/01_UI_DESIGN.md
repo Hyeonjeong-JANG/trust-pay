@@ -1,6 +1,6 @@
 # UI Design System
 > Created: 2026-04-26 22:40
-> Last Updated: 2026-04-26 22:40
+> Last Updated: 2026-04-27
 
 ## 1. 디자인 원칙
 
@@ -76,6 +76,13 @@
 - Layout: flex 1, centered
 - Label: 14px `#666666`
 - Value: 20px Bold, margin-top 4px
+- 금액 단위: RLUSD (예: "150.00 RLUSD")
+
+### 4.7 Status Badge
+- pending: bg `#FFF3CD`, text `#856404`
+- released: bg `#D4EDDA`, text `#155724`
+- refunded: bg `#F8D7DA`, text `#721C24`
+- Border Radius: 12px, Padding: 4px 8px, Font: 12px SemiBold
 
 ## 5. 레이아웃 규칙
 

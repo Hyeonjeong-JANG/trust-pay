@@ -1,26 +1,27 @@
 # API Specs
 > Created: 2026-04-26 22:45
-> Last Updated: 2026-04-26 22:45
+> Last Updated: 2026-04-27
 
 ## 1. 개요
 
 - **프레임워크**: NestJS ^11.0.0
 - **Base URL**: `http://localhost:3000`
 - **형식**: REST JSON API
-- **인증**: 미적용 (MVP)
+- **인증**: 전화번호/이메일 간편 인증 (MVP)
+- **결제 토큰**: RLUSD (Token Escrow via XLS-85)
 - **CORS**: 전체 허용 (MVP)
 
 ## 2. Escrow API
 
 ### 2.1 POST /escrow — 에스크로 생성
 
-소비자가 사업자에게 선불금을 월별 분할 에스크로로 예치한다.
+소비자가 사업자에게 선불금을 RLUSD로 월별 분할 Token Escrow에 예치한다.
 
 **Request Body**:
 ```json
 {
-  "consumerAddress": "rConsumer...",
-  "businessAddress": "rBusiness...",
+  "consumerId": "uuid",
+  "businessId": "uuid",
   "totalAmount": 600,
   "months": 6
 }
@@ -37,13 +38,14 @@
   "totalAmount": 600,
   "monthlyAmount": 100,
   "months": 6,
+  "currency": "RLUSD",
   "status": "active",
   "entries": [
     {
       "id": "uuid",
       "month": 1,
       "sequence": 12345,
-      "amount": "100000000",
+      "amount": "100",
       "finishAfter": 893456789,
       "cancelAfter": 896048789,
       "status": "pending",
@@ -58,9 +60,9 @@
 - `404` Business not found
 
 **비즈니스 로직**:
-1. Consumer/Business 존재 확인
-2. 테스트 월렛 생성 (MVP: 서버 사이드)
-3. N개의 XRPL EscrowCreate 트랜잭션 생성
+1. Consumer/Business 존재 확인 + XRPL 주소 조회
+2. Trust Line 확인 (RLUSD issuer에 대한 신뢰선)
+3. N개의 XRPL Token EscrowCreate 트랜잭션 생성 (RLUSD)
 4. DB에 Escrow + EscrowEntry 저장
 
 ---
@@ -143,11 +145,17 @@
   "name": "FitGym Gangnam",
   "category": "gym",
   "address": "Seoul Gangnam-gu ...",
-  "xrplAddress": "rBusiness..."
+  "phone": "010-1234-5678",
+  "email": "fitgym@example.com"
 }
 ```
 
-**Response 201**: Business 객체
+**Response 201**: Business 객체 (xrplAddress 자동 생성됨, xrplSecret 미노출)
+
+**비즈니스 로직**:
+1. XRPL 지갑 자동 생성 (Testnet faucet)
+2. RLUSD issuer에 대한 Trust Line 설정
+3. DB에 Business 저장 (xrplSecret 암호화)
 
 ---
 
@@ -182,14 +190,55 @@
 - totalPending: status가 "pending"인 entry의 amount 합계
 - activeEscrows: status가 "active"인 escrow 수
 
-## 4. [TODO] 미구현 API
+## 4. Auth API
+
+### 4.1 POST /auth/login — 간편 로그인
+
+**Request Body**:
+```json
+{
+  "phone": "010-1234-5678",
+  "role": "consumer"
+}
+```
+
+**Response 200**:
+```json
+{
+  "userId": "uuid",
+  "role": "consumer",
+  "name": "홍길동"
+}
+```
+
+**비즈니스 로직**:
+1. phone/email로 사용자 조회
+2. 없으면 자동 등록 (XRPL 지갑 생성 + Trust Line 설정)
+3. 있으면 기존 사용자 반환
+
+## 5. Consumer API
+
+### 5.1 POST /consumer — 소비자 등록
+
+**Request Body**:
+```json
+{
+  "name": "홍길동",
+  "phone": "010-1234-5678",
+  "email": "hong@example.com"
+}
+```
+
+**Response 201**: Consumer 객체 (xrplAddress 자동 생성됨)
+
+## 6. [TODO] 미구현 API
 
 | 엔드포인트 | 우선순위 | 설명 |
 |:---|:---:|:---|
-| POST /consumer | P1 | 소비자 등록 (현재 DB 직접 생성 필요) |
 | GET /business/:id/escrows | P1 | 사업자별 에스크로 목록 |
 | PATCH /business/:id | P2 | 사업자 정보 수정 |
-| POST /auth/verify | P2 | XRPL 지갑 서명 기반 인증 |
+| POST /auth/send-otp | P2 | OTP 발송 (프로덕션 인증) |
+| POST /auth/verify-otp | P2 | OTP 검증 (프로덕션 인증) |
 
 ## 5. Related Documents
 - **Concept_Design**: [Product Specs](../01_Concept_Design/03_PRODUCT_SPECS.md) - 기능 명세
