@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from './auth/auth.module';
+import { ConsumerModule } from './consumer/consumer.module';
 import { EscrowModule } from './escrow/escrow.module';
 import { XrplModule } from './xrpl/xrpl.module';
 import { BusinessModule } from './business/business.module';
@@ -14,6 +16,8 @@ import configuration from './config/configuration';
     }),
     PrismaModule,
     XrplModule,
+    AuthModule,
+    ConsumerModule,
     EscrowModule,
     BusinessModule,
   ],
