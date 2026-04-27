@@ -99,6 +99,9 @@ importers:
       '@prepaid-shield/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@react-native-community/netinfo':
+        specifier: ^12.0.1
+        version: 12.0.1(react-native@0.76.6(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1))(react@18.3.1)
       '@react-navigation/bottom-tabs':
         specifier: ^7.0.0
         version: 7.15.10(@react-navigation/native@7.2.2(react-native@0.76.6(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1))(react@18.3.1))(react-native-safe-area-context@5.0.0(react-native@0.76.6(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1))(react@18.3.1))(react-native-screens@4.4.0(react-native@0.76.6(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1))(react@18.3.1))(react-native@0.76.6(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1))(react@18.3.1)
@@ -1667,6 +1670,12 @@ packages:
     resolution: {integrity: sha512-avutXAFL1ehGvAXtPquu0YK5oz6ctS474iM3vNGQIkswrVhdrS52e3uoMQBzZhNRAIE0jBnUyXWNmSjGHhCFcw==}
     peerDependencies:
       react: ^16.8 || ^17.0 || ^18.0
+
+  '@react-native-community/netinfo@12.0.1':
+    resolution: {integrity: sha512-P/3caXIvfYSJG8AWJVefukg+ZGRPs+M4Lp3pNJtgcTYoJxCjWrKQGNnCkj/Cz//zWa/avGed0i/wzm0T8vV2IQ==}
+    peerDependencies:
+      react: '*'
+      react-native: '>=0.59'
 
   '@react-native/assets-registry@0.76.6':
     resolution: {integrity: sha512-YI8HoReYiIwdFQs+k9Q9qpFTnsyYikZxgs/UVtVbhKixXDQF6F9LLvj2naOx4cfV+RGybNKxwmDl1vUok/dRFQ==}
@@ -7621,6 +7630,11 @@ snapshots:
       '@babel/runtime': 7.29.2
       '@radix-ui/react-compose-refs': 1.0.0(react@18.3.1)
       react: 18.3.1
+
+  '@react-native-community/netinfo@12.0.1(react-native@0.76.6(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      react: 18.3.1
+      react-native: 0.76.6(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1)
 
   '@react-native/assets-registry@0.76.6': {}
 

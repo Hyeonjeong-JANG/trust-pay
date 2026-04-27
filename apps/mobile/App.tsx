@@ -5,6 +5,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { NetworkBanner } from './src/components/NetworkBanner';
 import { useAuthStore } from './src/store/auth';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { ConsumerDashboardScreen } from './src/screens/consumer/DashboardScreen';
@@ -119,11 +121,14 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <NavigationContainer>
-        <AppNavigator />
-        <StatusBar style="auto" />
-      </NavigationContainer>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <NavigationContainer>
+          <NetworkBanner />
+          <AppNavigator />
+          <StatusBar style="auto" />
+        </NavigationContainer>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
