@@ -9,17 +9,19 @@
     "start:prod": "node dist/main",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
+    "test": "jest",
+    "test:cov": "jest --coverage",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
-    "@nestjs/config": "^4.0.0",
-    "@prisma/client": "^6.6.0",
     "@prepaid-shield/shared-types": "workspace:*",
     "@prepaid-shield/validators": "workspace:*",
     "@prepaid-shield/xrpl-client": "workspace:*",
+    "@prisma/client": "^6.6.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.0",
     "zod": "^3.24.0"
@@ -27,9 +29,14 @@
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
-    "prisma": "^6.6.0",
-    "typescript": "^5.8.0",
+    "@nestjs/testing": "^11.1.19",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",
-    "@types/express": "^5.0.0"
+    "jest": "^30.3.0",
+    "jest-mock-extended": "^4.0.1",
+    "prisma": "^6.6.0",
+    "ts-jest": "^29.4.9",
+    "typescript": "^5.8.0"
   }
 }
