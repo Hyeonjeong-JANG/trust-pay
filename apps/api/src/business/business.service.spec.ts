@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { BusinessService } from './business.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
+import { CryptoService } from '../common/crypto.service';
 
 const mockBusiness = {
   id: 'biz-1',
@@ -12,7 +13,7 @@ const mockBusiness = {
   phone: '010-1234-5678',
   email: 'cafe@test.com',
   xrplAddress: 'rBizAddr123',
-  xrplSecret: 'sBizSecret123',
+  xrplSecret: 'encrypted:sBizSecret123',
   isActive: true,
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
@@ -46,6 +47,7 @@ describe('BusinessService', () => {
         BusinessService,
         { provide: PrismaService, useValue: prisma },
         { provide: XrplService, useValue: xrplService },
+        { provide: CryptoService, useValue: { encrypt: jest.fn((v: string) => 'encrypted:' + v), decrypt: jest.fn((v: string) => v.replace('encrypted:', '')) } },
       ],
     }).compile();
 
@@ -72,7 +74,7 @@ describe('BusinessService', () => {
           category: '카페',
           address: '서울시 강남구',
           xrplAddress: 'rBizAddr123',
-          xrplSecret: 'sBizSecret123',
+          xrplSecret: 'encrypted:sBizSecret123',
         }),
       });
       // Should NOT include xrplSecret in response

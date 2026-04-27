@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
+import { CryptoService } from '../common/crypto.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -34,6 +35,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: PrismaService, useValue: prisma },
         { provide: XrplService, useValue: xrplService },
+        { provide: CryptoService, useValue: { encrypt: jest.fn((v: string) => 'encrypted:' + v), decrypt: jest.fn((v: string) => v.replace('encrypted:', '')) } },
       ],
     }).compile();
 
@@ -56,7 +58,7 @@ describe('AuthService', () => {
         name: '테스트',
         phone: '010-1234-5678',
         xrplAddress: 'rTestAddr123',
-        xrplSecret: 'sTestSecret123',
+        xrplSecret: 'encrypted:sTestSecret123',
       });
 
       const result = await service.login({
@@ -72,7 +74,7 @@ describe('AuthService', () => {
           phone: '010-1234-5678',
           name: '테스트',
           xrplAddress: 'rTestAddr123',
-          xrplSecret: 'sTestSecret123',
+          xrplSecret: 'encrypted:sTestSecret123',
         }),
       });
       expect(result).toEqual({
@@ -124,7 +126,7 @@ describe('AuthService', () => {
         name: '소비자',
         phone: '010-0000-0000',
         xrplAddress: 'rTestAddr123',
-        xrplSecret: 'sTestSecret123',
+        xrplSecret: 'encrypted:sTestSecret123',
       });
 
       await service.login({ phone: '010-0000-0000', role: 'consumer' });

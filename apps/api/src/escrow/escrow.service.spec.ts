@@ -3,6 +3,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EscrowService } from './escrow.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CryptoService } from '../common/crypto.service';
 import { XrplService } from '../xrpl/xrpl.service';
 
 // Mock Wallet.fromSeed to avoid real XRPL seed validation
@@ -78,6 +79,7 @@ describe('EscrowService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: XrplService, useValue: xrplService },
         { provide: ConfigService, useValue: configService },
+        { provide: CryptoService, useValue: { encrypt: jest.fn((v: string) => 'encrypted:' + v), decrypt: jest.fn((v: string) => v.replace('encrypted:', '')) } },
       ],
     }).compile();
 
