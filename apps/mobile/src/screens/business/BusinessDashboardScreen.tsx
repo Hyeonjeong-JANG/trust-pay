@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
@@ -10,7 +10,7 @@ export function BusinessDashboardScreen() {
 
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['businessDashboard', userId],
-    queryFn: () => api.getBusinessDashboard(userId!) as Promise<any>,
+    queryFn: () => api.getBusinessDashboard(userId!),
     enabled: !!userId,
   });
 
@@ -27,61 +27,67 @@ export function BusinessDashboardScreen() {
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <Text>Loading...</Text>
+        <ActivityIndicator size="large" color="#4A90D9" />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Business Dashboard</Text>
-
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Received</Text>
           <Text style={styles.summaryValue}>
-            {dashboard?.totalReceived?.toLocaleString() ?? 0} XRP
+            {dashboard?.totalReceived?.toLocaleString() ?? 0} RLUSD
           </Text>
         </View>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Pending</Text>
           <Text style={styles.summaryValue}>
-            {dashboard?.totalPending?.toLocaleString() ?? 0} XRP
+            {dashboard?.totalPending?.toLocaleString() ?? 0} RLUSD
           </Text>
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Active Escrows</Text>
+      <Text style={styles.sectionTitle}>
+        Active Escrows ({dashboard?.activeEscrows ?? 0})
+      </Text>
       <FlatList
         data={dashboard?.escrows ?? []}
         keyExtractor={(item: any) => item.id}
-        renderItem={({ item }: { item: any }) => (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Customer: {item.consumer?.name}</Text>
-            <Text>Monthly: {item.monthlyAmount} XRP</Text>
-            {item.entries
-              ?.filter((e: any) => e.status === 'pending')
-              .slice(0, 1)
-              .map((entry: any) => (
+        renderItem={({ item }: { item: any }) => {
+          const pendingEntries = item.entries?.filter((e: any) => e.status === 'pending') ?? [];
+          const nextEntry = pendingEntries[0];
+          return (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>{item.consumer?.name ?? 'Consumer'}</Text>
+                <Text style={styles.cardAmount}>{item.totalAmount} RLUSD</Text>
+              </View>
+              <Text style={styles.cardSub}>
+                {item.monthlyAmount} RLUSD/month  ·  {pendingEntries.length} pending
+              </Text>
+              {nextEntry && (
                 <TouchableOpacity
-                  key={entry.id}
-                  style={styles.releaseButton}
+                  style={[styles.releaseButton, finishMutation.isPending && styles.buttonDisabled]}
                   onPress={() =>
                     finishMutation.mutate({
                       escrowId: item.id,
-                      month: entry.month,
+                      month: nextEntry.month,
                     })
                   }
+                  disabled={finishMutation.isPending}
                 >
                   <Text style={styles.releaseButtonText}>
-                    Release Month {entry.month}
+                    Release Month {nextEntry.month} ({nextEntry.amount} RLUSD)
                   </Text>
                 </TouchableOpacity>
-              ))}
-          </View>
-        )}
+              )}
+            </View>
+          );
+        }}
         ListEmptyComponent={
-          <Text style={styles.empty}>No escrows</Text>
+          <Text style={styles.empty}>No active escrows</Text>
         }
       />
     </View>
@@ -91,7 +97,6 @@ export function BusinessDashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#f5f5f5' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
   summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   summaryCard: {
     flex: 1,
@@ -99,9 +104,13 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 1,
   },
   summaryLabel: { fontSize: 14, color: '#666' },
-  summaryValue: { fontSize: 20, fontWeight: 'bold', marginTop: 4 },
+  summaryValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
   sectionTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12 },
   card: {
     backgroundColor: '#fff',
@@ -109,14 +118,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
-  cardTitle: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardTitle: { fontSize: 16, fontWeight: '600' },
+  cardAmount: { fontSize: 14, color: '#4A90D9', fontWeight: '600' },
+  cardSub: { fontSize: 13, color: '#999', marginTop: 4, marginBottom: 8 },
   releaseButton: {
     backgroundColor: '#34C759',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 8,
   },
+  buttonDisabled: { opacity: 0.5 },
   releaseButtonText: { color: '#fff', fontWeight: '600' },
   empty: { textAlign: 'center', color: '#999', marginTop: 40 },
 });
