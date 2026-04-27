@@ -20,6 +20,11 @@ export class BusinessController {
     return this.businessService.findAll();
   }
 
+  @Get(':id/balance')
+  getBalance(@Param('id') id: string) {
+    return this.businessService.getBalance(id);
+  }
+
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.businessService.findById(id);

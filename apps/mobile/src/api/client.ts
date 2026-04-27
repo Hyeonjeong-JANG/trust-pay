@@ -1,4 +1,4 @@
-import type { LoginResponse, EscrowRecord, BusinessDashboard, Business } from '@prepaid-shield/shared-types';
+import type { LoginResponse, EscrowRecord, BusinessDashboard, Business, BalanceResponse } from '@prepaid-shield/shared-types';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -98,6 +98,10 @@ export const api = {
   // Auth
   login: (data: { phone?: string; email?: string; role: 'consumer' | 'business'; name?: string }) =>
     request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Balance
+  getBalance: (id: string, role: 'consumer' | 'business') =>
+    request<BalanceResponse>(`/${role}/${id}/balance`),
 
   // Escrow
   createEscrow: (data: { consumerId: string; businessId: string; totalAmount: number; months: number }) =>

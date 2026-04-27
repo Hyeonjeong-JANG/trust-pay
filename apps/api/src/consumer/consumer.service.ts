@@ -41,6 +41,13 @@ export class ConsumerService {
     return result;
   }
 
+  async getBalance(id: string) {
+    const consumer = await this.prisma.consumer.findUnique({ where: { id } });
+    if (!consumer) throw new NotFoundException('Consumer not found');
+    const balance = await this.xrplService.getBalance(consumer.xrplAddress);
+    return { xrplAddress: consumer.xrplAddress, balance };
+  }
+
   async findAll() {
     const consumers = await this.prisma.consumer.findMany();
     return consumers.map(({ xrplSecret: _, ...c }) => c);

@@ -7,6 +7,7 @@ import { ConsumerDashboardScreen } from './DashboardScreen';
 jest.mock('../../api/client', () => ({
   api: {
     getConsumerEscrows: jest.fn(),
+    getBalance: jest.fn().mockResolvedValue({ xrplAddress: 'rTest1234', balance: '10000' }),
   },
 }));
 
@@ -19,7 +20,7 @@ jest.mock('../../store/auth', () => ({
 // Mock navigation
 const mockNavigation = {
   navigate: jest.fn(),
-};
+} as any;
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({
@@ -40,9 +41,9 @@ describe('ConsumerDashboardScreen', () => {
     api.getConsumerEscrows.mockResolvedValue([]);
 
     const { findByText } = renderWithProviders(
-      <ConsumerDashboardScreen navigation={mockNavigation} />,
+      <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
-    expect(await findByText('My Prepaid Protections')).toBeTruthy();
+    expect(await findByText('내 선불 보호')).toBeTruthy();
   });
 
   it('should show FAB button after loading', async () => {
@@ -50,7 +51,7 @@ describe('ConsumerDashboardScreen', () => {
     api.getConsumerEscrows.mockResolvedValue([]);
 
     const { findByText } = renderWithProviders(
-      <ConsumerDashboardScreen navigation={mockNavigation} />,
+      <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
     expect(await findByText('+')).toBeTruthy();
   });
@@ -60,10 +61,10 @@ describe('ConsumerDashboardScreen', () => {
     api.getConsumerEscrows.mockResolvedValue([]);
 
     const { findByText } = renderWithProviders(
-      <ConsumerDashboardScreen navigation={mockNavigation} />,
+      <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
-    expect(await findByText('No escrows yet. Tap + to get started.')).toBeTruthy();
+    expect(await findByText('아직 에스크로가 없습니다. +를 눌러 시작하세요.')).toBeTruthy();
   });
 
   it('should render escrow cards with business name and amount', async () => {
@@ -84,11 +85,10 @@ describe('ConsumerDashboardScreen', () => {
     ]);
 
     const { findByText } = renderWithProviders(
-      <ConsumerDashboardScreen navigation={mockNavigation} />,
+      <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
     expect(await findByText('테스트카페')).toBeTruthy();
-    expect(await findByText('150000 RLUSD')).toBeTruthy();
-    expect(await findByText('1/3 months released')).toBeTruthy();
+    expect(await findByText('1/3개월 릴리즈됨')).toBeTruthy();
   });
 });

@@ -8,12 +8,27 @@
  *  - 사업자 5개 (카페, 헬스장, 미용실, 세탁소, 학원)
  *  - 소비자 2명
  *  - 에스크로 2건 (각 3개월)
+ *
+ * xrplSecret은 AES-256-GCM으로 암호화됨 (CryptoService와 동일 로직)
  */
 
 import { PrismaClient } from '@prisma/client';
-import { randomUUID } from 'crypto';
+import { createCipheriv, randomBytes, scryptSync } from 'crypto';
 
 const prisma = new PrismaClient();
+
+// ─── 암호화 (CryptoService와 동일 로직) ───
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'dev-only-change-in-production-32ch';
+const SALT = 'prepaid-shield-v1';
+const key = scryptSync(ENCRYPTION_KEY, SALT, 32);
+
+function encrypt(plaintext: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [iv.toString('hex'), tag.toString('hex'), encrypted.toString('hex')].join(':');
+}
 
 // 가짜 XRPL 주소 (데모용)
 function fakeAddr(prefix: string, i: number) {
@@ -45,7 +60,7 @@ async function main() {
       data: {
         ...businesses[i],
         xrplAddress: fakeAddr('Biz', i + 1),
-        xrplSecret: `sDemoSecret_biz_${i + 1}`,
+        xrplSecret: encrypt(`sDemoSecret_biz_${i + 1}`),
       },
     });
     createdBusinesses.push(b);
@@ -64,7 +79,7 @@ async function main() {
       data: {
         ...consumers[i],
         xrplAddress: fakeAddr('Con', i + 1),
-        xrplSecret: `sDemoSecret_con_${i + 1}`,
+        xrplSecret: encrypt(`sDemoSecret_con_${i + 1}`),
       },
     });
     createdConsumers.push(c);
@@ -75,7 +90,7 @@ async function main() {
   console.log('\n📋 에스크로 생성...');
 
   // 에스크로 1: 김민수 → 강남 블루보틀 (카페 선불 3개월)
-  const escrow1 = await prisma.escrow.create({
+  await prisma.escrow.create({
     data: {
       consumerId: createdConsumers[0].id,
       businessId: createdBusinesses[0].id,
@@ -99,7 +114,7 @@ async function main() {
   console.log(`  📦 ${createdConsumers[0].name} → ${createdBusinesses[0].name}: 150,000 RLUSD (1/3 released)`);
 
   // 에스크로 2: 이서연 → 파워짐 피트니스 (헬스장 3개월)
-  const escrow2 = await prisma.escrow.create({
+  await prisma.escrow.create({
     data: {
       consumerId: createdConsumers[1].id,
       businessId: createdBusinesses[1].id,
@@ -128,7 +143,9 @@ async function main() {
   console.log('═══════════════════════════════════════════');
   console.log('\n데모 로그인 정보:');
   console.log('  소비자: 010-2000-0001 (김민수) / 010-2000-0002 (이서연)');
-  console.log('  사업자: 010-1000-0001 (강남 블루보틀) ~ 010-1000-0005 (정상어학원)\n');
+  console.log('  사업자: 010-1000-0001 (강남 블루보틀) ~ 010-1000-0005 (정상어학원)');
+  console.log(`  ENCRYPTION_KEY: ${ENCRYPTION_KEY === 'dev-only-change-in-production-32ch' ? '(기본값)' : '(커스텀)'}`);
+  console.log('');
 
   await prisma.$disconnect();
 }

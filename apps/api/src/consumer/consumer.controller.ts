@@ -13,6 +13,11 @@ export class ConsumerController {
     return this.consumerService.register(dto);
   }
 
+  @Get(':id/balance')
+  getBalance(@Param('id') id: string) {
+    return this.consumerService.getBalance(id);
+  }
+
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.consumerService.findById(id);

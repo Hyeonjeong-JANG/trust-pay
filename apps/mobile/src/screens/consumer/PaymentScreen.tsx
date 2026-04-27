@@ -11,11 +11,12 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
+import type { ScreenProps } from '../../navigation/types';
 
-export function PaymentScreen({ route, navigation }: any) {
+export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
   const userId = useAuthStore((s) => s.userId);
   const queryClient = useQueryClient();
-  const { businessId, businessName } = route.params ?? {};
+  const { businessId, businessName } = route.params;
 
   const [amount, setAmount] = useState('');
   const [months, setMonths] = useState('6');
@@ -30,7 +31,8 @@ export function PaymentScreen({ route, navigation }: any) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
-      Alert.alert('Success', 'Escrow created on XRPL!');
+      queryClient.invalidateQueries({ queryKey: ['balance'] });
+      Alert.alert('성공', 'XRPL에 에스크로가 생성되었습니다!');
       navigation.navigate('ConsumerDashboard');
     },
     onError: (err: Error) => {
@@ -47,32 +49,32 @@ export function PaymentScreen({ route, navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Create Escrow</Text>
-      <Text style={styles.businessLabel}>To: {businessName}</Text>
+      <Text style={styles.title}>에스크로 생성</Text>
+      <Text style={styles.businessLabel}>대상: {businessName}</Text>
 
-      <Text style={styles.label}>Total Amount (RLUSD)</Text>
+      <Text style={styles.label}>총 금액 (RLUSD)</Text>
       <TextInput
         style={styles.input}
         value={amount}
         onChangeText={setAmount}
         keyboardType="numeric"
-        placeholder="e.g. 600"
+        placeholder="예: 600"
       />
 
-      <Text style={styles.label}>Duration (months)</Text>
+      <Text style={styles.label}>기간 (개월)</Text>
       <TextInput
         style={styles.input}
         value={months}
         onChangeText={setMonths}
         keyboardType="numeric"
-        placeholder="e.g. 6"
+        placeholder="예: 6"
       />
 
       <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Monthly Release</Text>
+        <Text style={styles.infoTitle}>월별 릴리즈</Text>
         <Text style={styles.infoValue}>{monthlyAmount} RLUSD</Text>
         <Text style={styles.infoSub}>
-          Each month, {monthlyAmount} RLUSD is released to {businessName} via Token Escrow (XLS-85)
+          매월 {monthlyAmount} RLUSD가 Token Escrow(XLS-85)를 통해 {businessName}에게 릴리즈됩니다
         </Text>
       </View>
 
@@ -84,10 +86,10 @@ export function PaymentScreen({ route, navigation }: any) {
         {mutation.isPending ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator color="#fff" size="small" />
-            <Text style={styles.buttonText}> Creating on XRPL...</Text>
+            <Text style={styles.buttonText}> XRPL에 생성 중...</Text>
           </View>
         ) : (
-          <Text style={styles.buttonText}>Create Escrow</Text>
+          <Text style={styles.buttonText}>에스크로 생성</Text>
         )}
       </TouchableOpacity>
     </View>

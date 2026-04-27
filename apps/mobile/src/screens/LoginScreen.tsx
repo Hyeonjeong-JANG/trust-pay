@@ -53,9 +53,9 @@ export function LoginScreen() {
     >
       <View style={styles.inner}>
         <Text style={styles.title}>PrepaidShield</Text>
-        <Text style={styles.subtitle}>RLUSD Prepaid Protection on XRPL</Text>
+        <Text style={styles.subtitle}>XRPL 기반 RLUSD 선불 보호 서비스</Text>
 
-        {/* Role selector */}
+        {/* 역할 선택 */}
         <View style={styles.segmentRow}>
           {(['consumer', 'business'] as UserRole[]).map((r) => (
             <TouchableOpacity
@@ -64,13 +64,13 @@ export function LoginScreen() {
               onPress={() => setRole(r)}
             >
               <Text style={[styles.segmentText, role === r && styles.segmentTextActive]}>
-                {r === 'consumer' ? 'Consumer' : 'Business'}
+                {r === 'consumer' ? '소비자' : '사업자'}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Login method selector */}
+        {/* 로그인 방식 선택 */}
         <View style={styles.methodRow}>
           {(['phone', 'email'] as LoginMethod[]).map((m) => (
             <TouchableOpacity
@@ -79,16 +79,16 @@ export function LoginScreen() {
               onPress={() => setMethod(m)}
             >
               <Text style={[styles.methodText, method === m && styles.methodTextActive]}>
-                {m === 'phone' ? 'Phone' : 'Email'}
+                {m === 'phone' ? '전화번호' : '이메일'}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Input fields */}
+        {/* 입력 필드 */}
         {method === 'phone' ? (
           <>
-            <Text style={styles.label}>Phone Number</Text>
+            <Text style={styles.label}>전화번호</Text>
             <TextInput
               style={styles.input}
               value={phone}
@@ -100,7 +100,7 @@ export function LoginScreen() {
           </>
         ) : (
           <>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>이메일</Text>
             <TextInput
               style={styles.input}
               value={email}
@@ -115,17 +115,17 @@ export function LoginScreen() {
 
         {role === 'consumer' && (
           <>
-            <Text style={styles.label}>Name (optional)</Text>
+            <Text style={styles.label}>이름 (선택)</Text>
             <TextInput
               style={styles.input}
               value={name}
               onChangeText={setName}
-              placeholder="Your name"
+              placeholder="이름을 입력하세요"
             />
           </>
         )}
 
-        {/* Login button */}
+        {/* 로그인 버튼 */}
         <TouchableOpacity
           style={[styles.button, (!canSubmit || loginMutation.isPending) && styles.buttonDisabled]}
           onPress={() => loginMutation.mutate()}
@@ -135,22 +135,22 @@ export function LoginScreen() {
             <View style={styles.loadingRow}>
               <ActivityIndicator color="#fff" size="small" />
               <Text style={styles.buttonText}>
-                {role === 'consumer' ? ' Creating wallet...' : ' Logging in...'}
+                {role === 'consumer' ? ' 지갑 생성 중...' : ' 로그인 중...'}
               </Text>
             </View>
           ) : (
-            <Text style={styles.buttonText}>Login</Text>
+            <Text style={styles.buttonText}>로그인</Text>
           )}
         </TouchableOpacity>
 
         {role === 'consumer' && (
           <Text style={styles.hint}>
-            First login auto-creates your XRPL wallet + RLUSD trust line
+            첫 로그인 시 XRPL 지갑 + RLUSD 트러스트라인이 자동 생성됩니다
           </Text>
         )}
         {role === 'business' && (
           <Text style={styles.hint}>
-            Business accounts must be pre-registered by admin
+            사업자 계정은 관리자가 사전 등록해야 합니다
           </Text>
         )}
       </View>

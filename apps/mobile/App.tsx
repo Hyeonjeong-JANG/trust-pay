@@ -2,7 +2,7 @@ import React from 'react';
 import { TouchableOpacity, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from './src/store/auth';
 import { LoginScreen } from './src/screens/LoginScreen';
@@ -11,15 +11,23 @@ import { BusinessSelectScreen } from './src/screens/consumer/BusinessSelectScree
 import { PaymentScreen } from './src/screens/consumer/PaymentScreen';
 import { EscrowDetailScreen } from './src/screens/consumer/EscrowDetailScreen';
 import { BusinessDashboardScreen } from './src/screens/business/BusinessDashboardScreen';
+import type { RootStackParamList } from './src/navigation/types';
 
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 const queryClient = new QueryClient();
 
 function LogoutButton() {
   const clearAuth = useAuthStore((s) => s.clearAuth);
+  const qc = useQueryClient();
   return (
-    <TouchableOpacity onPress={clearAuth} style={{ marginRight: 8 }}>
-      <Text style={{ color: '#FF3B30', fontSize: 15 }}>Logout</Text>
+    <TouchableOpacity
+      onPress={() => {
+        qc.clear();
+        clearAuth();
+      }}
+      style={{ marginRight: 8 }}
+    >
+      <Text style={{ color: '#FF3B30', fontSize: 15 }}>로그아웃</Text>
     </TouchableOpacity>
   );
 }
@@ -44,7 +52,7 @@ function AppNavigator() {
         <Stack.Screen
           name="BusinessDashboard"
           component={BusinessDashboardScreen}
-          options={{ title: `${name ?? 'Business'} Dashboard` }}
+          options={{ title: `${name ?? '사업자'} 대시보드` }}
         />
       </Stack.Navigator>
     );
@@ -57,22 +65,22 @@ function AppNavigator() {
       <Stack.Screen
         name="ConsumerDashboard"
         component={ConsumerDashboardScreen}
-        options={{ title: 'My Escrows' }}
+        options={{ title: '내 선불보호' }}
       />
       <Stack.Screen
         name="BusinessSelect"
         component={BusinessSelectScreen}
-        options={{ title: 'Select Business' }}
+        options={{ title: '사업자 선택' }}
       />
       <Stack.Screen
         name="Payment"
         component={PaymentScreen}
-        options={{ title: 'New Escrow' }}
+        options={{ title: '에스크로 생성' }}
       />
       <Stack.Screen
         name="EscrowDetail"
         component={EscrowDetailScreen}
-        options={{ title: 'Escrow Detail' }}
+        options={{ title: '에스크로 상세' }}
       />
     </Stack.Navigator>
   );

@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client, Wallet } from 'xrpl';
-import { XrplEscrowClient, EscrowResult, CreateWalletResult, isoToRippleTime, monthsFromNow } from '@prepaid-shield/xrpl-client';
+import { XrplEscrowClient, EscrowResult, CreateWalletResult, isoToRippleTime, monthsFromNow, currencyToHex } from '@prepaid-shield/xrpl-client';
 import { randomUUID } from 'crypto';
 
 @Injectable()
@@ -133,6 +133,31 @@ export class XrplService implements OnModuleDestroy {
       ownerAddress,
       escrowSequence,
     });
+  }
+
+  async getBalance(xrplAddress: string): Promise<string> {
+    if (this.isDemoMode) {
+      this.logger.log(`[DEMO] Balance check for ${xrplAddress}`);
+      return '10000.00';
+    }
+    try {
+      const client = await this.getClient();
+      const issuer = this.configService.get<string>('rlusd.issuer')!;
+      const currency = this.configService.get<string>('rlusd.currency')!;
+      const hexCurrency = currencyToHex(currency);
+      const response = await client.request({
+        command: 'account_lines',
+        account: xrplAddress,
+        peer: issuer,
+      });
+      const line = (response.result as any).lines.find(
+        (l: any) => l.currency === currency || l.currency === hexCurrency,
+      );
+      return line?.balance ?? '0';
+    } catch (err) {
+      this.logger.warn(`Balance check failed for ${xrplAddress}: ${err}`);
+      return '0';
+    }
   }
 
   async onModuleDestroy() {

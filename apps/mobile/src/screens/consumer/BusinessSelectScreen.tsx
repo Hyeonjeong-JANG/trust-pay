@@ -4,8 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { ErrorView } from '../../components/ErrorView';
 import type { Business } from '@prepaid-shield/shared-types';
+import type { ScreenProps } from '../../navigation/types';
 
-export function BusinessSelectScreen({ navigation }: any) {
+export function BusinessSelectScreen({ navigation }: ScreenProps<'BusinessSelect'>) {
   const { data: businesses, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['businesses'],
     queryFn: () => api.getBusinesses(),
@@ -26,8 +27,8 @@ export function BusinessSelectScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Select Business</Text>
-      <Text style={styles.subtitle}>Choose where to set up prepaid protection</Text>
+      <Text style={styles.title}>사업자 선택</Text>
+      <Text style={styles.subtitle}>선불 보호를 설정할 사업자를 선택하세요</Text>
       <FlatList
         data={businesses}
         keyExtractor={(item) => item.id}
@@ -51,7 +52,7 @@ export function BusinessSelectScreen({ navigation }: any) {
           </TouchableOpacity>
         )}
         ListEmptyComponent={
-          <Text style={styles.empty}>No businesses registered yet</Text>
+          <Text style={styles.empty}>등록된 사업자가 없습니다</Text>
         }
       />
     </View>

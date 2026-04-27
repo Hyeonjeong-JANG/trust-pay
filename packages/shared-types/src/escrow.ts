@@ -94,3 +94,8 @@ export interface BusinessDashboard {
   activeEscrows: number;
   escrows: EscrowRecord[];
 }
+
+export interface BalanceResponse {
+  xrplAddress: string;
+  balance: string;
+}

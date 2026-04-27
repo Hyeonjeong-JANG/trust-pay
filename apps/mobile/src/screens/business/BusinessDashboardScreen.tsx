@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
@@ -17,11 +17,18 @@ export function BusinessDashboardScreen() {
     retry: 2,
   });
 
+  const { data: balanceData } = useQuery({
+    queryKey: ['balance', userId],
+    queryFn: () => api.getBalance(userId!, 'business'),
+    enabled: !!userId,
+  });
+
   const finishMutation = useMutation({
     mutationFn: ({ escrowId, month }: { escrowId: string; month: number }) =>
       api.finishEscrow(escrowId, month),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['balance'] });
       Alert.alert('릴리즈 완료', '월 대금이 수령되었습니다.');
     },
     onError: (err: Error) => {
@@ -44,15 +51,27 @@ export function BusinessDashboardScreen() {
 
   return (
     <View style={styles.container}>
+      {balanceData && (
+        <View style={styles.balanceCard}>
+          <Text style={styles.balanceLabel}>RLUSD 잔액</Text>
+          <Text style={styles.balanceValue}>
+            {Number(balanceData.balance).toLocaleString()} RLUSD
+          </Text>
+          <Text style={styles.balanceAddr}>
+            {balanceData.xrplAddress.slice(0, 8)}...{balanceData.xrplAddress.slice(-6)}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Received</Text>
+          <Text style={styles.summaryLabel}>수령액</Text>
           <Text style={styles.summaryValue}>
             {dashboard?.totalReceived?.toLocaleString() ?? 0} RLUSD
           </Text>
         </View>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Pending</Text>
+          <Text style={styles.summaryLabel}>대기액</Text>
           <Text style={styles.summaryValue}>
             {dashboard?.totalPending?.toLocaleString() ?? 0} RLUSD
           </Text>
@@ -60,7 +79,7 @@ export function BusinessDashboardScreen() {
       </View>
 
       <Text style={styles.sectionTitle}>
-        Active Escrows ({dashboard?.activeEscrows ?? 0})
+        활성 에스크로 ({dashboard?.activeEscrows ?? 0})
       </Text>
       <FlatList
         data={dashboard?.escrows ?? []}
@@ -71,11 +90,11 @@ export function BusinessDashboardScreen() {
           return (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>{item.consumer?.name ?? 'Consumer'}</Text>
-                <Text style={styles.cardAmount}>{item.totalAmount} RLUSD</Text>
+                <Text style={styles.cardTitle}>{item.consumer?.name ?? '소비자'}</Text>
+                <Text style={styles.cardAmount}>{item.totalAmount.toLocaleString()} RLUSD</Text>
               </View>
               <Text style={styles.cardSub}>
-                {item.monthlyAmount} RLUSD/month  ·  {pendingEntries.length} pending
+                {item.monthlyAmount.toLocaleString()} RLUSD/월  ·  {pendingEntries.length}건 대기
               </Text>
               {nextEntry && (
                 <TouchableOpacity
@@ -89,7 +108,7 @@ export function BusinessDashboardScreen() {
                   disabled={finishMutation.isPending}
                 >
                   <Text style={styles.releaseButtonText}>
-                    Release Month {nextEntry.month} ({nextEntry.amount} RLUSD)
+                    {nextEntry.month}월차 릴리즈 ({Number(nextEntry.amount).toLocaleString()} RLUSD)
                   </Text>
                 </TouchableOpacity>
               )}
@@ -97,7 +116,7 @@ export function BusinessDashboardScreen() {
           );
         }}
         ListEmptyComponent={
-          <Text style={styles.empty}>No active escrows</Text>
+          <Text style={styles.empty}>활성 에스크로가 없습니다</Text>
         }
       />
     </View>
@@ -107,6 +126,20 @@ export function BusinessDashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#f5f5f5' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  balanceCard: {
+    backgroundColor: '#4A90D9',
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  balanceLabel: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
+  balanceValue: { fontSize: 28, fontWeight: 'bold', color: '#fff', marginVertical: 4 },
+  balanceAddr: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.6)',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
   summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   summaryCard: {
     flex: 1,

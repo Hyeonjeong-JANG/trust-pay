@@ -1,12 +1,19 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
-import type { EscrowRecord, EscrowEntry } from '@prepaid-shield/shared-types';
+import type { EscrowEntry } from '@prepaid-shield/shared-types';
+import type { ScreenProps } from '../../navigation/types';
 
-export function ConsumerDashboardScreen({ navigation }: any) {
+const STATUS_KO: Record<string, string> = {
+  active: '진행중',
+  completed: '완료',
+  cancelled: '취소됨',
+};
+
+export function ConsumerDashboardScreen({ navigation }: ScreenProps<'ConsumerDashboard'>) {
   const userId = useAuthStore((s) => s.userId);
 
   const { data: escrows, isLoading, isError, error, refetch } = useQuery({
@@ -14,6 +21,12 @@ export function ConsumerDashboardScreen({ navigation }: any) {
     queryFn: () => api.getConsumerEscrows(userId!),
     enabled: !!userId,
     retry: 2,
+  });
+
+  const { data: balanceData } = useQuery({
+    queryKey: ['balance', userId],
+    queryFn: () => api.getBalance(userId!, 'consumer'),
+    enabled: !!userId,
   });
 
   if (isLoading) {
@@ -30,7 +43,18 @@ export function ConsumerDashboardScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>My Prepaid Protections</Text>
+      {balanceData && (
+        <View style={styles.balanceCard}>
+          <Text style={styles.balanceLabel}>RLUSD 잔액</Text>
+          <Text style={styles.balanceValue}>
+            {Number(balanceData.balance).toLocaleString()} RLUSD
+          </Text>
+          <Text style={styles.balanceAddr}>
+            {balanceData.xrplAddress.slice(0, 8)}...{balanceData.xrplAddress.slice(-6)}
+          </Text>
+        </View>
+      )}
+      <Text style={styles.title}>내 선불 보호</Text>
       <FlatList
         data={escrows}
         keyExtractor={(item) => item.id}
@@ -42,20 +66,20 @@ export function ConsumerDashboardScreen({ navigation }: any) {
               onPress={() => navigation.navigate('EscrowDetail', { id: item.id })}
             >
               <View style={styles.cardHeader}>
-                <Text style={styles.businessName}>{(item as any).business?.name ?? 'Business'}</Text>
+                <Text style={styles.businessName}>{(item as any).business?.name ?? '사업자'}</Text>
                 <View style={[styles.badge, item.status === 'active' ? styles.badgeActive : styles.badgeDone]}>
-                  <Text style={styles.badgeText}>{item.status}</Text>
+                  <Text style={styles.badgeText}>{STATUS_KO[item.status] ?? item.status}</Text>
                 </View>
               </View>
-              <Text style={styles.amount}>{item.totalAmount} RLUSD</Text>
+              <Text style={styles.amount}>{item.totalAmount.toLocaleString()} RLUSD</Text>
               <Text style={styles.progress}>
-                {released}/{item.months} months released
+                {released}/{item.months}개월 릴리즈됨
               </Text>
             </TouchableOpacity>
           );
         }}
         ListEmptyComponent={
-          <Text style={styles.empty}>No escrows yet. Tap + to get started.</Text>
+          <Text style={styles.empty}>아직 에스크로가 없습니다. +를 눌러 시작하세요.</Text>
         }
       />
       <TouchableOpacity
@@ -71,6 +95,20 @@ export function ConsumerDashboardScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#f5f5f5' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  balanceCard: {
+    backgroundColor: '#4A90D9',
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  balanceLabel: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
+  balanceValue: { fontSize: 28, fontWeight: 'bold', color: '#fff', marginVertical: 4 },
+  balanceAddr: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.6)',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
   card: {
     backgroundColor: '#fff',
@@ -88,7 +126,7 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
   badgeActive: { backgroundColor: '#E8F5E9' },
   badgeDone: { backgroundColor: '#F0F0F0' },
-  badgeText: { fontSize: 12, fontWeight: '600', textTransform: 'capitalize', color: '#333' },
+  badgeText: { fontSize: 12, fontWeight: '600', color: '#333' },
   amount: { fontSize: 16, color: '#333' },
   progress: { fontSize: 13, color: '#999', marginTop: 4 },
   empty: { textAlign: 'center', color: '#999', marginTop: 40 },

@@ -74,6 +74,13 @@ export class BusinessService {
     };
   }
 
+  async getBalance(id: string) {
+    const business = await this.prisma.business.findUnique({ where: { id } });
+    if (!business) throw new NotFoundException('Business not found');
+    const balance = await this.xrplService.getBalance(business.xrplAddress);
+    return { xrplAddress: business.xrplAddress, balance };
+  }
+
   async findAll() {
     const businesses = await this.prisma.business.findMany({ where: { isActive: true } });
     return businesses.map(({ xrplSecret: _, ...b }) => b);
