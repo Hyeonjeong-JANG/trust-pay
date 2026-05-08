@@ -10,8 +10,9 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "test": "jest",
-    "test:e2e": "jest --config jest.e2e-config.ts --forceExit",
+    "test:e2e": "DATABASE_URL=\"file:./test.db\" prisma db push --skip-generate && DATABASE_URL=\"file:./test.db\" jest --config jest.e2e-config.ts --forceExit",
     "test:cov": "jest --coverage",
+    "seed": "ts-node prisma/seed.ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {
@@ -27,6 +28,9 @@
     "rxjs": "^7.8.0",
     "zod": "^3.24.0"
   },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
@@ -40,6 +44,7 @@
     "prisma": "^6.6.0",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.9",
+    "ts-node": "^10.9.2",
     "typescript": "^5.8.0"
   }
 }

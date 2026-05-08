@@ -125,7 +125,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
               </View>
             ) : balanceData ? (
               <View style={styles.balanceCard}>
-                <Text style={styles.balanceLabel}>RLUSD 잔액</Text>
+                <Text style={styles.balanceLabel}>XRPL Testnet RLUSD 잔액</Text>
                 <Text style={styles.balanceValue}>
                   {Number(balanceData.balance).toLocaleString()} RLUSD
                 </Text>
@@ -191,6 +191,12 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
         }
         renderItem={({ item }: { item: EscrowWithBusiness }) => {
           const released = item.entries.filter((e: EscrowEntry) => e.status === 'released').length;
+          const pendingEntries = item.entries.filter((e: EscrowEntry) => e.status === 'pending');
+          const fallbackMonthly = item.months > 0 ? item.totalAmount / item.months : 0;
+          const pendingAmount = pendingEntries.reduce(
+            (sum, entry) => sum + Number(entry.amount ?? fallbackMonthly),
+            0,
+          );
           const statusStyle = STATUS_STYLE[item.status] ?? STATUS_STYLE.cancelled;
           const progressPct = item.months > 0 ? (released / item.months) * 100 : 0;
           return (
@@ -215,6 +221,11 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
               <Text style={styles.progress}>
                 {released}/{item.months}개월 릴리즈됨
               </Text>
+              {pendingAmount > 0 && (
+                <Text style={styles.pendingProtect}>
+                  대기 보호금 {pendingAmount.toLocaleString()} RLUSD
+                </Text>
+              )}
             </TouchableOpacity>
           );
         }}
@@ -229,7 +240,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
             <Text style={styles.emptyDesc}>
               {isFiltered
                 ? '다른 검색어나 필터를 시도해보세요'
-                : '아래 + 버튼을 눌러 첫 선불 보호를 시작하세요'}
+                : '아래 + 버튼을 눌러 XRPL Token Escrow로 월별 릴리즈되는 선불 보호를 시작하세요'}
             </Text>
           </View>
         }
@@ -377,6 +388,12 @@ const styles = StyleSheet.create({
   progress: {
     fontSize: font.size.sm,
     color: colors.gray400,
+    marginTop: spacing.xs,
+  },
+  pendingProtect: {
+    fontSize: font.size.sm,
+    color: colors.primary,
+    fontWeight: font.weight.semibold,
     marginTop: spacing.xs,
   },
   emptyContainer: {

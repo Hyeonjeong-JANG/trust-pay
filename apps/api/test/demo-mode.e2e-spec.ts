@@ -13,13 +13,49 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 
+function expectNoWalletSecret(value: unknown) {
+  const serialized = JSON.stringify(value);
+  expect(serialized).not.toContain('xrplSecret');
+  expect(serialized).not.toContain('sMock');
+  expect(serialized).not.toContain('sDemo');
+}
+
 describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
 
   let consumerId: string;
+  let consumerToken: string;
   let businessId: string;
+  let businessToken: string;
   let escrowId: string;
+
+  async function loginWithDemoOtp(data: {
+    phone?: string;
+    email?: string;
+    role: 'consumer' | 'business';
+    name?: string;
+  }) {
+    const codeRes = await request(app.getHttpServer())
+      .post('/auth/request-code')
+      .send(data)
+      .expect(201);
+
+    expect(codeRes.body.code).toBe('123456');
+
+    const loginRes = await request(app.getHttpServer())
+      .post('/auth/verify-code')
+      .send({ ...data, code: codeRes.body.code })
+      .expect(201);
+
+    expect(loginRes.body.token).toEqual(expect.any(String));
+    expectNoWalletSecret(loginRes.body);
+    return loginRes.body;
+  }
+
+  function auth(token: string) {
+    return `Bearer ${token}`;
+  }
 
   beforeAll(async () => {
     process.env.DEMO_MODE = 'true';
@@ -62,35 +98,42 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
     expect(res.body).toHaveProperty('id');
     expect(res.body).toHaveProperty('xrplAddress');
     expect(res.body).not.toHaveProperty('xrplSecret');
+    expectNoWalletSecret(res.body);
     expect(res.body.name).toBe('데모카페');
     businessId = res.body.id;
   });
 
   // ─── 2. 소비자 로그인 (자동 등록) ───
   it('소비자 로그인 — 최초 로그인 시 자동 등록 + 지갑 생성 (데모)', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({
-        phone: '010-7777-8888',
-        role: 'consumer',
-        name: '데모소비자',
-      })
-      .expect(201);
-
-    expect(res.body).toEqual({
-      userId: expect.any(String),
+    const body = await loginWithDemoOtp({
+      phone: '010-7777-8888',
       role: 'consumer',
       name: '데모소비자',
     });
-    consumerId = res.body.userId;
+
+    expect(body).toEqual({
+      userId: expect.any(String),
+      role: 'consumer',
+      name: '데모소비자',
+      token: expect.any(String),
+    });
+    consumerId = body.userId;
+    consumerToken = body.token;
+  });
+
+  it('사업자 로그인 — 등록된 사업자', async () => {
+    const body = await loginWithDemoOtp({ phone: '010-5555-6666', role: 'business' });
+
+    expect(body.role).toBe('business');
+    expect(body.name).toBe('데모카페');
+    businessToken = body.token;
   });
 
   // ─── 3. 에스크로 생성 ───
   it('에스크로 생성 — 3개월 150,000 RLUSD (데모 모드: 월 2분)', async () => {
     const res = await request(app.getHttpServer())
       .post('/escrow')
-      .set('x-user-id', consumerId)
-      .set('x-user-role', 'consumer')
+      .set('Authorization', auth(consumerToken))
       .send({
         consumerId,
         businessId,
@@ -119,34 +162,33 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('에스크로 상세 조회 — 관계 데이터 포함', async () => {
     const res = await request(app.getHttpServer())
       .get(`/escrow/${escrowId}`)
-      .set('x-user-id', consumerId)
-      .set('x-user-role', 'consumer')
+      .set('Authorization', auth(consumerToken))
       .expect(200);
 
     expect(res.body.id).toBe(escrowId);
     expect(res.body.business.name).toBe('데모카페');
     expect(res.body.consumer.name).toBe('데모소비자');
     expect(res.body.entries).toHaveLength(3);
+    expectNoWalletSecret(res.body);
   });
 
   // ─── 5. 소비자별 에스크로 목록 ───
   it('소비자별 에스크로 목록 조회', async () => {
     const res = await request(app.getHttpServer())
       .get(`/escrow/consumer/${consumerId}`)
-      .set('x-user-id', consumerId)
-      .set('x-user-role', 'consumer')
+      .set('Authorization', auth(consumerToken))
       .expect(200);
 
     expect(res.body).toHaveLength(1);
     expect(res.body[0].id).toBe(escrowId);
+    expectNoWalletSecret(res.body);
   });
 
   // ─── 6. Month 1 릴리즈 ───
   it('에스크로 릴리즈 — Month 1 (사업자가 월 대금 수령)', async () => {
     const res = await request(app.getHttpServer())
       .post(`/escrow/${escrowId}/finish`)
-      .set('x-user-id', businessId)
-      .set('x-user-role', 'business')
+      .set('Authorization', auth(businessToken))
       .send({ entryMonth: 1 })
       .expect(201);
 
@@ -156,8 +198,7 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('릴리즈 후 상태 확인 — Month 1 released, 나머지 pending', async () => {
     const res = await request(app.getHttpServer())
       .get(`/escrow/${escrowId}`)
-      .set('x-user-id', consumerId)
-      .set('x-user-role', 'consumer')
+      .set('Authorization', auth(consumerToken))
       .expect(200);
 
     const entries = res.body.entries.sort((a: any, b: any) => a.month - b.month);
@@ -170,8 +211,7 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('중복 릴리즈 방지 — 이미 릴리즈된 항목 거부', async () => {
     const res = await request(app.getHttpServer())
       .post(`/escrow/${escrowId}/finish`)
-      .set('x-user-id', businessId)
-      .set('x-user-role', 'business')
+      .set('Authorization', auth(businessToken))
       .send({ entryMonth: 1 })
       .expect(400);
 
@@ -182,8 +222,7 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('에스크로 취소 — 남은 pending 항목 환불', async () => {
     const res = await request(app.getHttpServer())
       .post(`/escrow/${escrowId}/cancel`)
-      .set('x-user-id', consumerId)
-      .set('x-user-role', 'consumer')
+      .set('Authorization', auth(consumerToken))
       .expect(201);
 
     expect(res.body.cancelled).toBe(2); // month 2, 3
@@ -192,8 +231,7 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('취소 후 상태 확인 — cancelled, pending 없음', async () => {
     const res = await request(app.getHttpServer())
       .get(`/escrow/${escrowId}`)
-      .set('x-user-id', consumerId)
-      .set('x-user-role', 'consumer')
+      .set('Authorization', auth(consumerToken))
       .expect(200);
 
     expect(res.body.status).toBe('cancelled');
@@ -207,8 +245,7 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('사업자 대시보드 — 수령/대기 금액 집계', async () => {
     const res = await request(app.getHttpServer())
       .get(`/business/${businessId}/dashboard`)
-      .set('x-user-id', businessId)
-      .set('x-user-role', 'business')
+      .set('Authorization', auth(businessToken))
       .expect(200);
 
     expect(res.body.business.name).toBe('데모카페');
@@ -221,8 +258,7 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   it('사업자 목록 — xrplSecret 미노출', async () => {
     const res = await request(app.getHttpServer())
       .get('/business')
-      .set('x-user-id', consumerId)
-      .set('x-user-role', 'consumer')
+      .set('Authorization', auth(consumerToken))
       .expect(200);
 
     expect(res.body.length).toBeGreaterThanOrEqual(1);
@@ -230,16 +266,16 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
       expect(biz).not.toHaveProperty('xrplSecret');
       expect(biz).toHaveProperty('xrplAddress');
     }
+    expectNoWalletSecret(res.body);
   });
 
-  // ─── 10. 사업자 로그인 ───
-  it('사업자 로그인 — 등록된 사업자', async () => {
+  // ─── 10. 사업자 세션 확인 ───
+  it('사업자 세션 — 서명 토큰으로 보호 API 접근', async () => {
     const res = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ phone: '010-5555-6666', role: 'business' })
-      .expect(201);
+      .get(`/business/${businessId}/dashboard`)
+      .set('Authorization', auth(businessToken))
+      .expect(200);
 
-    expect(res.body.role).toBe('business');
-    expect(res.body.name).toBe('데모카페');
+    expect(res.body.business.id).toBe(businessId);
   });
 });

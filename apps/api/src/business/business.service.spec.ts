@@ -19,6 +19,8 @@ const mockBusiness = {
   updatedAt: new Date('2026-01-01'),
 };
 
+const businessUser = { userId: 'biz-1', role: 'business' as const, name: '테스트카페' };
+
 describe('BusinessService', () => {
   let service: BusinessService;
   let prisma: any;
@@ -87,7 +89,7 @@ describe('BusinessService', () => {
     it('should return business without secret', async () => {
       prisma.business.findUnique.mockResolvedValue(mockBusiness);
 
-      const result = await service.findById('biz-1');
+      const result = await service.findById('biz-1', businessUser);
 
       expect(result).not.toHaveProperty('xrplSecret');
       expect(result).toHaveProperty('xrplAddress', 'rBizAddr123');
@@ -95,7 +97,9 @@ describe('BusinessService', () => {
 
     it('should throw if business not found', async () => {
       prisma.business.findUnique.mockResolvedValue(null);
-      await expect(service.findById('bad-id')).rejects.toThrow(NotFoundException);
+      await expect(
+        service.findById('bad-id', { ...businessUser, userId: 'bad-id' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -128,7 +132,7 @@ describe('BusinessService', () => {
         ],
       });
 
-      const result = await service.dashboard('biz-1');
+      const result = await service.dashboard('biz-1', businessUser);
 
       // e-1: 2 released * 10000 = 20000 received, 1 pending * 10000 = 10000 pending
       // e-2: 0 released = 0 received, 2 pending * 20000 = 40000 pending
@@ -144,7 +148,7 @@ describe('BusinessService', () => {
         escrows: [],
       });
 
-      const result = await service.dashboard('biz-1');
+      const result = await service.dashboard('biz-1', businessUser);
 
       expect(result.totalReceived).toBe(0);
       expect(result.totalPending).toBe(0);
@@ -153,7 +157,9 @@ describe('BusinessService', () => {
 
     it('should throw if business not found', async () => {
       prisma.business.findUnique.mockResolvedValue(null);
-      await expect(service.dashboard('bad-id')).rejects.toThrow(NotFoundException);
+      await expect(
+        service.dashboard('bad-id', { ...businessUser, userId: 'bad-id' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

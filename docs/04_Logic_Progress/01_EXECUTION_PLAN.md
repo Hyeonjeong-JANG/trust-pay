@@ -24,7 +24,7 @@
 ### Step 2.1: Auth + Consumer API
 - [ ] `apps/api/src/auth/` 디렉토리 생성
 - [ ] `auth.module.ts`, `auth.controller.ts`, `auth.service.ts` 생성
-- [ ] `POST /auth/login` 구현 (phone/email → 사용자 조회 또는 자동 등록)
+- [ ] `POST /auth/request-code`, `POST /auth/verify-code` 구현 (phone/email OTP → 사용자 조회 또는 자동 등록)
 - [ ] `apps/api/src/consumer/` 디렉토리 생성
 - [ ] `consumer.module.ts`, `consumer.controller.ts`, `consumer.service.ts` 생성
 - [ ] `POST /consumer` 구현 (지갑 자동 생성 + Trust Line 설정)

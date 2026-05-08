@@ -9,12 +9,16 @@ import {
   type ViewToken,
 } from 'react-native';
 import { useAppStore } from '../store/app';
+import { ShieldIllustration } from '../components/illustrations/ShieldIllustration';
+import { EscrowIllustration } from '../components/illustrations/EscrowIllustration';
+import { StablecoinIllustration } from '../components/illustrations/StablecoinIllustration';
+import { RocketIllustration } from '../components/illustrations/RocketIllustration';
 import { colors, spacing, radius, font } from '../theme';
 import type { ScreenProps } from '../navigation/types';
 
 interface Slide {
   key: string;
-  emoji: string;
+  illustration: React.ReactNode;
   title: string;
   desc: string;
 }
@@ -22,27 +26,27 @@ interface Slide {
 const SLIDES: Slide[] = [
   {
     key: '1',
-    emoji: '\uD83D\uDEE1\uFE0F',
-    title: '선불금을 안전하게 보호',
-    desc: '학원, 헬스장 등 선불 결제를 블록체인 에스크로로 보호합니다.\n사업자 폐업 시에도 환불이 보장됩니다.',
+    illustration: <ShieldIllustration size={140} />,
+    title: '선불금을 월별로 보호',
+    desc: '이미 이용한 월차만 사업자에게 릴리즈되고\n남은 월차는 취소 시 환불할 수 있습니다.',
   },
   {
     key: '2',
-    emoji: '\uD83D\uDD10',
-    title: 'XRPL Token Escrow',
-    desc: 'XRP Ledger의 최신 기능 XLS-85 Token Escrow를 활용합니다.\n매월 자동 릴리즈로 소비자와 사업자 모두 보호됩니다.',
+    illustration: <EscrowIllustration size={140} />,
+    title: 'XLS-85 Token Escrow',
+    desc: 'XRP Ledger Testnet의 Token Escrow로 각 월차를 잠급니다.\nfinishAfter 이후 월별로 릴리즈되어 흐름이 원장에 남습니다.',
   },
   {
     key: '3',
-    emoji: '\uD83D\uDCB5',
+    illustration: <StablecoinIllustration size={140} />,
     title: 'RLUSD 스테이블코인',
     desc: '달러에 연동된 RLUSD로 가격 변동 걱정 없이\n안정적으로 결제할 수 있습니다.',
   },
   {
     key: '4',
-    emoji: '\uD83D\uDE80',
-    title: '지금 시작하세요',
-    desc: '간편한 로그인으로 바로 시작할 수 있습니다.\n별도의 지갑 설정이 필요 없습니다.',
+    illustration: <RocketIllustration size={140} />,
+    title: '데모 준비 완료',
+    desc: '소비자와 사업자 로그인만으로 Demo Mode를 확인합니다.\nTestnet Mode에서는 tx hash로 원장 증거를 검증합니다.',
   },
 ];
 
@@ -89,7 +93,7 @@ export function OnboardingScreen({ navigation }: ScreenProps<'Onboarding'>) {
         viewabilityConfig={viewabilityConfig}
         renderItem={({ item }) => (
           <View style={[s.slide, { width }]}>
-            <Text style={s.slideEmoji}>{item.emoji}</Text>
+            <View style={s.illustrationWrap}>{item.illustration}</View>
             <Text style={s.slideTitle}>{item.title}</Text>
             <Text style={s.slideDesc}>{item.desc}</Text>
           </View>
@@ -145,8 +149,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.xxxl,
   },
-  slideEmoji: {
-    fontSize: 72,
+  illustrationWrap: {
     marginBottom: spacing.xxl,
   },
   slideTitle: {

@@ -14,6 +14,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
+import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { ScreenProps } from '../../navigation/types';
 
@@ -36,16 +37,12 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
       queryClient.invalidateQueries({ queryKey: ['balance'] });
-      Alert.alert('성공', 'XRPL에 에스크로가 생성되었습니다!');
+      showSuccessToast('에스크로 생성 완료', 'XRPL에 에스크로가 생성되었습니다!');
       navigation.navigate('ConsumerTabs', { screen: 'Home' });
     },
     onError: (err: Error) => {
       const apiErr = err as import('../../api/client').ApiError;
-      Alert.alert(
-        '에스크로 생성 실패',
-        apiErr.userMessage ?? err.message,
-        apiErr.isRetryable ? [{ text: '확인' }, { text: '재시도', onPress: () => mutation.mutate() }] : undefined,
-      );
+      showErrorToast('에스크로 생성 실패', apiErr.userMessage ?? err.message);
     },
   });
 
@@ -102,8 +99,9 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           <Text style={styles.infoValue}>{monthlyAmount} RLUSD</Text>
           <View style={styles.infoDivider} />
           <Text style={styles.infoDesc}>
-            매월 {monthlyAmount} RLUSD가 Token Escrow(XLS-85)를 통해 {businessName}에게 릴리즈됩니다
+            총액은 {months || '0'}개의 Token Escrow로 나뉘어 잠기고, finishAfter 이후 매월 {monthlyAmount} RLUSD가 {businessName}에게 릴리즈됩니다
           </Text>
+          <Text style={styles.infoHint}>취소 시 아직 대기 중인 월차는 소비자에게 환불됩니다</Text>
         </View>
 
         <TouchableOpacity
@@ -210,6 +208,14 @@ const styles = StyleSheet.create({
     color: colors.gray500,
     textAlign: 'center',
     lineHeight: 16,
+  },
+  infoHint: {
+    fontSize: font.size.xs,
+    color: colors.primary,
+    fontWeight: font.weight.medium,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginTop: spacing.sm,
   },
   button: {
     backgroundColor: colors.primary,

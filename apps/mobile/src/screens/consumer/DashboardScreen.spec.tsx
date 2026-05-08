@@ -24,7 +24,7 @@ const mockNavigation = {
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   });
   return render(
     <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
@@ -65,6 +65,7 @@ describe('ConsumerDashboardScreen', () => {
     );
 
     expect(await findByText('에스크로가 없습니다')).toBeTruthy();
+    expect(await findByText(/XRPL Token Escrow로 월별 릴리즈되는 선불 보호/)).toBeTruthy();
   });
 
   it('should render escrow cards with business name and amount', async () => {
@@ -90,5 +91,6 @@ describe('ConsumerDashboardScreen', () => {
 
     expect(await findByText('테스트카페')).toBeTruthy();
     expect(await findByText('1/3개월 릴리즈됨')).toBeTruthy();
+    expect(await findByText('대기 보호금 100,000 RLUSD')).toBeTruthy();
   });
 });

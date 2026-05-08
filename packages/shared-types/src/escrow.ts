@@ -85,6 +85,13 @@ export interface LoginResponse {
   userId: string;
   role: UserRole;
   name: string;
+  token: string;
+}
+
+export interface RequestCodeResponse {
+  delivery: 'demo' | 'sms' | 'email';
+  code?: string;
+  expiresInSeconds: number;
 }
 
 export interface BusinessDashboard {

@@ -6,7 +6,8 @@ import { LoginScreen } from './LoginScreen';
 // Mock API
 jest.mock('../api/client', () => ({
   api: {
-    login: jest.fn(),
+    requestCode: jest.fn(),
+    verifyCode: jest.fn(),
   },
 }));
 
@@ -14,12 +15,15 @@ jest.mock('../api/client', () => ({
 const mockSetAuth = jest.fn();
 jest.mock('../store/auth', () => ({
   useAuthStore: (selector: any) =>
-    selector({ setAuth: mockSetAuth, role: null, userId: null, name: null }),
+    selector({ setAuth: mockSetAuth, role: null, userId: null, name: null, token: null }),
 }));
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { retry: false, gcTime: Infinity },
+    },
   });
   return render(
     <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
@@ -28,7 +32,13 @@ function renderWithProviders(ui: React.ReactElement) {
 
 describe('LoginScreen', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
   });
 
   it('should render title and subtitle', () => {
@@ -94,56 +104,96 @@ describe('LoginScreen', () => {
     ).toBeTruthy();
   });
 
-  it('should disable login button when phone input is empty', () => {
+  it('should show request code button before OTP is issued', () => {
     const { getByText } = renderWithProviders(<LoginScreen />);
-    const loginButton = getByText('로그인');
-    expect(loginButton).toBeTruthy();
+    expect(getByText('인증코드 받기')).toBeTruthy();
   });
 
-  it('should enable login button when valid phone entered', () => {
+  it('should keep request code button available when valid phone entered', () => {
     const { getByText, getByPlaceholderText } = renderWithProviders(
       <LoginScreen />,
     );
 
     fireEvent.changeText(getByPlaceholderText('010-1234-5678'), '010-1234-5678');
 
-    expect(getByText('로그인')).toBeTruthy();
+    expect(getByText('인증코드 받기')).toBeTruthy();
   });
 
-  it('should call api.login on valid phone submit', async () => {
+  it('should request a demo OTP on valid phone submit', async () => {
     const { api } = require('../api/client');
-    api.login.mockResolvedValue({
-      userId: 'c-1',
-      role: 'consumer',
-      name: '테스트',
-    });
+    api.requestCode.mockResolvedValue({ delivery: 'demo', code: '123456', expiresInSeconds: 300 });
 
     const { getByText, getByPlaceholderText } = renderWithProviders(
       <LoginScreen />,
     );
 
     fireEvent.changeText(getByPlaceholderText('010-1234-5678'), '010-1234-5678');
-    fireEvent.press(getByText('로그인'));
+    fireEvent.press(getByText('인증코드 받기'));
 
     await waitFor(() => {
-      expect(api.login).toHaveBeenCalledWith({
+      expect(api.requestCode).toHaveBeenCalledWith({
         phone: '010-1234-5678',
         role: 'consumer',
       });
     });
 
     await waitFor(() => {
-      expect(mockSetAuth).toHaveBeenCalledWith('consumer', 'c-1', '테스트');
+      expect(getByText('데모 인증코드: 123456')).toBeTruthy();
+      expect(getByText('로그인')).toBeTruthy();
     });
   });
 
-  it('should call api.login with email when email method selected', async () => {
+  it('should verify OTP and store the signed session token', async () => {
     const { api } = require('../api/client');
-    api.login.mockResolvedValue({
-      userId: 'c-2',
+    api.requestCode.mockResolvedValue({ delivery: 'demo', code: '123456', expiresInSeconds: 300 });
+    api.verifyCode.mockResolvedValue({
+      userId: 'c-1',
       role: 'consumer',
-      name: '이메일유저',
+      name: '테스트',
+      token: 'signed-token',
     });
+
+    const { getByText, getByPlaceholderText } = renderWithProviders(<LoginScreen />);
+
+    fireEvent.changeText(getByPlaceholderText('010-1234-5678'), '010-1234-5678');
+    fireEvent.press(getByText('인증코드 받기'));
+
+    await waitFor(() => expect(getByText('로그인')).toBeTruthy());
+    fireEvent.press(getByText('로그인'));
+
+    await waitFor(() => {
+      expect(api.verifyCode).toHaveBeenCalledWith({
+        phone: '010-1234-5678',
+        role: 'consumer',
+        code: '123456',
+      });
+      expect(mockSetAuth).toHaveBeenCalledWith('consumer', 'c-1', '테스트', 'signed-token');
+    });
+  });
+
+  it('should request OTP for business landline submit', async () => {
+    const { api } = require('../api/client');
+    api.requestCode.mockResolvedValue({ delivery: 'demo', code: '123456', expiresInSeconds: 300 });
+
+    const { getByText, getByPlaceholderText } = renderWithProviders(
+      <LoginScreen />,
+    );
+
+    fireEvent.press(getByText('사업자'));
+    fireEvent.changeText(getByPlaceholderText('010-1234-5678'), '02-1234-5678');
+    fireEvent.press(getByText('인증코드 받기'));
+
+    await waitFor(() => {
+      expect(api.requestCode).toHaveBeenCalledWith({
+        phone: '02-1234-5678',
+        role: 'business',
+      });
+    });
+  });
+
+  it('should request OTP with email when email method selected', async () => {
+    const { api } = require('../api/client');
+    api.requestCode.mockResolvedValue({ delivery: 'demo', code: '123456', expiresInSeconds: 300 });
 
     const { getByText, getByPlaceholderText } = renderWithProviders(
       <LoginScreen />,
@@ -151,10 +201,10 @@ describe('LoginScreen', () => {
 
     fireEvent.press(getByText('이메일'));
     fireEvent.changeText(getByPlaceholderText('user@example.com'), 'test@test.com');
-    fireEvent.press(getByText('로그인'));
+    fireEvent.press(getByText('인증코드 받기'));
 
     await waitFor(() => {
-      expect(api.login).toHaveBeenCalledWith({
+      expect(api.requestCode).toHaveBeenCalledWith({
         email: 'test@test.com',
         role: 'consumer',
       });

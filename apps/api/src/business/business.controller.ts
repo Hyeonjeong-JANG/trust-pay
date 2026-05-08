@@ -1,8 +1,9 @@
-import { Controller, Post, Get, Param, Body, UsePipes, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, UsePipes, UseGuards, Req } from '@nestjs/common';
 import { BusinessService } from './business.service';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { businessRegistrationSchema } from '@prepaid-shield/validators';
 import { AuthGuard } from '../common/auth.guard';
+import type { SessionUser } from '../common/session-token';
 
 @Controller('business')
 export class BusinessController {
@@ -24,19 +25,19 @@ export class BusinessController {
 
   @Get(':id/balance')
   @UseGuards(AuthGuard)
-  getBalance(@Param('id') id: string) {
-    return this.businessService.getBalance(id);
+  getBalance(@Param('id') id: string, @Req() req: { user: SessionUser }) {
+    return this.businessService.getBalance(id, req.user);
   }
 
   @Get(':id')
   @UseGuards(AuthGuard)
-  findById(@Param('id') id: string) {
-    return this.businessService.findById(id);
+  findById(@Param('id') id: string, @Req() req: { user: SessionUser }) {
+    return this.businessService.findById(id, req.user);
   }
 
   @Get(':id/dashboard')
   @UseGuards(AuthGuard)
-  dashboard(@Param('id') id: string) {
-    return this.businessService.dashboard(id);
+  dashboard(@Param('id') id: string, @Req() req: { user: SessionUser }) {
+    return this.businessService.dashboard(id, req.user);
   }
 }

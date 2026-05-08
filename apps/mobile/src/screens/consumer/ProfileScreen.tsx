@@ -60,6 +60,7 @@ export function ProfileScreen(_props: ConsumerTabProps<'Profile'>) {
       {/* XRPL 지갑 정보 */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>XRPL 지갑</Text>
+        <Text style={styles.sectionDesc}>데모 지갑으로 RLUSD 잔액과 Testnet 주소를 확인합니다</Text>
         <View style={styles.card}>
           {isLoading ? (
             <ActivityIndicator size="small" color={colors.primary} />
@@ -162,6 +163,13 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
+  },
+  sectionDesc: {
+    fontSize: font.size.sm,
+    color: colors.gray500,
+    lineHeight: 20,
     marginBottom: spacing.sm,
     marginLeft: spacing.xs,
   },

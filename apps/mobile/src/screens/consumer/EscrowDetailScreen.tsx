@@ -13,6 +13,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
+import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { ErrorView } from '../../components/ErrorView';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowEntry } from '@prepaid-shield/shared-types';
@@ -60,11 +61,11 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
       queryClient.invalidateQueries({ queryKey: ['escrow', id] });
       queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
       queryClient.invalidateQueries({ queryKey: ['balance'] });
-      Alert.alert('취소 완료', `${data.cancelled}건 환불됨`);
+      showSuccessToast('취소 완료', `${data.cancelled}건 환불됨`);
     },
     onError: (err: Error) => {
       const apiErr = err as ApiError;
-      Alert.alert('취소 실패', apiErr.userMessage ?? err.message);
+      showErrorToast('취소 실패', apiErr.userMessage ?? err.message);
     },
   });
 
@@ -93,6 +94,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
 
   const released = escrow.entries.filter((e: EscrowEntry) => e.status === 'released').length;
   const pending = escrow.entries.filter((e: EscrowEntry) => e.status === 'pending').length;
+  const refunded = escrow.entries.filter((e: EscrowEntry) => e.status === 'refunded').length;
   const progressPct = escrow.months > 0 ? (released / escrow.months) * 100 : 0;
   const escrowStyle = STATUS_STYLE[escrow.status] ?? STATUS_STYLE.cancelled;
 
@@ -107,6 +109,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
         ListHeaderComponent={
           <>
             <View style={styles.summaryCard}>
+              <Text style={styles.ledgerLabel}>XRPL 원장 상태</Text>
               <View style={styles.summaryTop}>
                 <Text style={styles.businessName}>{escrow.business?.name ?? '사업자'}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: escrowStyle.bg }]}>
@@ -142,7 +145,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                   <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
                 </View>
                 <Text style={styles.progressText}>
-                  {released}건 릴리즈 · {pending}건 대기
+                  릴리즈 완료 {released}건 · 대기/환불 가능 {pending + refunded}건
                 </Text>
               </View>
             </View>
@@ -160,7 +163,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 <View style={styles.entryInfo}>
                   <Text style={styles.entryMonth}>{item.month}월차</Text>
                   <Text style={styles.entryDate}>
-                    릴리즈: {rippleTimeToDate(item.finishAfter)}
+                    finishAfter: {rippleTimeToDate(item.finishAfter)}
                   </Text>
                 </View>
                 <View style={[styles.entryBadge, { backgroundColor: entryStyle.bg }]}>
@@ -173,7 +176,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 <Text style={styles.entryAmount}>{Number(item.amount).toLocaleString()} RLUSD</Text>
                 {item.txHash && (
                   <Text style={styles.txHash} numberOfLines={1}>
-                    TX: {item.txHash}
+                    TX Hash: {item.txHash}
                   </Text>
                 )}
               </View>
@@ -210,6 +213,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     marginBottom: spacing.xl,
     ...shadow.md,
+  },
+  ledgerLabel: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.semibold,
+    color: colors.primary,
+    marginBottom: spacing.sm,
   },
   summaryTop: {
     flexDirection: 'row',

@@ -1,6 +1,6 @@
 # QA Checklist
 > Created: 2026-04-26 22:50
-> Last Updated: 2026-04-27
+> Last Updated: 2026-05-04
 
 ## 1. Global Rubric Scorecard
 
@@ -21,6 +21,7 @@
 - [ ] 오픈소스 라이선스 준수 (xrpl.js: ISC, NestJS: MIT, Expo: MIT)
 - [ ] 민감 정보(개인키, 시드 등)가 코드에 하드코딩되지 않음
 - [ ] .env 파일이 .gitignore에 포함됨
+- [ ] .env.* 파일이 ignore되고 .env.example만 tracked 예외로 유지됨
 
 ## 3. 기능 체크리스트
 
@@ -66,6 +67,8 @@
 ### 보안
 - [ ] .env 파일 미커밋
 - [ ] 커스토디얼 지갑 시크릿이 코드에 노출되지 않음 (DB 암호화 저장)
+- [ ] API 응답 전체에 `xrplSecret`이 포함되지 않음
+- [ ] Demo/Test 외 환경에서는 `ENCRYPTION_KEY` 명시 설정 필요
 - [ ] 전화번호/이메일 간편 인증 적용 (MVP)
 
 ### 코드 품질
@@ -86,4 +89,5 @@
 - **Concept_Design**: [Lean Canvas](../01_Concept_Design/02_LEAN_CANVAS.md) - 비즈니스 모델
 - **Technical_Specs**: [API Specs](../03_Technical_Specs/02_API_SPECS.md) - API 테스트 대상
 - **QA_Validation**: [Test Scenarios](./01_TEST_SCENARIOS.md) - 상세 테스트 케이스
+- **QA_Validation**: [KFIP Submission QA](./03_SUBMISSION_QA.md) - 1차 제출 전 최종 체크리스트
 - **Logic_Progress**: [Roadmap](../04_Logic_Progress/00_ROADMAP.md) - Phase 6 최종 점검

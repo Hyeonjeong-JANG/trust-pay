@@ -49,7 +49,7 @@
 - [x] 전체 문서 업데이트
 
 ### Phase 2 — 핵심 기능 완성
-- [ ] 인증 API (`POST /auth/login`) 구현
+- [ ] 인증 API (`POST /auth/request-code`, `POST /auth/verify-code`) 구현
 - [ ] Consumer 등록 API (`POST /consumer`) 구현 — 지갑 자동 생성 + Trust Line
 - [ ] Business 등록 API 수정 — 지갑 자동 생성 + Trust Line
 - [ ] Escrow API 수정 — RLUSD Token Escrow(XLS-85)로 전환

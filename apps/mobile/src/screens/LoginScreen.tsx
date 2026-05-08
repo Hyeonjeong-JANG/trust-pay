@@ -26,16 +26,40 @@ export function LoginScreen() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [demoCode, setDemoCode] = useState<string | null>(null);
 
-  const loginMutation = useMutation({
-    mutationFn: () =>
-      api.login({
-        ...(method === 'phone' ? { phone } : { email }),
-        role,
-        ...(name ? { name } : {}),
-      }),
+  const authPayload = () => ({
+    ...(method === 'phone' ? { phone } : { email }),
+    role,
+    ...(name ? { name } : {}),
+  });
+
+  const resetCode = () => {
+    setCode('');
+    setCodeSent(false);
+    setDemoCode(null);
+  };
+
+  const requestCodeMutation = useMutation({
+    mutationFn: () => api.requestCode(authPayload()),
     onSuccess: (data) => {
-      setAuth(data.role, data.userId, data.name);
+      setCodeSent(true);
+      setDemoCode(data.code ?? null);
+      if (data.code) setCode(data.code);
+    },
+    onError: (err: Error) => {
+      const apiErr = err as import('../api/client').ApiError;
+      const title = apiErr.code === 'NETWORK' ? '네트워크 오류' : '인증코드 요청 실패';
+      Alert.alert(title, apiErr.userMessage ?? err.message);
+    },
+  });
+
+  const verifyCodeMutation = useMutation({
+    mutationFn: () => api.verifyCode({ ...authPayload(), code }),
+    onSuccess: (data) => {
+      setAuth(data.role, data.userId, data.name, data.token);
     },
     onError: (err: Error) => {
       const apiErr = err as import('../api/client').ApiError;
@@ -44,9 +68,23 @@ export function LoginScreen() {
     },
   });
 
-  const isPhoneValid = /^01[016789]-?\d{3,4}-?\d{4}$/.test(phone);
+  const isMobilePhoneValid = /^01[016789]-?\d{3,4}-?\d{4}$/.test(phone);
+  const isLandlinePhoneValid = /^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(phone);
+  const isPhoneValid = role === 'business'
+    ? isMobilePhoneValid || isLandlinePhoneValid
+    : isMobilePhoneValid;
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const canSubmit = method === 'phone' ? isPhoneValid : isEmailValid;
+  const canVerify = canSubmit && /^\d{6}$/.test(code);
+  const isPending = requestCodeMutation.isPending || verifyCodeMutation.isPending;
+
+  const handleSubmit = () => {
+    if (codeSent) {
+      verifyCodeMutation.mutate();
+    } else {
+      requestCodeMutation.mutate();
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -72,7 +110,10 @@ export function LoginScreen() {
               <TouchableOpacity
                 key={r}
                 style={[styles.segment, role === r && styles.segmentActive]}
-                onPress={() => setRole(r)}
+                onPress={() => {
+                  setRole(r);
+                  resetCode();
+                }}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.segmentIcon, role === r && styles.segmentIconActive]}>
@@ -91,7 +132,10 @@ export function LoginScreen() {
               <TouchableOpacity
                 key={m}
                 style={[styles.methodButton, method === m && styles.methodActive]}
-                onPress={() => setMethod(m)}
+                onPress={() => {
+                  setMethod(m);
+                  resetCode();
+                }}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.methodText, method === m && styles.methodTextActive]}>
@@ -108,7 +152,10 @@ export function LoginScreen() {
               <TextInput
                 style={[styles.input, phone && !isPhoneValid && styles.inputError]}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(value) => {
+                  setPhone(value);
+                  resetCode();
+                }}
                 placeholder="010-1234-5678"
                 placeholderTextColor={colors.gray400}
                 keyboardType="phone-pad"
@@ -121,7 +168,10 @@ export function LoginScreen() {
               <TextInput
                 style={[styles.input, email && !isEmailValid && styles.inputError]}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(value) => {
+                  setEmail(value);
+                  resetCode();
+                }}
                 placeholder="user@example.com"
                 placeholderTextColor={colors.gray400}
                 keyboardType="email-address"
@@ -137,29 +187,50 @@ export function LoginScreen() {
               <TextInput
                 style={styles.input}
                 value={name}
-                onChangeText={setName}
+                onChangeText={(value) => {
+                  setName(value);
+                  resetCode();
+                }}
                 placeholder="이름을 입력하세요"
                 placeholderTextColor={colors.gray400}
               />
             </View>
           )}
 
+          {codeSent && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>인증코드</Text>
+              <TextInput
+                style={[styles.input, code && !canVerify && styles.inputError]}
+                value={code}
+                onChangeText={setCode}
+                placeholder="123456"
+                placeholderTextColor={colors.gray400}
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+              {demoCode && (
+                <Text style={styles.demoCode}>데모 인증코드: {demoCode}</Text>
+              )}
+            </View>
+          )}
+
           {/* 로그인 버튼 */}
           <TouchableOpacity
-            style={[styles.button, (!canSubmit || loginMutation.isPending) && styles.buttonDisabled]}
-            onPress={() => loginMutation.mutate()}
-            disabled={!canSubmit || loginMutation.isPending}
+            style={[styles.button, ((codeSent ? !canVerify : !canSubmit) || isPending) && styles.buttonDisabled]}
+            onPress={handleSubmit}
+            disabled={(codeSent ? !canVerify : !canSubmit) || isPending}
             activeOpacity={0.8}
           >
-            {loginMutation.isPending ? (
+            {isPending ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color="#fff" size="small" />
                 <Text style={styles.buttonText}>
-                  {role === 'consumer' ? ' 지갑 생성 중...' : ' 로그인 중...'}
+                  {requestCodeMutation.isPending ? ' 인증코드 요청 중...' : ' 로그인 중...'}
                 </Text>
               </View>
             ) : (
-              <Text style={styles.buttonText}>로그인</Text>
+              <Text style={styles.buttonText}>{codeSent ? '로그인' : '인증코드 받기'}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -288,6 +359,12 @@ const styles = StyleSheet.create({
   inputError: {
     borderColor: colors.danger,
     backgroundColor: colors.dangerLight,
+  },
+  demoCode: {
+    color: colors.primary,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    marginTop: spacing.sm,
   },
   button: {
     backgroundColor: colors.primary,

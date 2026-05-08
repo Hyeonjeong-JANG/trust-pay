@@ -61,6 +61,7 @@ export class XrplEscrowClient {
   /**
    * Create monthly Token Escrow entries on the XRPL (XLS-85).
    * Each month gets its own EscrowCreate with RLUSD IssuedCurrencyAmount.
+   * The returned Sequence is the OfferSequence needed later by EscrowFinish/EscrowCancel.
    */
   async createMonthlyEscrows(
     params: TokenEscrowParams,
@@ -122,6 +123,7 @@ export class XrplEscrowClient {
 
   /**
    * Finish (release) a Token Escrow — business claims monthly RLUSD payment.
+   * Account is the business wallet, Owner is the original consumer wallet.
    * Only succeeds after FinishAfter time has passed.
    */
   async finishEscrow(params: FinishEscrowParams): Promise<string> {
@@ -140,6 +142,7 @@ export class XrplEscrowClient {
 
   /**
    * Cancel a Token Escrow — consumer reclaims RLUSD funds.
+   * Owner remains the original consumer wallet that created the escrow.
    * Only succeeds after CancelAfter time has passed.
    */
   async cancelEscrow(params: CancelEscrowParams): Promise<string> {

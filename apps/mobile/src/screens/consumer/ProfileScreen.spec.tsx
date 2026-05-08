@@ -15,7 +15,7 @@ jest.mock('../../store/auth', () => ({
 }));
 
 function renderWithProviders(ui: React.ReactElement) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 }
 
@@ -36,5 +36,6 @@ describe('ProfileScreen', () => {
     const { findByText } = renderWithProviders(<ProfileScreen navigation={{} as any} route={{} as any} />);
     expect(await findByText('XRPL Testnet')).toBeTruthy();
     expect(await findByText('Token Escrow (XLS-85)')).toBeTruthy();
+    expect(await findByText(/데모 지갑으로 RLUSD 잔액과 Testnet 주소를 확인/)).toBeTruthy();
   });
 });

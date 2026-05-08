@@ -1,5 +1,6 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from './auth.guard';
+import { createSessionToken } from './session-token';
 
 function mockContext(headers: Record<string, string>, params: Record<string, string> = {}): ExecutionContext {
   const req = {
@@ -16,6 +17,11 @@ function mockContext(headers: Record<string, string>, params: Record<string, str
 describe('AuthGuard', () => {
   const guard = new AuthGuard();
 
+  it('should reject spoofed x-user headers without a bearer token', () => {
+    const ctx = mockContext({ 'x-user-id': 'user-1', 'x-user-role': 'consumer' });
+    expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
+  });
+
   it('should throw if x-user-id header missing', () => {
     const ctx = mockContext({ 'x-user-role': 'consumer' });
     expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
@@ -31,11 +37,12 @@ describe('AuthGuard', () => {
     expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
   });
 
-  it('should pass and attach user to request', () => {
-    const ctx = mockContext({ 'x-user-id': 'user-1', 'x-user-role': 'consumer' });
+  it('should pass and attach user from a bearer token', () => {
+    const token = createSessionToken({ userId: 'user-1', role: 'consumer', name: '테스트' });
+    const ctx = mockContext({ authorization: `Bearer ${token}` });
     const result = guard.canActivate(ctx);
     expect(result).toBe(true);
     const req = ctx.switchToHttp().getRequest();
-    expect((req as any).user).toEqual({ userId: 'user-1', role: 'consumer' });
+    expect((req as any).user).toEqual({ userId: 'user-1', role: 'consumer', name: '테스트' });
   });
 });

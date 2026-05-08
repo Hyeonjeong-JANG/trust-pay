@@ -1,3 +1,13 @@
+const DEV_ONLY_ENCRYPTION_KEY = 'dev-only-key-change-in-prod-32ch';
+
+function defaultEncryptionKey() {
+  if (process.env.ENCRYPTION_KEY) return process.env.ENCRYPTION_KEY;
+  if (process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === 'test') {
+    return DEV_ONLY_ENCRYPTION_KEY;
+  }
+  return '';
+}
+
 export default () => ({
   port: parseInt(process.env.PORT || '3000', 10),
   xrpl: {
@@ -11,6 +21,7 @@ export default () => ({
     fundingAmount: process.env.RLUSD_FUNDING_AMOUNT || '10000',
   },
   demoMode: process.env.DEMO_MODE === 'true',
+  authDemoOtp: process.env.AUTH_DEMO_OTP === 'true',
   escrowFastMode: process.env.ESCROW_FAST_MODE === 'true',
-  encryptionKey: process.env.ENCRYPTION_KEY || 'dev-only-key-change-in-prod-32ch',
+  encryptionKey: defaultEncryptionKey(),
 });

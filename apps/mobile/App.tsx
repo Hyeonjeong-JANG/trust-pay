@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import Toast from 'react-native-toast-message';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { NetworkBanner } from './src/components/NetworkBanner';
 import { useAuthStore } from './src/store/auth';
@@ -156,6 +157,7 @@ export default function App() {
           <AppNavigator />
           <StatusBar style="auto" />
         </NavigationContainer>
+        <Toast />
       </QueryClientProvider>
     </ErrorBoundary>
   );

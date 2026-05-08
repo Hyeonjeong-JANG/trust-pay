@@ -6,6 +6,8 @@ const ALGO = 'aes-256-gcm';
 const IV_LEN = 12;
 const TAG_LEN = 16;
 const SALT = 'prepaid-shield-v1'; // static salt — key uniqueness comes from ENCRYPTION_KEY
+const MIN_KEY_LEN = 32;
+const DEV_ONLY_KEY = 'dev-only-key-change-in-prod-32ch';
 
 @Injectable()
 export class CryptoService {
@@ -15,6 +17,13 @@ export class CryptoService {
     const secret = this.configService.get<string>('encryptionKey');
     if (!secret) {
       throw new Error('ENCRYPTION_KEY is required — set it in .env');
+    }
+    if (secret.length < MIN_KEY_LEN) {
+      throw new Error(`ENCRYPTION_KEY must be at least ${MIN_KEY_LEN} characters`);
+    }
+    const demoMode = this.configService.get<boolean>('demoMode') ?? false;
+    if (secret === DEV_ONLY_KEY && !demoMode && process.env.NODE_ENV !== 'test') {
+      throw new Error('Refusing to use dev-only encryption key outside demo/test mode');
     }
     // Derive 32-byte key from passphrase using scrypt
     this.key = scryptSync(secret, SALT, 32);

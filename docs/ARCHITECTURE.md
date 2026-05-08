@@ -93,7 +93,8 @@
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/auth/login` | 소비자 자동등록 / 사업자 로그인 |
+| POST | `/auth/request-code` | 전화번호/이메일 OTP 요청 |
+| POST | `/auth/verify-code` | OTP 검증, 소비자 자동등록 / 사업자 로그인, 세션 토큰 발급 |
 | POST | `/business` | 사업자 등록 (지갑 자동 생성) |
 | GET | `/business` | 활성 사업자 목록 |
 | GET | `/business/:id/dashboard` | 사업자 대시보드 (수령/대기 집계) |

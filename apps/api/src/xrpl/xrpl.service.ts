@@ -29,6 +29,7 @@ export class XrplService implements OnModuleDestroy {
 
   async createWallet(): Promise<CreateWalletResult> {
     if (this.isDemoMode) {
+      // Demo Mode keeps the UX deterministic and offline; Testnet Mode uses funded XRPL wallets.
       const wallet = Wallet.generate();
       this.logger.log(`[DEMO] Generated wallet ${wallet.address}`);
       return { wallet, address: wallet.address, secret: wallet.seed! };
@@ -99,6 +100,7 @@ export class XrplService implements OnModuleDestroy {
     if (this.isDemoMode) {
       const results: EscrowResult[] = [];
       for (let month = 1; month <= months; month++) {
+        // Synthetic tx hashes let the app display ledger-like evidence without Testnet latency.
         const finishDate = monthsFromNow(month, true);
         const cancelDate = monthsFromNow(month + 1, true);
         results.push({

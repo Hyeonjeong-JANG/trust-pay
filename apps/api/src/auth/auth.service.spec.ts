@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -50,6 +50,119 @@ describe('AuthService', () => {
       await expect(
         service.login({ role: 'consumer' }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('OTP session login', () => {
+    it('should allow fixed OTP without enabling XRPL demo mode for local Testnet verification', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalAuthDemoOtp = process.env.AUTH_DEMO_OTP;
+      process.env.NODE_ENV = 'development';
+      process.env.AUTH_DEMO_OTP = 'true';
+
+      try {
+        const result = await service.requestCode({
+          phone: '010-1234-5678',
+          role: 'consumer',
+        });
+
+        expect(result).toEqual({
+          delivery: 'demo',
+          code: '123456',
+          expiresInSeconds: 300,
+        });
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+        if (originalAuthDemoOtp === undefined) {
+          delete process.env.AUTH_DEMO_OTP;
+        } else {
+          process.env.AUTH_DEMO_OTP = originalAuthDemoOtp;
+        }
+      }
+    });
+
+    it('should fail closed when non-demo OTP delivery is not configured', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalAuthDemoOtp = process.env.AUTH_DEMO_OTP;
+      process.env.NODE_ENV = 'development';
+      delete process.env.AUTH_DEMO_OTP;
+
+      try {
+        await expect(
+          service.requestCode({ phone: '010-1234-5678', role: 'consumer' }),
+        ).rejects.toThrow(ServiceUnavailableException);
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+        if (originalAuthDemoOtp === undefined) {
+          delete process.env.AUTH_DEMO_OTP;
+        } else {
+          process.env.AUTH_DEMO_OTP = originalAuthDemoOtp;
+        }
+      }
+    });
+
+    it('should return the fixed demo OTP for phone login requests', async () => {
+      const result = await service.requestCode({
+        phone: '010-1234-5678',
+        role: 'consumer',
+      });
+
+      expect(result).toEqual({
+        delivery: 'demo',
+        code: '123456',
+        expiresInSeconds: 300,
+      });
+    });
+
+    it('should reject an incorrect OTP before creating a session', async () => {
+      await service.requestCode({ phone: '010-1234-5678', role: 'consumer' });
+
+      await expect(
+        service.verifyCode({ phone: '010-1234-5678', role: 'consumer', code: '000000' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should invalidate an OTP after repeated incorrect attempts', async () => {
+      prisma.consumer.findFirst.mockResolvedValue({
+        id: 'existing-1',
+        name: '기존소비자',
+        phone: '010-1234-5678',
+      });
+      await service.requestCode({ phone: '010-1234-5678', role: 'consumer' });
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await expect(
+          service.verifyCode({ phone: '010-1234-5678', role: 'consumer', code: '000000' }),
+        ).rejects.toThrow(BadRequestException);
+      }
+
+      await expect(
+        service.verifyCode({ phone: '010-1234-5678', role: 'consumer', code: '123456' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.consumer.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should issue a server-signed session token after OTP verification', async () => {
+      prisma.consumer.findFirst.mockResolvedValue({
+        id: 'existing-1',
+        name: '기존소비자',
+        phone: '010-1234-5678',
+      });
+      await service.requestCode({ phone: '010-1234-5678', role: 'consumer' });
+
+      const result = await service.verifyCode({
+        phone: '010-1234-5678',
+        role: 'consumer',
+        code: '123456',
+      });
+
+      expect(result).toEqual({
+        userId: 'existing-1',
+        role: 'consumer',
+        name: '기존소비자',
+        token: expect.any(String),
+      });
+      expect(result.token.split('.')).toHaveLength(2);
     });
   });
 

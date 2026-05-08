@@ -1,27 +1,41 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
   TouchableOpacity,
-  Alert,
+  TextInput,
   ActivityIndicator,
   Platform,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
+import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, BusinessSummaryRowSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowRecord, EscrowEntry } from '@prepaid-shield/shared-types';
 
+type StatusFilter = 'all' | 'active' | 'completed' | 'cancelled';
+const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'active', label: '진행중' },
+  { key: 'completed', label: '완료' },
+  { key: 'cancelled', label: '취소됨' },
+];
+
+type EscrowWithConsumer = EscrowRecord & { consumer?: { id: string; name: string } };
+
 export function BusinessDashboardScreen() {
   const userId = useAuthStore((s) => s.userId);
   const queryClient = useQueryClient();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const { data: dashboard, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['businessDashboard', userId],
@@ -43,11 +57,11 @@ export function BusinessDashboardScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
       queryClient.invalidateQueries({ queryKey: ['balance'] });
-      Alert.alert('릴리즈 완료', '월 대금이 수령되었습니다.');
+      showSuccessToast('릴리즈 완료', '월 대금이 수령되었습니다.');
     },
     onError: (err: Error) => {
       const apiErr = err as ApiError;
-      Alert.alert('릴리즈 실패', apiErr.userMessage ?? err.message);
+      showErrorToast('릴리즈 실패', apiErr.userMessage ?? err.message);
     },
   });
 
@@ -55,6 +69,23 @@ export function BusinessDashboardScreen() {
     refetch();
     refetchBalance();
   }, [refetch, refetchBalance]);
+
+  const filteredEscrows = useMemo(() => {
+    const all = (dashboard?.escrows ?? []) as EscrowWithConsumer[];
+    let result = all;
+    if (statusFilter !== 'all') {
+      result = result.filter((e) => e.status === statusFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter((e) =>
+        (e.consumer?.name ?? '').toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [dashboard?.escrows, statusFilter, searchQuery]);
+
+  const isFiltered = searchQuery.trim() !== '' || statusFilter !== 'all';
 
   if (isLoading) {
     return (
@@ -76,7 +107,7 @@ export function BusinessDashboardScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={dashboard?.escrows ?? []}
+        data={filteredEscrows}
         keyExtractor={(item: EscrowRecord) => item.id}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor={colors.primary} />
@@ -95,7 +126,7 @@ export function BusinessDashboardScreen() {
               </View>
             ) : balanceData ? (
               <View style={styles.balanceCard}>
-                <Text style={styles.balanceLabel}>RLUSD 잔액</Text>
+                <Text style={styles.balanceLabel}>XRPL Testnet RLUSD 잔액</Text>
                 <Text style={styles.balanceValue}>
                   {Number(balanceData.balance).toLocaleString()} RLUSD
                 </Text>
@@ -123,12 +154,45 @@ export function BusinessDashboardScreen() {
               </View>
             </View>
 
+            {/* 검색 + 필터 */}
+            <View style={styles.searchRow}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="소비자 이름 검색..."
+                placeholderTextColor={colors.gray400}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearBtn}>
+                  <Text style={styles.clearBtnText}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
+              {FILTER_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.filterChip, statusFilter === opt.key && styles.filterChipActive]}
+                  onPress={() => setStatusFilter(opt.key)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterChipText, statusFilter === opt.key && styles.filterChipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.settlementHint}>EscrowFinish로 수령 가능한 월차만 정산됩니다</Text>
             <Text style={styles.sectionTitle}>
-              활성 에스크로 ({dashboard?.activeEscrows ?? 0})
+              {isFiltered
+                ? `검색 결과 (${filteredEscrows.length}건)`
+                : `에스크로 (${(dashboard?.escrows ?? []).length}건)`}
             </Text>
           </>
         }
-        renderItem={({ item }: { item: EscrowRecord & { consumer?: { id: string; name: string } } }) => {
+        renderItem={({ item }: { item: EscrowWithConsumer }) => {
           const pendingEntries = item.entries?.filter((e: EscrowEntry) => e.status === 'pending') ?? [];
           const nextEntry = pendingEntries[0];
           const releasedCount = (item.entries?.length ?? 0) - pendingEntries.length;
@@ -166,7 +230,7 @@ export function BusinessDashboardScreen() {
                   activeOpacity={0.8}
                 >
                   <Text style={styles.releaseButtonText}>
-                    {nextEntry.month}월차 릴리즈 ({Number(nextEntry.amount).toLocaleString()} RLUSD)
+                    {nextEntry.month}월차 수령 가능 ({Number(nextEntry.amount).toLocaleString()} RLUSD)
                   </Text>
                 </TouchableOpacity>
               )}
@@ -228,6 +292,12 @@ const styles = StyleSheet.create({
     color: colors.gray900,
   },
   summaryLabel: { fontSize: font.size.xs, color: colors.gray500, marginTop: spacing.xs },
+  settlementHint: {
+    fontSize: font.size.sm,
+    color: colors.gray500,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
+  },
   sectionTitle: {
     fontSize: font.size.lg,
     fontWeight: font.weight.semibold,
@@ -297,4 +367,43 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   emptyDesc: { fontSize: font.size.sm, color: colors.gray400, textAlign: 'center' },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    ...shadow.sm,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    fontSize: font.size.md,
+    color: colors.gray800,
+  },
+  clearBtn: { padding: spacing.xs },
+  clearBtnText: { fontSize: font.size.md, color: colors.gray400 },
+  filterRow: { marginBottom: spacing.lg },
+  filterChip: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.white,
+    marginRight: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterChipText: {
+    fontSize: font.size.sm,
+    color: colors.gray500,
+    fontWeight: font.weight.medium,
+  },
+  filterChipTextActive: {
+    color: colors.white,
+  },
 });

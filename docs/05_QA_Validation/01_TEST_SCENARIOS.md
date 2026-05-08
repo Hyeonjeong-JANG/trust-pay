@@ -41,9 +41,10 @@
 
 | ID | 테스트 | Method | Endpoint | 기대 |
 |:---|:---|:---|:---|:---|
-| A-01 | 신규 유저 로그인 (자동 등록) | POST | /auth/login | 200, userId + role 반환, 지갑 자동 생성 |
-| A-02 | 기존 유저 로그인 | POST | /auth/login | 200, 기존 userId 반환 |
-| A-03 | 전화번호 누락 | POST | /auth/login | 400 |
+| A-01 | 인증코드 요청 | POST | /auth/request-code | 201, delivery + expiresInSeconds 반환 |
+| A-02 | 신규 유저 OTP 검증 (자동 등록) | POST | /auth/verify-code | 201, userId + role + token 반환, 지갑 자동 생성 |
+| A-03 | 잘못된 인증코드 | POST | /auth/verify-code | 400 |
+| A-04 | Bearer 토큰 없는 보호 API 접근 | GET | /business | 401 |
 
 ### Escrow API
 

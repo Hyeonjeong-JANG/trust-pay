@@ -61,7 +61,7 @@ export function NotificationsScreen() {
         id: `${escrow.id}-created`,
         icon: '📝',
         title: '에스크로 생성',
-        description: `${bizName}에 ${escrow.totalAmount.toLocaleString()} RLUSD 에스크로가 생성되었습니다.`,
+        description: `${bizName}에 ${escrow.totalAmount.toLocaleString()} RLUSD XLS-85 Token Escrow가 생성되었습니다.`,
         timestamp: createdTs,
         isUnread: createdTs > lastViewed,
       });
@@ -75,7 +75,7 @@ export function NotificationsScreen() {
             id: `${entry.id}-released`,
             icon: '✅',
             title: '릴리즈 완료',
-            description: `${bizName} ${entry.month}월차 ${Number(entry.amount).toLocaleString()} RLUSD가 릴리즈되었습니다.`,
+            description: `${bizName} ${entry.month}월차가 EscrowFinish로 ${Number(entry.amount).toLocaleString()} RLUSD가 릴리즈되었습니다.`,
             timestamp: ts,
             isUnread: ts > lastViewed,
           });
@@ -88,7 +88,7 @@ export function NotificationsScreen() {
             id: `${entry.id}-refunded`,
             icon: '↩️',
             title: '환불 완료',
-            description: `${bizName} ${entry.month}월차 ${Number(entry.amount).toLocaleString()} RLUSD가 환불되었습니다.`,
+            description: `${bizName} ${entry.month}월차 대기분 ${Number(entry.amount).toLocaleString()} RLUSD가 환불되었습니다.`,
             timestamp: ts,
             isUnread: ts > lastViewed,
           });

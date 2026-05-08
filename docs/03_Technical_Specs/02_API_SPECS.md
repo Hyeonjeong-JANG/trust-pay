@@ -192,7 +192,7 @@
 
 ## 4. Auth API
 
-### 4.1 POST /auth/login — 간편 로그인
+### 4.1 POST /auth/request-code — 인증코드 요청
 
 **Request Body**:
 ```json
@@ -202,19 +202,44 @@
 }
 ```
 
-**Response 200**:
+**Response 201**:
+```json
+{
+  "delivery": "demo",
+  "code": "123456",
+  "expiresInSeconds": 300
+}
+```
+
+`DEMO_MODE=true` 또는 `AUTH_DEMO_OTP=true`에서 고정 데모 OTP를 반환한다. SMS/Email Provider가 연결되지 않은 상태에서 데모 OTP도 비활성화하면 fail-closed로 503을 반환한다.
+
+### 4.2 POST /auth/verify-code — 인증코드 검증 및 세션 발급
+
+**Request Body**:
+```json
+{
+  "phone": "010-1234-5678",
+  "role": "consumer",
+  "code": "123456"
+}
+```
+
+**Response 201**:
 ```json
 {
   "userId": "uuid",
   "role": "consumer",
-  "name": "홍길동"
+  "name": "홍길동",
+  "token": "server-signed-session-token"
 }
 ```
 
 **비즈니스 로직**:
-1. phone/email로 사용자 조회
-2. 없으면 자동 등록 (XRPL 지갑 생성 + Trust Line 설정)
-3. 있으면 기존 사용자 반환
+1. phone/email로 OTP를 요청하고 검증한다.
+2. 검증 성공 시 phone/email로 사용자 조회
+3. 소비자가 없으면 자동 등록 (XRPL 지갑 생성 + Trust Line 설정)
+4. 사업자는 사전 등록된 계정만 로그인 가능
+5. 서버 서명 세션 토큰을 반환하고 보호 API는 Bearer 토큰만 신뢰한다.
 
 ## 5. Consumer API
 
@@ -237,8 +262,7 @@
 |:---|:---:|:---|
 | GET /business/:id/escrows | P1 | 사업자별 에스크로 목록 |
 | PATCH /business/:id | P2 | 사업자 정보 수정 |
-| POST /auth/send-otp | P2 | OTP 발송 (프로덕션 인증) |
-| POST /auth/verify-otp | P2 | OTP 검증 (프로덕션 인증) |
+| 외부 SMS/Email Provider 연결 | P2 | Demo OTP를 실제 발송 계층으로 교체 |
 
 ## 5. Related Documents
 - **Concept_Design**: [Product Specs](../01_Concept_Design/03_PRODUCT_SPECS.md) - 기능 명세

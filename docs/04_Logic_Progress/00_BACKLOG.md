@@ -36,7 +36,7 @@
 - [ ] XRPL Token Escrow(XLS-85) 지원으로 xrpl-client 수정
 - [ ] Trust Line 설정 로직 추가 (RLUSD issuer)
 - [ ] 커스토디얼 지갑 생성 로직 (Testnet faucet + 지갑 암호화 저장)
-- [ ] 인증 API 구현 (`POST /auth/login`)
+- [ ] 인증 API 구현 (`POST /auth/request-code`, `POST /auth/verify-code`)
 - [ ] Consumer 등록 API 구현 (`POST /consumer`) — 지갑 자동 생성
 - [ ] Business 등록 API 수정 — 지갑 자동 생성
 - [ ] Escrow API 수정 — RLUSD Token Escrow로 전환

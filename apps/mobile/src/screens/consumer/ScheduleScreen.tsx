@@ -133,6 +133,9 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
                   <Text style={styles.summaryLabel}>RLUSD</Text>
                 </View>
               </View>
+              <Text style={styles.summaryDesc}>
+                대기 월차는 finishAfter 기준으로 표시됩니다
+              </Text>
             </View>
             {scheduleItems.length > 0 && (
               <Text style={styles.sectionTitle}>릴리즈 일정</Text>
@@ -171,6 +174,11 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
                   <Text style={styles.cardMonth}>{item.entry.month}월차</Text>
                   <Text style={styles.cardAmount}>{Number(item.entry.amount).toLocaleString()} RLUSD</Text>
                 </View>
+                <Text style={styles.cardLedgerNote}>
+                  {item.isPast
+                    ? 'finishAfter 이후입니다. 사업자가 EscrowFinish로 수령할 수 있습니다.'
+                    : 'finishAfter까지 에스크로에 잠겨 있습니다.'}
+                </Text>
               </View>
             </View>
           );
@@ -179,7 +187,7 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📅</Text>
             <Text style={styles.emptyTitle}>예정된 릴리즈가 없습니다</Text>
-            <Text style={styles.emptyDesc}>에스크로를 생성하면 릴리즈 일정이 표시됩니다</Text>
+            <Text style={styles.emptyDesc}>활성 에스크로의 대기 월차가 생기면 finishAfter 기준으로 표시됩니다</Text>
           </View>
         }
         contentContainerStyle={styles.listContent}
@@ -213,6 +221,13 @@ const styles = StyleSheet.create({
   },
   summaryLabel: { fontSize: font.size.sm, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
   summaryDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.2)' },
+  summaryDesc: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: font.size.xs,
+    lineHeight: 18,
+    marginTop: spacing.md,
+    textAlign: 'center',
+  },
   sectionTitle: {
     fontSize: font.size.lg,
     fontWeight: font.weight.semibold,
@@ -279,6 +294,12 @@ const styles = StyleSheet.create({
     fontSize: font.size.md,
     fontWeight: font.weight.semibold,
     color: colors.primary,
+  },
+  cardLedgerNote: {
+    fontSize: font.size.xs,
+    color: colors.gray500,
+    lineHeight: 18,
+    marginTop: spacing.sm,
   },
   emptyContainer: { alignItems: 'center', paddingTop: 60 },
   emptyIcon: { fontSize: 40, marginBottom: spacing.md },

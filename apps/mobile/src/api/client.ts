@@ -1,4 +1,4 @@
-import type { LoginResponse, EscrowRecord, BusinessDashboard, Business, BalanceResponse } from '@prepaid-shield/shared-types';
+import type { LoginResponse, RequestCodeResponse, EscrowRecord, BusinessDashboard, Business, BalanceResponse } from '@prepaid-shield/shared-types';
 import { useAuthStore } from '../store/auth';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
@@ -76,10 +76,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  const { userId, role } = useAuthStore.getState();
+  const { token } = useAuthStore.getState();
   const authHeaders: Record<string, string> = {};
-  if (userId) authHeaders['x-user-id'] = userId;
-  if (role) authHeaders['x-user-role'] = role;
+  if (token) authHeaders.Authorization = `Bearer ${token}`;
 
   let res: Response;
   try {
@@ -105,8 +104,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   // Auth
-  login: (data: { phone?: string; email?: string; role: 'consumer' | 'business'; name?: string }) =>
-    request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+  requestCode: (data: { phone?: string; email?: string; role: 'consumer' | 'business'; name?: string }) =>
+    request<RequestCodeResponse>('/auth/request-code', { method: 'POST', body: JSON.stringify(data) }),
+
+  verifyCode: (data: { phone?: string; email?: string; role: 'consumer' | 'business'; name?: string; code: string }) =>
+    request<LoginResponse>('/auth/verify-code', { method: 'POST', body: JSON.stringify(data) }),
 
   // Balance
   getBalance: (id: string, role: 'consumer' | 'business') =>

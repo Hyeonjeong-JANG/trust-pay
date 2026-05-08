@@ -2,7 +2,9 @@
 /**
  * XRPL Testnet 연동 검증 스크립트
  *
- * 실행: npx tsx scripts/verify-xrpl-testnet.ts
+ * 실행:
+ *  pnpm exec tsx scripts/verify-xrpl-testnet.ts --help
+ *  pnpm exec tsx scripts/verify-xrpl-testnet.ts
  *
  * 테스트 항목:
  *  1. Testnet 연결
@@ -13,6 +15,7 @@
  *  6. Escrow Cancel (취소) — CancelAfter 대기 후
  *
  * 주의: Testnet 네트워크 상태에 따라 1~5분 소요될 수 있음
+ * 출력 정책: address와 tx hash만 출력하고 seed/private key는 출력하지 않음
  */
 
 import { Client, Wallet } from 'xrpl';
@@ -20,6 +23,50 @@ import { Client, Wallet } from 'xrpl';
 const TESTNET_URL = 'wss://s.altnet.rippletest.net:51233';
 // RLUSD: 5-char currency → 40-char hex (XRPL non-standard currency encoding)
 const RLUSD_CURRENCY = Buffer.from('RLUSD', 'ascii').toString('hex').toUpperCase().padEnd(40, '0');
+const RIPPLE_EPOCH = 946684800;
+
+interface TxEvidence {
+  label: string;
+  hash: string;
+}
+
+function shouldPrintHelp(): boolean {
+  return process.argv.includes('--help') || process.argv.includes('-h');
+}
+
+function printHelp() {
+  console.log(`
+TrustPay XRPL Testnet 직접 검증 스크립트
+
+Usage:
+  pnpm exec tsx scripts/verify-xrpl-testnet.ts --help
+  pnpm exec tsx scripts/verify-xrpl-testnet.ts
+
+What it proves:
+  1. XRPL Testnet websocket 연결
+  2. 소비자, 사업자, RLUSD 발행자 Testnet 지갑 생성
+  3. 발행자 AccountSet으로 asfAllowTrustLineLocking 활성화
+  4. 소비자/사업자 TrustSet으로 RLUSD Trust Line 설정
+  5. 발행자 Payment로 소비자에게 RLUSD 지급
+  6. XLS-85 Token EscrowCreate로 월별 RLUSD 에스크로 생성
+  7. EscrowFinish로 도래한 월차를 사업자에게 릴리즈
+  8. EscrowCancel로 미이용 월차를 소비자에게 환불
+
+Expected evidence:
+  - Testnet address: consumer, business, issuer
+  - Transaction hash: AccountSet, TrustSet, Payment, EscrowCreate, EscrowFinish, EscrowCancel
+
+Secret policy:
+  - 이 스크립트는 임시 Testnet 지갑을 생성합니다.
+  - 제출 문서에는 address와 tx hash만 기록합니다.
+  - seed/private key는 출력하지 않습니다.
+`);
+}
+
+if (shouldPrintHelp()) {
+  printHelp();
+  process.exit(0);
+}
 
 // ─── Helpers ───
 function log(step: string, msg: string) {
@@ -52,6 +99,7 @@ async function main() {
   let consumerWallet: Wallet;
   let businessWallet: Wallet;
   let issuerWallet: Wallet;
+  const evidence: TxEvidence[] = [];
 
   try {
     // 2. Create wallets
@@ -81,6 +129,7 @@ async function main() {
     );
     const accountSetMeta = accountSetRes.result.meta as any;
     if (accountSetMeta?.TransactionResult === 'tesSUCCESS') {
+      evidence.push({ label: 'issuer AccountSet asfAllowTrustLineLocking', hash: accountSetRes.result.hash });
       log('Step 2.5', '발행자 TrustLine Locking 활성화 완료');
     } else {
       fail('Step 2.5', `발행자 AccountSet 실패: ${accountSetMeta?.TransactionResult}`);
@@ -107,6 +156,7 @@ async function main() {
       );
       const meta = trustRes.result.meta as any;
       if (meta?.TransactionResult === 'tesSUCCESS') {
+        evidence.push({ label: `${label} TrustSet RLUSD`, hash: trustRes.result.hash });
         log('Step 3', `${label} Trust Line 설정 완료`);
       } else {
         fail('Step 3', `${label} Trust Line 실패: ${meta?.TransactionResult}`);
@@ -131,6 +181,7 @@ async function main() {
     );
     const payMeta = payRes.result.meta as any;
     if (payMeta?.TransactionResult === 'tesSUCCESS') {
+      evidence.push({ label: 'issuer Payment 10000 RLUSD to consumer', hash: payRes.result.hash });
       log('Step 3+', `소비자에게 10,000 RLUSD 전송 완료`);
     } else {
       fail('Step 3+', `RLUSD 전송 실패: ${payMeta?.TransactionResult}`);
@@ -141,12 +192,10 @@ async function main() {
     console.log('\n--- Token Escrow 생성 (3개월, 데모 모드) ---');
     const DEMO_MONTH_MS = 2 * 60 * 1000; // 2분
     const now = Date.now();
-    const escrows: { month: number; sequence: number; finishAfter: number; cancelAfter: number }[] = [];
+    const escrows: { month: number; sequence: number; finishAfter: number; cancelAfter: number; txHash: string }[] = [];
     const monthlyAmount = '1000';
 
     for (let month = 1; month <= 3; month++) {
-      // Ripple epoch = 2000-01-01T00:00:00Z = 946684800 Unix
-      const RIPPLE_EPOCH = 946684800;
       const finishAfter = Math.floor((now + month * DEMO_MONTH_MS) / 1000) - RIPPLE_EPOCH;
       const cancelAfter = Math.floor((now + (month + 1) * DEMO_MONTH_MS) / 1000) - RIPPLE_EPOCH;
 
@@ -168,8 +217,9 @@ async function main() {
 
       if (meta?.TransactionResult === 'tesSUCCESS') {
         const sequence = (res.result.tx_json as any).Sequence as number;
-        escrows.push({ month, sequence, finishAfter, cancelAfter });
-        log('Step 4', `Month ${month} 에스크로 생성 (seq: ${sequence}, tx: ${res.result.hash.slice(0, 12)}...)`);
+        escrows.push({ month, sequence, finishAfter, cancelAfter, txHash: res.result.hash });
+        evidence.push({ label: `month ${month} XLS-85 Token EscrowCreate`, hash: res.result.hash });
+        log('Step 4', `Month ${month} 에스크로 생성 (seq: ${sequence}, tx: ${res.result.hash})`);
       } else {
         fail('Step 4', `Month ${month} 에스크로 실패: ${meta?.TransactionResult}`);
         throw new Error('EscrowCreate failed');
@@ -195,9 +245,11 @@ async function main() {
     );
     const finishMeta = finishRes.result.meta as any;
     if (finishMeta?.TransactionResult === 'tesSUCCESS') {
-      log('Step 5', `Month 1 릴리즈 성공 (tx: ${finishRes.result.hash.slice(0, 12)}...)`);
+      evidence.push({ label: 'month 1 EscrowFinish', hash: finishRes.result.hash });
+      log('Step 5', `Month 1 릴리즈 성공 (tx: ${finishRes.result.hash})`);
     } else {
       fail('Step 5', `Month 1 릴리즈 실패: ${finishMeta?.TransactionResult}`);
+      throw new Error('EscrowFinish failed');
     }
 
     // 6. Escrow Cancel — Month 3 (CancelAfter 대기)
@@ -219,9 +271,11 @@ async function main() {
     );
     const cancelMeta = cancelRes.result.meta as any;
     if (cancelMeta?.TransactionResult === 'tesSUCCESS') {
-      log('Step 6', `Month 3 취소 성공 (tx: ${cancelRes.result.hash.slice(0, 12)}...)`);
+      evidence.push({ label: 'month 3 EscrowCancel', hash: cancelRes.result.hash });
+      log('Step 6', `Month 3 취소 성공 (tx: ${cancelRes.result.hash})`);
     } else {
       fail('Step 6', `Month 3 취소 실패: ${cancelMeta?.TransactionResult}`);
+      throw new Error('EscrowCancel failed');
     }
 
     // Summary
@@ -232,6 +286,10 @@ async function main() {
     console.log(`  사업자: ${businessWallet.address}`);
     console.log(`  발행자: ${issuerWallet.address}`);
     console.log(`  에스크로 3개 생성, 1개 릴리즈, 1개 취소`);
+    console.log('  검증 증거:');
+    for (const item of evidence) {
+      console.log(`  - ${item.label}: ${item.hash}`);
+    }
     console.log('═══════════════════════════════════════════\n');
 
   } catch (err) {

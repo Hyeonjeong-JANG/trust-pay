@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Body,
+  Req,
   UsePipes,
   UseGuards,
 } from '@nestjs/common';
@@ -21,30 +22,31 @@ export class EscrowController {
 
   @Post()
   @UsePipes(new ZodValidationPipe(createEscrowSchema))
-  create(@Body() dto: CreateEscrowDto) {
-    return this.escrowService.create(dto);
+  create(@Body() dto: CreateEscrowDto, @Req() req: any) {
+    return this.escrowService.create(dto, req.user);
   }
 
   @Get(':id')
-  findById(@Param('id') id: string) {
-    return this.escrowService.findById(id);
+  findById(@Param('id') id: string, @Req() req: any) {
+    return this.escrowService.findById(id, req.user);
   }
 
   @Post(':id/finish')
   finish(
     @Param('id') id: string,
     @Body(new ZodValidationPipe(finishEscrowSchema)) dto: FinishEscrowDto,
+    @Req() req: any,
   ) {
-    return this.escrowService.finishEntry(id, dto.entryMonth);
+    return this.escrowService.finishEntry(id, dto.entryMonth, req.user);
   }
 
   @Post(':id/cancel')
-  cancel(@Param('id') id: string) {
-    return this.escrowService.cancelEscrow(id);
+  cancel(@Param('id') id: string, @Req() req: any) {
+    return this.escrowService.cancelEscrow(id, req.user);
   }
 
   @Get('consumer/:consumerId')
-  findByConsumer(@Param('consumerId') consumerId: string) {
-    return this.escrowService.findByConsumer(consumerId);
+  findByConsumer(@Param('consumerId') consumerId: string, @Req() req: any) {
+    return this.escrowService.findByConsumer(consumerId, req.user);
   }
 }

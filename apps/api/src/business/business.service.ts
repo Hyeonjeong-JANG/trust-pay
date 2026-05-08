@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
 import { CryptoService } from '../common/crypto.service';
+import type { SessionUser } from '../common/session-token';
 
 @Injectable()
 export class BusinessService {
@@ -37,14 +38,16 @@ export class BusinessService {
     return result;
   }
 
-  async findById(id: string) {
+  async findById(id: string, user: SessionUser) {
+    this.assertBusinessOwner(id, user);
     const business = await this.prisma.business.findUnique({ where: { id } });
     if (!business) throw new NotFoundException('Business not found');
     const { xrplSecret: _, ...result } = business;
     return result;
   }
 
-  async dashboard(id: string) {
+  async dashboard(id: string, user: SessionUser) {
+    this.assertBusinessOwner(id, user);
     const business = await this.prisma.business.findUnique({
       where: { id },
       include: {
@@ -70,11 +73,18 @@ export class BusinessService {
       totalReceived,
       totalPending,
       activeEscrows: business.escrows.filter((e) => e.status === 'active').length,
-      escrows: business.escrows,
+      escrows: business.escrows.map((e) => {
+        if (e.consumer) {
+          const { xrplSecret: _, ...consumer } = e.consumer;
+          return { ...e, consumer };
+        }
+        return e;
+      }),
     };
   }
 
-  async getBalance(id: string) {
+  async getBalance(id: string, user: SessionUser) {
+    this.assertBusinessOwner(id, user);
     const business = await this.prisma.business.findUnique({ where: { id } });
     if (!business) throw new NotFoundException('Business not found');
     const balance = await this.xrplService.getBalance(business.xrplAddress);
@@ -84,5 +94,11 @@ export class BusinessService {
   async findAll() {
     const businesses = await this.prisma.business.findMany({ where: { isActive: true } });
     return businesses.map(({ xrplSecret: _, ...b }) => b);
+  }
+
+  private assertBusinessOwner(id: string, user: SessionUser) {
+    if (user.role !== 'business' || user.userId !== id) {
+      throw new ForbiddenException('해당 사업자 계정으로만 접근할 수 있습니다');
+    }
   }
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const phoneRegex = /^01[016789]-?\d{3,4}-?\d{4}$/;
+const phoneRegex = /^(01[016789]-?\d{3,4}-?\d{4}|0[2-6][1-5]?-?\d{3,4}-?\d{4})$/;
 
 export const phoneSchema = z
   .string()
@@ -44,7 +44,7 @@ export const consumerRegistrationSchema = z.object({
   email: z.string().email().optional(),
 });
 
-export const loginSchema = z
+const loginIdentifierSchema = z
   .object({
     phone: phoneSchema.optional(),
     email: emailSchema.optional(),
@@ -55,9 +55,19 @@ export const loginSchema = z
     message: 'Either phone or email is required',
   });
 
+export const loginSchema = loginIdentifierSchema;
+
+export const requestCodeSchema = loginIdentifierSchema;
+
+export const verifyCodeSchema = loginIdentifierSchema.and(
+  z.object({ code: z.string().regex(/^\d{6}$/, 'Invalid verification code') }),
+);
+
 export type CreateEscrowInput = z.infer<typeof createEscrowSchema>;
 export type FinishEscrowInput = z.infer<typeof finishEscrowSchema>;
 export type CancelEscrowInput = z.infer<typeof cancelEscrowSchema>;
 export type BusinessRegistrationInput = z.infer<typeof businessRegistrationSchema>;
 export type ConsumerRegistrationInput = z.infer<typeof consumerRegistrationSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type RequestCodeInput = z.infer<typeof requestCodeSchema>;
+export type VerifyCodeInput = z.infer<typeof verifyCodeSchema>;

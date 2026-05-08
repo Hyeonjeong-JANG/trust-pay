@@ -13,6 +13,10 @@ jest.mock('xrpl', () => ({
       classicAddress: 'rMockWalletAddr',
       seed: 'sMockSeed',
     }),
+    generate: jest.fn().mockReturnValue({
+      classicAddress: 'rMockGeneratedAddr',
+      seed: 'sMockGeneratedSeed',
+    }),
   },
 }));
 
@@ -30,6 +34,9 @@ const mockBusiness = {
   xrplAddress: 'rBusinessAddr',
   xrplSecret: 'sBusinessSecret',
 };
+
+const consumerUser = { userId: 'consumer-1', role: 'consumer' as const, name: '소비자' };
+const businessUser = { userId: 'business-1', role: 'business' as const, name: '사업자' };
 
 const mockEscrowResults = [
   { month: 1, sequence: 100, amount: '50000', finishAfter: '2026-06-01T00:00:00Z', cancelAfter: '2026-07-01T00:00:00Z', txHash: 'TX1' },
@@ -105,7 +112,7 @@ describe('EscrowService', () => {
         businessId: 'business-1',
         totalAmount: 150000,
         months: 3,
-      });
+      }, consumerUser);
 
       expect(xrplService.createMonthlyEscrows).toHaveBeenCalledWith(
         expect.anything(), // Wallet.fromSeed result
@@ -131,7 +138,10 @@ describe('EscrowService', () => {
       prisma.consumer.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.create({ consumerId: 'bad-id', businessId: 'business-1', totalAmount: 100000, months: 2 }),
+        service.create(
+          { consumerId: 'bad-id', businessId: 'business-1', totalAmount: 100000, months: 2 },
+          { ...consumerUser, userId: 'bad-id' },
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -140,18 +150,27 @@ describe('EscrowService', () => {
       prisma.business.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.create({ consumerId: 'consumer-1', businessId: 'bad-id', totalAmount: 100000, months: 2 }),
+        service.create({ consumerId: 'consumer-1', businessId: 'bad-id', totalAmount: 100000, months: 2 }, consumerUser),
       ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('findById', () => {
     it('should return escrow with entries', async () => {
-      const escrow = { id: 'escrow-1', entries: [], business: mockBusiness, consumer: mockConsumer };
+      const escrow = { id: 'escrow-1', consumerId: 'consumer-1', businessId: 'business-1', entries: [], business: mockBusiness, consumer: mockConsumer };
       prisma.escrow.findUnique.mockResolvedValue(escrow);
 
-      const result = await service.findById('escrow-1');
-      expect(result).toEqual(escrow);
+      const result = await service.findById('escrow-1', consumerUser);
+      const { xrplSecret: _bs, ...expectedBusiness } = mockBusiness;
+      const { xrplSecret: _cs, ...expectedConsumer } = mockConsumer;
+      expect(result).toEqual({
+        id: 'escrow-1',
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        entries: [],
+        business: expectedBusiness,
+        consumer: expectedConsumer,
+      });
       expect(prisma.escrow.findUnique).toHaveBeenCalledWith({
         where: { id: 'escrow-1' },
         include: { entries: true, business: true, consumer: true },
@@ -160,7 +179,7 @@ describe('EscrowService', () => {
 
     it('should throw if escrow not found', async () => {
       prisma.escrow.findUnique.mockResolvedValue(null);
-      await expect(service.findById('bad-id')).rejects.toThrow(NotFoundException);
+      await expect(service.findById('bad-id', consumerUser)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -180,7 +199,7 @@ describe('EscrowService', () => {
       prisma.business.findUnique.mockResolvedValue(mockBusiness);
       prisma.escrowEntry.update.mockResolvedValue({});
 
-      const result = await service.finishEntry('escrow-1', 1);
+      const result = await service.finishEntry('escrow-1', 1, businessUser);
 
       expect(xrplService.finishEscrow).toHaveBeenCalledWith(
         expect.anything(), // Wallet.fromSeed
@@ -208,7 +227,7 @@ describe('EscrowService', () => {
       prisma.business.findUnique.mockResolvedValue(mockBusiness);
       prisma.escrowEntry.update.mockResolvedValue({});
 
-      await service.finishEntry('escrow-1', 1);
+      await service.finishEntry('escrow-1', 1, businessUser);
 
       expect(prisma.escrow.update).toHaveBeenCalledWith({
         where: { id: 'escrow-1' },
@@ -219,18 +238,18 @@ describe('EscrowService', () => {
     it('should throw if entry already released', async () => {
       prisma.escrow.findUnique.mockResolvedValue(makeEscrow('released'));
 
-      await expect(service.finishEntry('escrow-1', 1)).rejects.toThrow(BadRequestException);
+      await expect(service.finishEntry('escrow-1', 1, businessUser)).rejects.toThrow(BadRequestException);
     });
 
     it('should throw if entry month not found', async () => {
       prisma.escrow.findUnique.mockResolvedValue(makeEscrow());
 
-      await expect(service.finishEntry('escrow-1', 99)).rejects.toThrow(NotFoundException);
+      await expect(service.finishEntry('escrow-1', 99, businessUser)).rejects.toThrow(NotFoundException);
     });
 
     it('should throw if escrow not found', async () => {
       prisma.escrow.findUnique.mockResolvedValue(null);
-      await expect(service.finishEntry('bad-id', 1)).rejects.toThrow(NotFoundException);
+      await expect(service.finishEntry('bad-id', 1, businessUser)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -250,7 +269,7 @@ describe('EscrowService', () => {
       prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
       prisma.escrowEntry.update.mockResolvedValue({});
 
-      const result = await service.cancelEscrow('escrow-1');
+      const result = await service.cancelEscrow('escrow-1', consumerUser);
 
       // Should only cancel pending entries (2 and 3), not released (1)
       expect(xrplService.cancelEscrow).toHaveBeenCalledTimes(2);
@@ -279,7 +298,7 @@ describe('EscrowService', () => {
         .mockResolvedValueOnce('CANCEL_TX_2');
       prisma.escrowEntry.update.mockResolvedValue({});
 
-      const result = await service.cancelEscrow('escrow-1');
+      const result = await service.cancelEscrow('escrow-1', consumerUser);
 
       // Still marks escrow as cancelled
       expect(prisma.escrow.update).toHaveBeenCalledWith({
@@ -293,7 +312,7 @@ describe('EscrowService', () => {
 
     it('should throw if escrow not found', async () => {
       prisma.escrow.findUnique.mockResolvedValue(null);
-      await expect(service.cancelEscrow('bad-id')).rejects.toThrow(NotFoundException);
+      await expect(service.cancelEscrow('bad-id', consumerUser)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -302,7 +321,7 @@ describe('EscrowService', () => {
       const escrows = [{ id: 'e-1' }, { id: 'e-2' }];
       prisma.escrow.findMany.mockResolvedValue(escrows);
 
-      const result = await service.findByConsumer('consumer-1');
+      const result = await service.findByConsumer('consumer-1', consumerUser);
 
       expect(prisma.escrow.findMany).toHaveBeenCalledWith({
         where: { consumerId: 'consumer-1' },

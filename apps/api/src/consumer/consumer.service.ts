@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
 import { CryptoService } from '../common/crypto.service';
+import type { SessionUser } from '../common/session-token';
 
 @Injectable()
 export class ConsumerService {
@@ -34,22 +35,29 @@ export class ConsumerService {
     return result;
   }
 
-  async findById(id: string) {
+  async findById(id: string, user: SessionUser) {
+    this.assertConsumerOwner(id, user);
     const consumer = await this.prisma.consumer.findUnique({ where: { id } });
     if (!consumer) throw new NotFoundException('Consumer not found');
     const { xrplSecret: _, ...result } = consumer;
     return result;
   }
 
-  async getBalance(id: string) {
+  async getBalance(id: string, user: SessionUser) {
+    this.assertConsumerOwner(id, user);
     const consumer = await this.prisma.consumer.findUnique({ where: { id } });
     if (!consumer) throw new NotFoundException('Consumer not found');
     const balance = await this.xrplService.getBalance(consumer.xrplAddress);
     return { xrplAddress: consumer.xrplAddress, balance };
   }
 
-  async findAll() {
-    const consumers = await this.prisma.consumer.findMany();
-    return consumers.map(({ xrplSecret: _, ...c }) => c);
+  async findAll(_user: SessionUser) {
+    throw new ForbiddenException('소비자 목록 조회는 관리자 권한이 필요합니다');
+  }
+
+  private assertConsumerOwner(id: string, user: SessionUser) {
+    if (user.role !== 'consumer' || user.userId !== id) {
+      throw new ForbiddenException('본인 소비자 계정으로만 접근할 수 있습니다');
+    }
   }
 }
