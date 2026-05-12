@@ -20,7 +20,7 @@ export const useAppStore = create<AppState>()(
       setNotificationsLastViewed: (ts) => set({ notificationsLastViewed: ts }),
     }),
     {
-      name: 'prepaid-shield-app',
+      name: 'trust-pay-app',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         hasSeenOnboarding: state.hasSeenOnboarding,

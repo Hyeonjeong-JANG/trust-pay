@@ -1,27 +1,32 @@
 {
   "expo": {
-    "name": "PrepaidShield",
-    "slug": "prepaid-shield",
+    "name": "TrustPay",
+    "slug": "trust-pay",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "prepaidshield",
+    "scheme": "trustpay",
     "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#F5F7FA"
     },
-    "platforms": ["ios", "android"],
+    "platforms": ["ios", "android", "web"],
     "ios": {
-      "bundleIdentifier": "com.prepaidshield.app",
+      "bundleIdentifier": "com.trustpay.app",
       "supportsTablet": false
     },
     "android": {
-      "package": "com.prepaidshield.app",
+      "package": "com.trustpay.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F5F7FA"
       }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/icon.png"
     }
   }
 }

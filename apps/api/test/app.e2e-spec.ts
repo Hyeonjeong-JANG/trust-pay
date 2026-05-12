@@ -21,7 +21,7 @@ function expectNoWalletSecret(value: unknown) {
   expect(serialized).not.toContain('sSecret');
 }
 
-describe('PrepaidShield E2E', () => {
+describe('TrustPay E2E', () => {
   let app: INestApplication;
   let prisma: PrismaService;
 

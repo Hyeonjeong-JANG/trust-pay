@@ -42,7 +42,7 @@ export function Logo({ size = 120 }: LogoProps) {
         strokeLinejoin="round"
       />
 
-      {/* PS text */}
+      {/* TP text */}
       <SvgText
         x="60"
         y="108"
@@ -52,7 +52,7 @@ export function Logo({ size = 120 }: LogoProps) {
         fill="#1A4FBF"
         letterSpacing={2}
       >
-        PS
+        TP
       </SvgText>
     </Svg>
   );

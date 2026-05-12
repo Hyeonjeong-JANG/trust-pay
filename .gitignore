@@ -38,6 +38,7 @@ apps/api/prisma/migrations/
 
 # Turbo
 .turbo/
+.vercel/
 
 # Git worktrees
 .worktrees/
@@ -51,3 +52,4 @@ coverage/
 
 # KFIP submission (contains personal info)
 docs/KFIP-SUBMISSION.md
+.vercel

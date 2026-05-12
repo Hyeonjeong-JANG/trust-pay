@@ -20,7 +20,7 @@
 **"선불금을 RLUSD 스테이블코인 에스크로에 보관하여, 가치 변동 없이 사업자 폐업 시 자동 환불"**
 
 - 기존: 돈을 사업자에게 넘긴 후 돌려받을 방법 없음
-- PrepaidShield: 돈이 XRPL Token Escrow(XLS-85)에 RLUSD로 잠겨있으므로 가치 변동 없이 자동 환불
+- TrustPay: 돈이 XRPL Token Escrow(XLS-85)에 RLUSD로 잠겨있으므로 가치 변동 없이 자동 환불
 
 ## 4. Solution (솔루션)
 

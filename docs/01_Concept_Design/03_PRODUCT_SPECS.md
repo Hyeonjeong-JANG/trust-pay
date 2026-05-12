@@ -64,7 +64,7 @@
 ## 5. XRPL Token Escrow 플로우 (XLS-85)
 
 ```
-[소비자] ---(600 RLUSD, 6개월)--> [PrepaidShield API]
+[소비자] ---(600 RLUSD, 6개월)--> [TrustPay API]
                                         |
                             Trust Line 설정 (RLUSD issuer)
                                         |

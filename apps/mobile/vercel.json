@@ -1,0 +1,12 @@
+{
+  "buildCommand": "EXPO_PUBLIC_API_URL=/api pnpm exec expo export --platform web",
+  "outputDirectory": "dist",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

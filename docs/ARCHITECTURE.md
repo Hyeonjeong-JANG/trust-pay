@@ -1,4 +1,4 @@
-# PrepaidShield Technical Architecture
+# TrustPay Technical Architecture
 
 ## System Overview
 
@@ -63,7 +63,7 @@
 ## Why XLS-85 Token Escrow?
 
 ### 기존 선불 결제의 문제
-| 문제 | 현재 방식 | PrepaidShield |
+| 문제 | 현재 방식 | TrustPay |
 |------|-----------|---------------|
 | 폐업 리스크 | 소비자 전액 손실 | **자동 환불** (CancelAfter) |
 | 자금 투명성 | 사업자 계좌에 묶임 | **XRPL 온체인 확인** |

@@ -19,6 +19,65 @@ import { colors, spacing, radius, font, shadow } from '../theme';
 type UserRole = 'consumer' | 'business';
 type LoginMethod = 'phone' | 'email';
 
+const isWeb = Platform.OS === 'web';
+
+function PrimaryActionButton({
+  label,
+  loadingLabel,
+  disabled,
+  loading,
+  onPress,
+}: {
+  label: string;
+  loadingLabel: string;
+  disabled: boolean;
+  loading: boolean;
+  onPress: () => void;
+}) {
+  if (isWeb) {
+    return React.createElement(
+      'button',
+      {
+        type: 'button',
+        disabled,
+        onClick: onPress,
+        style: {
+          width: '100%',
+          backgroundColor: colors.primary,
+          color: colors.white,
+          border: 0,
+          borderRadius: radius.md,
+          padding: `${spacing.md}px`,
+          marginTop: spacing.sm,
+          fontSize: font.size.md,
+          fontWeight: font.weight.semibold,
+          cursor: disabled ? 'default' : 'pointer',
+          opacity: disabled ? 0.5 : 1,
+        },
+      },
+      loading ? loadingLabel : label,
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      style={[styles.button, disabled && styles.buttonDisabled]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator color="#fff" size="small" />
+          <Text style={styles.buttonText}> {loadingLabel}</Text>
+        </View>
+      ) : (
+        <Text style={styles.buttonText}>{label}</Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 export function LoginScreen() {
   const setAuth = useAuthStore((s) => s.setAuth);
   const [role, setRole] = useState<UserRole>('consumer');
@@ -28,7 +87,6 @@ export function LoginScreen() {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
-  const [demoCode, setDemoCode] = useState<string | null>(null);
 
   const authPayload = () => ({
     ...(method === 'phone' ? { phone } : { email }),
@@ -39,15 +97,12 @@ export function LoginScreen() {
   const resetCode = () => {
     setCode('');
     setCodeSent(false);
-    setDemoCode(null);
   };
 
   const requestCodeMutation = useMutation({
     mutationFn: () => api.requestCode(authPayload()),
     onSuccess: (data) => {
       setCodeSent(true);
-      setDemoCode(data.code ?? null);
-      if (data.code) setCode(data.code);
     },
     onError: (err: Error) => {
       const apiErr = err as import('../api/client').ApiError;
@@ -97,9 +152,9 @@ export function LoginScreen() {
       >
         <View style={styles.brandArea}>
           <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>PS</Text>
+            <Text style={styles.logoText}>TP</Text>
           </View>
-          <Text style={styles.title}>PrepaidShield</Text>
+          <Text style={styles.title}>TrustPay</Text>
           <Text style={styles.subtitle}>XRPL 기반 RLUSD 선불 보호 서비스</Text>
         </View>
 
@@ -209,30 +264,16 @@ export function LoginScreen() {
                 keyboardType="number-pad"
                 maxLength={6}
               />
-              {demoCode && (
-                <Text style={styles.demoCode}>데모 인증코드: {demoCode}</Text>
-              )}
             </View>
           )}
 
-          {/* 로그인 버튼 */}
-          <TouchableOpacity
-            style={[styles.button, ((codeSent ? !canVerify : !canSubmit) || isPending) && styles.buttonDisabled]}
+          <PrimaryActionButton
+            label={codeSent ? '로그인' : '인증코드 받기'}
+            loadingLabel={requestCodeMutation.isPending ? '인증코드 요청 중...' : '로그인 중...'}
             onPress={handleSubmit}
             disabled={(codeSent ? !canVerify : !canSubmit) || isPending}
-            activeOpacity={0.8}
-          >
-            {isPending ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color="#fff" size="small" />
-                <Text style={styles.buttonText}>
-                  {requestCodeMutation.isPending ? ' 인증코드 요청 중...' : ' 로그인 중...'}
-                </Text>
-              </View>
-            ) : (
-              <Text style={styles.buttonText}>{codeSent ? '로그인' : '인증코드 받기'}</Text>
-            )}
-          </TouchableOpacity>
+            loading={isPending}
+          />
         </View>
 
         <Text style={styles.hint}>
@@ -249,31 +290,32 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    padding: spacing.xxl,
+    justifyContent: isWeb ? 'flex-start' : 'center',
+    alignItems: isWeb ? 'center' : 'stretch',
+    padding: isWeb ? spacing.lg : spacing.xxl,
   },
   brandArea: {
     alignItems: 'center',
-    marginBottom: spacing.xxxl,
+    marginBottom: isWeb ? spacing.lg : spacing.xxxl,
   },
   logoCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: isWeb ? 56 : 72,
+    height: isWeb ? 56 : 72,
+    borderRadius: isWeb ? 28 : 36,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: isWeb ? spacing.sm : spacing.lg,
     ...shadow.md,
   },
   logoText: {
-    fontSize: font.size.xl,
+    fontSize: isWeb ? font.size.lg : font.size.xl,
     fontWeight: font.weight.bold,
     color: colors.white,
     letterSpacing: 1,
   },
   title: {
-    fontSize: font.size.hero,
+    fontSize: isWeb ? font.size.xxl : font.size.hero,
     fontWeight: font.weight.bold,
     color: colors.gray900,
     letterSpacing: -0.5,
@@ -284,15 +326,17 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   formCard: {
+    width: '100%',
+    maxWidth: isWeb ? 460 : undefined,
     backgroundColor: colors.white,
     borderRadius: radius.lg,
-    padding: spacing.xl,
+    padding: isWeb ? spacing.lg : spacing.xl,
     ...shadow.sm,
   },
   segmentRow: {
     flexDirection: 'row',
     gap: spacing.md,
-    marginBottom: spacing.xl,
+    marginBottom: isWeb ? spacing.lg : spacing.xl,
   },
   segment: {
     flex: 1,
@@ -321,7 +365,7 @@ const styles = StyleSheet.create({
   methodRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.xl,
+    marginBottom: isWeb ? spacing.lg : spacing.xl,
   },
   methodButton: {
     paddingVertical: spacing.sm,
@@ -339,7 +383,7 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: font.weight.semibold,
   },
-  inputGroup: { marginBottom: spacing.lg },
+  inputGroup: { marginBottom: isWeb ? spacing.md : spacing.lg },
   label: {
     fontSize: font.size.sm,
     fontWeight: font.weight.semibold,
@@ -359,12 +403,6 @@ const styles = StyleSheet.create({
   inputError: {
     borderColor: colors.danger,
     backgroundColor: colors.dangerLight,
-  },
-  demoCode: {
-    color: colors.primary,
-    fontSize: font.size.sm,
-    fontWeight: font.weight.semibold,
-    marginTop: spacing.sm,
   },
   button: {
     backgroundColor: colors.primary,

@@ -36,11 +36,18 @@ XRPL 통합 상세: [`docs/XRPL-INTEGRATION.md`](docs/XRPL-INTEGRATION.md)
 
 ## 데모 플로우
 
-1. 소비자 `010-1234-5678`로 로그인합니다.
+웹 데모: https://xrpl-tawny.vercel.app
+
+수동 로그인용 테스트 계정은 아래와 같습니다. OTP는 `123456`입니다.
+
+- Consumer: `010-2000-0001`
+- Business: `010-1000-0002`
+
+1. 소비자 `010-2000-0001`로 로그인합니다.
 2. 대시보드에서 진행중, 완료, 환불된 에스크로를 확인합니다.
 3. 파워짐 헬스장 에스크로 상세에서 6개월 중 3개월 released, 3개월 pending 상태를 확인합니다.
-4. 브라이트 영어학원을 선택해 300 RLUSD, 3개월 에스크로를 생성합니다.
-5. 사업자 `02-1234-5678`로 로그인해 pending 월 정산을 실행합니다.
+4. 정상어학원을 선택해 300 RLUSD, 3개월 에스크로를 생성합니다.
+5. 사업자 `010-1000-0002`로 로그인해 pending 월 정산을 실행합니다.
 6. 소비자 화면에서 pending 엔트리 환불 흐름을 설명합니다.
 
 상세 시나리오: [`docs/DEMO-SCENARIO.md`](docs/DEMO-SCENARIO.md)
@@ -150,14 +157,14 @@ pnpm --filter mobile exec jest --runInBand
 pnpm exec tsx --test scripts/testnet-cli.spec.ts
 ```
 
-2026-05-04 Phase 7 리허설 기준 확인 결과:
+2026-05-12 제출 전 확인 결과:
 
 | 검증 | 결과 |
 |:---|:---:|
 | Monorepo build | Pass |
-| API unit tests | 39 passed |
-| Mobile tests | 54 passed |
-| API E2E tests | 31 passed |
+| API unit tests | 46 passed |
+| Mobile tests | 55 passed |
+| API E2E tests | 41 passed |
 | Mobile typecheck | Pass |
 | Mobile Jest clean exit | Pass |
 | Testnet CLI help tests | 2 passed |
@@ -165,6 +172,7 @@ pnpm exec tsx --test scripts/testnet-cli.spec.ts
 ## 주요 문서
 
 - XRPL 통합 가이드: [`docs/XRPL-INTEGRATION.md`](docs/XRPL-INTEGRATION.md)
+- XRPL Testnet 증빙: [`docs/XRPL-TESTNET-EVIDENCE.md`](docs/XRPL-TESTNET-EVIDENCE.md)
 - 데모 시나리오: [`docs/DEMO-SCENARIO.md`](docs/DEMO-SCENARIO.md)
 - 데모 발표 스크립트: [`docs/DEMO-SCRIPT.md`](docs/DEMO-SCRIPT.md)
 - 데모 영상 shotlist: [`docs/DEMO-VIDEO-SHOTLIST.md`](docs/DEMO-VIDEO-SHOTLIST.md)

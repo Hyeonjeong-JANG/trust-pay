@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: trustpay-api
+    env: node
+    plan: free
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter api build
+    startCommand: pnpm --filter api start:demo
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEMO_MODE
+        value: true
+      - key: AUTH_DEMO_OTP
+        value: true
+      - key: DATABASE_URL
+        value: file:./dev.db
+      - key: CORS_ORIGIN
+        value: '*'

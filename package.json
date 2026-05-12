@@ -1,5 +1,5 @@
 {
-  "name": "prepaid-shield",
+  "name": "trust-pay",
   "private": true,
   "scripts": {
     "dev:api": "pnpm --filter api dev",

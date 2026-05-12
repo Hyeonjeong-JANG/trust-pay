@@ -11,6 +11,21 @@
 
 ## 2. 녹화 전 준비
 
+가장 빠른 촬영 방식은 배포된 웹 데모를 사용하는 것입니다.
+
+```text
+https://xrpl-tawny.vercel.app
+```
+
+웹 데모는 실제 서비스처럼 전화번호와 OTP를 수동 입력해 로그인합니다.
+
+```text
+Consumer: 010-2000-0001 / OTP: 123456
+Business: 010-1000-0002 / OTP: 123456
+```
+
+로컬 앱으로 촬영할 경우 아래 명령을 사용합니다.
+
 ```bash
 pnpm demo:reset
 pnpm demo:api
@@ -44,11 +59,11 @@ pnpm demo:mobile
 |:---|:---|:---|:---|:---|
 | 1 | 온보딩 첫 화면 | 앱 시작 | 헬스장/학원 선불 결제 피해 문제 | 문제 문구가 화면에 보임 |
 | 2 | 온보딩 XRPL 설명 | 다음 화면 이동 | 전액 선지급 대신 RLUSD를 월별 Token Escrow에 예치 | RLUSD, Token Escrow 문구 |
-| 3 | LoginScreen | Consumer 선택, `010-1234-5678` 입력 | 소비자 김민수로 로그인 | Consumer 역할과 전화번호 |
+| 3 | LoginScreen | Consumer 선택, `010-2000-0001` 입력 | 소비자 김민수로 로그인 | Consumer 역할과 전화번호 |
 | 4 | Consumer Dashboard | active 카드 확인 | 내 선불금의 released/pending/refunded 상태 확인 | active/completed/cancelled 카드 |
 | 5 | Escrow Detail | 파워짐 active 상세 열기 | 600 RLUSD, 6개월, 3 released + 3 pending | 월별 상태와 tx hash |
-| 6 | Payment Flow | 브라이트 영어학원 선택, `300`, `3` 입력 | 하나의 결제가 3개 월별 escrow로 분할 | 월별 100 RLUSD 설명 |
-| 7 | Business Login | 로그아웃 후 Business `02-1234-5678` 로그인 | 사업자는 제공한 월만 정산 | 사업자 역할과 파워짐 계정 |
+| 6 | Payment Flow | 정상어학원 선택, `300`, `3` 입력 | 하나의 결제가 3개 월별 escrow로 분할 | 월별 100 RLUSD 설명 |
+| 7 | Business Login | 로그아웃 후 Business `010-1000-0002` 로그인 | 사업자는 제공한 월만 정산 | 사업자 역할과 파워짐 계정 |
 | 8 | Business Dashboard | Release 버튼 또는 정산 영역 표시 | `EscrowFinish`가 사업자 월별 정산에 대응 | 수령액, 미정산액, Release |
 | 9 | Refund Scenario | cancelled escrow 상태 표시 | 미이용 pending 월은 `EscrowCancel` 환불 대상으로 분리 | refunded/released 상태 |
 | 10 | 마무리 화면 | 대시보드 또는 문서 화면 | XRPL Testnet 검증 스크립트와 문서가 별도로 있음 | `docs/XRPL-INTEGRATION.md` 언급 |
@@ -94,6 +109,7 @@ TrustPay의 핵심 XRPL 사용 지점은 RLUSD, Trust Line, XLS-85 Token EscrowC
 ## 8. 구글폼에 붙일 프로토타입 링크 메모
 
 ```text
-[입력 필요] 3~5분 데모 영상 링크
+웹 데모: https://xrpl-tawny.vercel.app
+데모 영상: [입력 필요] 3분 내외 데모 영상 링크
 보조 설명: Demo Mode에서는 모바일 UX 전체 흐름을 시연하고, XRPL Testnet 트랜잭션 검증은 repository의 docs/XRPL-INTEGRATION.md 및 scripts/verify-xrpl-testnet.ts에서 확인할 수 있습니다.
 ```

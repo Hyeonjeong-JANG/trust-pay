@@ -88,7 +88,7 @@ function wait(ms: number): Promise<void> {
 // ─── Main ───
 async function main() {
   console.log('\n═══════════════════════════════════════════');
-  console.log('  PrepaidShield — XRPL Testnet 연동 검증');
+  console.log('  TrustPay — XRPL Testnet 연동 검증');
   console.log('═══════════════════════════════════════════\n');
 
   // 1. Connect

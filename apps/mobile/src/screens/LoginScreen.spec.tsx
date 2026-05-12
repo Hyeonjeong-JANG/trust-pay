@@ -43,7 +43,7 @@ describe('LoginScreen', () => {
 
   it('should render title and subtitle', () => {
     const { getByText } = renderWithProviders(<LoginScreen />);
-    expect(getByText('PrepaidShield')).toBeTruthy();
+    expect(getByText('TrustPay')).toBeTruthy();
     expect(getByText('XRPL 기반 RLUSD 선불 보호 서비스')).toBeTruthy();
   });
 
@@ -109,6 +109,13 @@ describe('LoginScreen', () => {
     expect(getByText('인증코드 받기')).toBeTruthy();
   });
 
+  it('should not show shortcut demo account buttons', () => {
+    const { queryByText } = renderWithProviders(<LoginScreen />);
+    expect(queryByText('심사용 데모 계정')).toBeNull();
+    expect(queryByText('김민수 소비자')).toBeNull();
+    expect(queryByText('파워짐 사업자')).toBeNull();
+  });
+
   it('should keep request code button available when valid phone entered', () => {
     const { getByText, getByPlaceholderText } = renderWithProviders(
       <LoginScreen />,
@@ -119,11 +126,11 @@ describe('LoginScreen', () => {
     expect(getByText('인증코드 받기')).toBeTruthy();
   });
 
-  it('should request a demo OTP on valid phone submit', async () => {
+  it('should request an OTP and require manual code entry', async () => {
     const { api } = require('../api/client');
     api.requestCode.mockResolvedValue({ delivery: 'demo', code: '123456', expiresInSeconds: 300 });
 
-    const { getByText, getByPlaceholderText } = renderWithProviders(
+    const { getByText, getByPlaceholderText, queryByText } = renderWithProviders(
       <LoginScreen />,
     );
 
@@ -138,9 +145,12 @@ describe('LoginScreen', () => {
     });
 
     await waitFor(() => {
-      expect(getByText('데모 인증코드: 123456')).toBeTruthy();
       expect(getByText('로그인')).toBeTruthy();
+      expect(getByPlaceholderText('123456')).toBeTruthy();
     });
+
+    expect(queryByText('데모 인증코드: 123456')).toBeNull();
+    expect(getByPlaceholderText('123456').props.value).toBe('');
   });
 
   it('should verify OTP and store the signed session token', async () => {
@@ -159,6 +169,7 @@ describe('LoginScreen', () => {
     fireEvent.press(getByText('인증코드 받기'));
 
     await waitFor(() => expect(getByText('로그인')).toBeTruthy());
+    fireEvent.changeText(getByPlaceholderText('123456'), '123456');
     fireEvent.press(getByText('로그인'));
 
     await waitFor(() => {
