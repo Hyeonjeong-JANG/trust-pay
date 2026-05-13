@@ -122,7 +122,7 @@ export const api = {
     request<PaymentRequest>('/payment-requests', { method: 'POST', body: JSON.stringify(data) }),
 
   getPaymentRequest: (code: string) =>
-    request<PaymentRequest>(`/payment-requests/${encodeURIComponent(code)}`),
+    request<PaymentRequest>(`/payment-requests?code=${encodeURIComponent(code)}`),
 
   getEscrow: (id: string) => request<EscrowRecord>(`/escrow/${id}`),
 

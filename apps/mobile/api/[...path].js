@@ -613,6 +613,12 @@ module.exports = async function handler(req, res) {
     return request ? send(res, 200, request) : send(res, 404, { message: 'Payment request not found' });
   }
 
+  if (req.method === 'GET' && path === '/payment-requests') {
+    const code = (url.searchParams.get('code') || '').toUpperCase();
+    const request = paymentRequests.find((item) => item.code === code);
+    return request ? send(res, 200, request) : send(res, 404, { message: 'Payment request not found' });
+  }
+
   if (req.method === 'GET' && parts[0] === 'business' && parts[2] === 'balance') {
     const business = businesses.find((item) => item.id === parts[1]);
     return send(res, 200, { xrplAddress: business?.xrplAddress ?? '', balance: '10000.00' });

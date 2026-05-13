@@ -144,7 +144,7 @@ describe('static Demo API fixture', () => {
       escrowType: 'monthly',
     });
     const created = createResponse.body as any;
-    const lookupResponse = await callApi('GET', `/api/payment-requests/${created.code}`);
+    const lookupResponse = await callApi('GET', `/api/payment-requests?code=${created.code}`);
 
     expect(createResponse.statusCode).toBe(201);
     expect(created).toMatchObject({
