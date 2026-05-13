@@ -33,6 +33,26 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
 
 type EscrowWithConsumer = EscrowRecord & { consumer?: { id: string; name: string } };
 
+function sumEntryAmounts(entries: EscrowEntry[], status: EscrowEntry['status']): number {
+  return entries
+    .filter((entry) => entry.status === status)
+    .reduce((sum, entry) => sum + Number(entry.amount), 0);
+}
+
+function getPrepaidAmounts(escrow: EscrowWithConsumer) {
+  const totalAmount = Number(escrow.totalAmount);
+  const settledChargeAmount = escrow.chargeRequests
+    ?.filter((request) => request.status === 'settled')
+    .reduce((sum, request) => sum + Number(request.amount), 0) ?? 0;
+  const releasedEntryAmount = sumEntryAmounts(escrow.entries ?? [], 'released');
+  const refundedEntryAmount = sumEntryAmounts(escrow.entries ?? [], 'refunded');
+  const usedAmount = settledChargeAmount > 0 ? settledChargeAmount : releasedEntryAmount;
+  return {
+    usedAmount,
+    remainingAmount: Math.max(totalAmount - usedAmount - refundedEntryAmount, 0),
+  };
+}
+
 export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashboard'>) {
   const userId = useAuthStore((s) => s.userId);
   const queryClient = useQueryClient();
@@ -236,7 +256,10 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
           const pendingEntries = item.entries?.filter((e: EscrowEntry) => e.status === 'pending') ?? [];
           const releasedCount = (item.entries?.length ?? 0) - pendingEntries.length;
           const totalEntries = item.entries?.length || item.months;
-          const progressPct = totalEntries > 0 ? (releasedCount / totalEntries) * 100 : 0;
+          const prepaidAmounts = isPrepaid ? getPrepaidAmounts(item) : null;
+          const progressPct = isPrepaid
+            ? Number(item.totalAmount) > 0 ? ((prepaidAmounts?.usedAmount ?? 0) / Number(item.totalAmount)) * 100 : 0
+            : totalEntries > 0 ? (releasedCount / totalEntries) * 100 : 0;
           return (
             <View style={styles.card}>
               <TouchableOpacity
@@ -252,9 +275,15 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
                   <View style={styles.cardInfo}>
                     <Text style={styles.cardTitle}>{item.consumer?.name ?? '소비자'}</Text>
                     <Text style={styles.cardSub}>
-                      {formatKrwFromRlusd(item.monthlyAmount)}/{isPrepaid ? '회' : '월'} · {pendingEntries.length}건 대기
+                      {isPrepaid
+                        ? `사용 ${formatKrwFromRlusd(prepaidAmounts?.usedAmount ?? 0)} · 잔액 ${formatKrwFromRlusd(prepaidAmounts?.remainingAmount ?? 0)}`
+                        : `${formatKrwFromRlusd(item.monthlyAmount)}/월 · ${pendingEntries.length}건 대기`}
                     </Text>
-                    <Text style={styles.cardSubRlusd}>{formatRlusd(item.monthlyAmount)}</Text>
+                    <Text style={styles.cardSubRlusd}>
+                      {isPrepaid
+                        ? `${formatRlusd(prepaidAmounts?.usedAmount ?? 0)} 사용 · ${formatRlusd(prepaidAmounts?.remainingAmount ?? 0)} 잔액`
+                        : formatRlusd(item.monthlyAmount)}
+                    </Text>
                   </View>
                   <View style={styles.cardAmountBlock}>
                     <Text style={styles.cardAmount}>{formatKrwFromRlusd(item.totalAmount)}</Text>

@@ -170,8 +170,8 @@ describe('BusinessDashboardScreen', () => {
   it('should keep prepaid charge controls out of dashboard cards', async () => {
     const { api } = require('../../api/client');
     api.getBusinessDashboard.mockResolvedValue({
-      totalReceived: 40,
-      totalPending: 110,
+      totalReceived: 25,
+      totalPending: 125,
       escrows: [
         {
           id: 'e-prepaid',
@@ -195,15 +195,21 @@ describe('BusinessDashboardScreen', () => {
             { id: 'en-2', month: 10, amount: '5', status: 'pending', finishAfter: 830607775 },
             { id: 'en-3', month: 11, amount: '5', status: 'pending', finishAfter: 830607775 },
           ],
+          chargeRequests: [
+            { id: 'charge-1', menuName: '아메리카노', amount: 10, status: 'settled' },
+            { id: 'charge-2', menuName: '브런치 세트', amount: 15, status: 'settled' },
+          ],
         },
       ],
     });
 
-    const { findAllByText, findByText, queryByText, queryByPlaceholderText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+    const { findByText, queryByText, queryByPlaceholderText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
     expect(await findByText(/이미 보호 원장에 잠긴 금액권에서 실제 사용금액 차감 요청을 보냅니다/)).toBeTruthy();
-    expect(await findByText(/₩6,750\/회/)).toBeTruthy();
-    expect((await findAllByText('5.00 RLUSD')).length).toBeGreaterThan(0);
+    expect(await findByText('사용 ₩33,750 · 잔액 ₩168,750')).toBeTruthy();
+    expect(await findByText('25.00 RLUSD 사용 · 125.00 RLUSD 잔액')).toBeTruthy();
+    expect(queryByText(/\/회/)).toBeNull();
+    expect(queryByText(/건 대기/)).toBeNull();
     expect(queryByText('차감 메뉴 등록')).toBeNull();
     expect(queryByText('차감 항목 선택')).toBeNull();
     expect(queryByText('직접 입력')).toBeNull();

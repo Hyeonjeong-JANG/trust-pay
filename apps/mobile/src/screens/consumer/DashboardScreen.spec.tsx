@@ -184,7 +184,7 @@ describe('ConsumerDashboardScreen', () => {
     expect(await findByText('100,000.00 RLUSD')).toBeTruthy();
   });
 
-  it('should render prepaid escrow progress by usage count', async () => {
+  it('should render prepaid escrow progress by used and remaining amounts', async () => {
     const { api } = require('../../api/client');
     api.getConsumerEscrows.mockResolvedValue([
       {
@@ -199,19 +199,30 @@ describe('ConsumerDashboardScreen', () => {
           ...Array.from({ length: 8 }, (_, index) => ({ id: `r-${index}`, amount: '5', status: 'released' })),
           ...Array.from({ length: 22 }, (_, index) => ({ id: `p-${index}`, amount: '5', status: 'pending' })),
         ],
+        chargeRequests: [
+          { id: 'charge-1', menuName: '아메리카노', amount: 20, status: 'settled' },
+          { id: 'charge-2', menuName: '브런치', amount: 17, status: 'settled' },
+        ],
       },
     ]);
 
-    const { findByText } = renderWithProviders(
+    const { findByText, queryByText } = renderWithProviders(
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
     expect(await findByText('강남 블루보틀')).toBeTruthy();
     expect(await findByText('이용권 차감')).toBeTruthy();
     expect(await findByText('₩202,500')).toBeTruthy();
-    expect(await findByText('8/30회 사용됨')).toBeTruthy();
-    expect(await findByText('대기 보호금 ₩148,500')).toBeTruthy();
-    expect(await findByText('110.00 RLUSD')).toBeTruthy();
+    expect(await findByText('사용 금액')).toBeTruthy();
+    expect(await findByText('남은 잔액')).toBeTruthy();
+    expect(await findByText('₩49,950')).toBeTruthy();
+    expect(await findByText('₩152,550')).toBeTruthy();
+    expect(await findByText('37.00 RLUSD')).toBeTruthy();
+    expect(await findByText('113.00 RLUSD')).toBeTruthy();
+    expect(queryByText(/회 사용됨/)).toBeNull();
+    expect(queryByText(/대기 보호금/)).toBeNull();
+    expect(queryByText(/남은 금액/)).toBeNull();
+    expect(queryByText(/사용 ₩49,950 · 잔액 ₩152,550/)).toBeNull();
   });
 
   it('should surface pending charge approvals on escrow cards', async () => {

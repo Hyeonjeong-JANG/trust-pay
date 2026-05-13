@@ -23,6 +23,26 @@ import type { EscrowRecord, EscrowStatus } from '@prepaid-shield/shared-types';
 type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
 type PendingChargeApproval = ChargeRequest & { escrowId: string; businessName: string };
 
+function sumEntryAmounts(entries: EscrowEntry[], status: EscrowEntry['status']): number {
+  return entries
+    .filter((entry) => entry.status === status)
+    .reduce((sum, entry) => sum + Number(entry.amount), 0);
+}
+
+function getPrepaidAmounts(escrow: EscrowWithBusiness) {
+  const totalAmount = Number(escrow.totalAmount);
+  const settledChargeAmount = escrow.chargeRequests
+    ?.filter((request) => request.status === 'settled')
+    .reduce((sum, request) => sum + Number(request.amount), 0) ?? 0;
+  const releasedEntryAmount = sumEntryAmounts(escrow.entries, 'released');
+  const refundedEntryAmount = sumEntryAmounts(escrow.entries, 'refunded');
+  const usedAmount = settledChargeAmount > 0 ? settledChargeAmount : releasedEntryAmount;
+  return {
+    usedAmount,
+    remainingAmount: Math.max(totalAmount - usedAmount - refundedEntryAmount, 0),
+  };
+}
+
 const STATUS_KO: Record<string, string> = {
   active: '진행중',
   completed: '완료',
@@ -277,13 +297,16 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
           const pendingEntries = item.entries.filter((e: EscrowEntry) => e.status === 'pending');
           const fallbackMonthly = item.months > 0 ? item.totalAmount / item.months : 0;
           const totalEntries = item.entries.length || item.months;
-          const pendingAmount = pendingEntries.reduce(
+          const prepaidAmounts = isPrepaid ? getPrepaidAmounts(item) : null;
+          const monthlyPendingAmount = pendingEntries.reduce(
             (sum, entry) => sum + Number(entry.amount ?? fallbackMonthly),
             0,
           );
           const pendingChargeCount = item.chargeRequests?.filter((request) => request.status === 'pending_approval').length ?? 0;
           const statusStyle = STATUS_STYLE[item.status] ?? STATUS_STYLE.cancelled;
-          const progressPct = totalEntries > 0 ? (released / totalEntries) * 100 : 0;
+          const progressPct = isPrepaid
+            ? Number(item.totalAmount) > 0 ? ((prepaidAmounts?.usedAmount ?? 0) / Number(item.totalAmount)) * 100 : 0
+            : totalEntries > 0 ? (released / totalEntries) * 100 : 0;
           return (
             <TouchableOpacity
               style={styles.card}
@@ -303,21 +326,34 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
               </View>
               <Text style={styles.amount}>{formatKrwFromRlusd(item.totalAmount)}</Text>
               <Text style={styles.amountSub}>{formatRlusd(item.totalAmount)}</Text>
-              {/* 진행률 바 */}
+              {isPrepaid && prepaidAmounts && (
+                <View style={styles.prepaidStats}>
+                  <View style={styles.prepaidStatCard}>
+                    <Text style={styles.prepaidStatLabel}>사용 금액</Text>
+                    <Text style={styles.prepaidStatValue}>{formatKrwFromRlusd(prepaidAmounts.usedAmount)}</Text>
+                    <Text style={styles.prepaidStatSub}>{formatRlusd(prepaidAmounts.usedAmount)}</Text>
+                  </View>
+                  <View style={[styles.prepaidStatCard, styles.prepaidStatCardPrimary]}>
+                    <Text style={[styles.prepaidStatLabel, styles.prepaidStatLabelPrimary]}>남은 잔액</Text>
+                    <Text style={[styles.prepaidStatValue, styles.prepaidStatValuePrimary]}>{formatKrwFromRlusd(prepaidAmounts.remainingAmount)}</Text>
+                    <Text style={[styles.prepaidStatSub, styles.prepaidStatSubPrimary]}>{formatRlusd(prepaidAmounts.remainingAmount)}</Text>
+                  </View>
+                </View>
+              )}
               <View style={styles.progressBarBg}>
                 <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
               </View>
-              <Text style={styles.progress}>
-                {isPrepaid
-                  ? `${released}/${totalEntries}회 사용됨`
-                  : `${released}/${item.months}개월 릴리즈됨`}
-              </Text>
-              {pendingAmount > 0 && (
+              {isPrepaid ? (
+                <Text style={styles.progress}>승인된 실제 사용금액 기준으로 잔액이 줄어듭니다</Text>
+              ) : (
+                <Text style={styles.progress}>{released}/{item.months}개월 릴리즈됨</Text>
+              )}
+              {!isPrepaid && monthlyPendingAmount > 0 && (
                 <>
                   <Text style={styles.pendingProtect}>
-                    대기 보호금 {formatKrwFromRlusd(pendingAmount)}
+                    대기 보호금 {formatKrwFromRlusd(monthlyPendingAmount)}
                   </Text>
-                  <Text style={styles.pendingProtectSub}>{formatRlusd(pendingAmount)}</Text>
+                  <Text style={styles.pendingProtectSub}>{formatRlusd(monthlyPendingAmount)}</Text>
                 </>
               )}
               {pendingChargeCount > 0 && (
@@ -585,6 +621,47 @@ const styles = StyleSheet.create({
     fontSize: font.size.xs,
     color: colors.gray400,
     marginTop: 1,
+  },
+  prepaidStats: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  prepaidStatCard: {
+    flex: 1,
+    backgroundColor: colors.gray50,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+  },
+  prepaidStatCardPrimary: {
+    backgroundColor: colors.primaryLight,
+  },
+  prepaidStatLabel: {
+    fontSize: font.size.xs,
+    color: colors.gray500,
+    fontWeight: font.weight.semibold,
+    marginBottom: 4,
+  },
+  prepaidStatLabelPrimary: {
+    color: colors.primary,
+  },
+  prepaidStatValue: {
+    fontSize: font.size.md,
+    color: colors.gray900,
+    fontWeight: font.weight.bold,
+    letterSpacing: -0.2,
+  },
+  prepaidStatValuePrimary: {
+    color: colors.primary,
+  },
+  prepaidStatSub: {
+    fontSize: font.size.xs,
+    color: colors.gray400,
+    marginTop: 2,
+  },
+  prepaidStatSubPrimary: {
+    color: colors.primary,
+    opacity: 0.72,
   },
   progressBarBg: {
     height: 4,
