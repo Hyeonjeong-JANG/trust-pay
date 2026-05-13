@@ -59,6 +59,19 @@ describe('PaymentScreen', () => {
     expect(getByText(/총액은 6개의 Token Escrow로 나뉘어 잠기고/)).toBeTruthy();
   });
 
+  it('should explain that only TrustPay protected checkout is covered', () => {
+    const { getByText } = renderWithProviders(
+      <PaymentScreen
+        navigation={{ navigate: jest.fn() } as any}
+        route={{ params: { businessId: 'b-1', businessName: '파워짐 헬스장' } } as any}
+      />,
+    );
+
+    expect(getByText('TrustPay 보호 결제로 결제')).toBeTruthy();
+    expect(getByText(/카드·계좌 결제가 TrustPay를 거쳐야 선불금이 XRPL 원장에 잠깁니다/)).toBeTruthy();
+    expect(getByText(/현금이나 가게 단말기 직접 결제는 이미 업장으로 입금되어 보호할 수 없습니다/)).toBeTruthy();
+  });
+
   it('should convert KRW input to decimal RLUSD before creating an escrow', async () => {
     const { api } = require('../../api/client');
     const { getByPlaceholderText, getByText } = renderWithProviders(

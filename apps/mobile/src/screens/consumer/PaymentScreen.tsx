@@ -138,6 +138,19 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           </View>
         </View>
 
+        <View style={styles.protectionCard}>
+          <Text style={styles.protectionEyebrow}>TrustPay 보호 결제로 결제</Text>
+          <Text style={styles.protectionTitle}>처음부터 TrustPay를 거쳐야 선불금이 보호됩니다</Text>
+          <View style={styles.protectionRow}>
+            <Text style={styles.protectionBadge}>보호됨</Text>
+            <Text style={styles.protectionText}>카드·계좌 결제가 TrustPay를 거쳐야 선불금이 XRPL 원장에 잠깁니다</Text>
+          </View>
+          <View style={styles.protectionRow}>
+            <Text style={[styles.protectionBadge, styles.protectionBadgeMuted]}>제외</Text>
+            <Text style={styles.protectionText}>현금이나 가게 단말기 직접 결제는 이미 업장으로 입금되어 보호할 수 없습니다</Text>
+          </View>
+        </View>
+
         {!!products.length && (
           <View style={styles.formCard}>
             <Text style={styles.sectionLabel}>등록 상품 선택</Text>
@@ -329,6 +342,54 @@ const styles = StyleSheet.create({
     fontSize: font.size.lg,
     fontWeight: font.weight.semibold,
     color: colors.gray900,
+  },
+  protectionCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    ...shadow.sm,
+  },
+  protectionEyebrow: {
+    fontSize: font.size.xs,
+    color: colors.primary,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.xs,
+  },
+  protectionTitle: {
+    fontSize: font.size.md,
+    color: colors.gray900,
+    fontWeight: font.weight.bold,
+    lineHeight: 22,
+    marginBottom: spacing.md,
+  },
+  protectionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  protectionBadge: {
+    minWidth: 48,
+    textAlign: 'center',
+    fontSize: font.size.xs,
+    color: colors.primary,
+    fontWeight: font.weight.bold,
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    overflow: 'hidden',
+  },
+  protectionBadgeMuted: {
+    color: colors.gray500,
+    backgroundColor: colors.gray100,
+  },
+  protectionText: {
+    flex: 1,
+    fontSize: font.size.sm,
+    color: colors.gray600,
+    lineHeight: 20,
   },
   formCard: {
     backgroundColor: colors.white,

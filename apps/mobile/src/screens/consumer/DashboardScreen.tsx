@@ -10,17 +10,19 @@ import {
   ScrollView,
   RefreshControl,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
 import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
+import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { EscrowEntry } from '@prepaid-shield/shared-types';
+import type { ChargeRequest, EscrowEntry } from '@prepaid-shield/shared-types';
 import type { ConsumerTabProps } from '../../navigation/types';
 import type { EscrowRecord, EscrowStatus } from '@prepaid-shield/shared-types';
 type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
+type PendingChargeApproval = ChargeRequest & { escrowId: string; businessName: string };
 
 const STATUS_KO: Record<string, string> = {
   active: '진행중',
@@ -45,6 +47,7 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
 
 export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>) {
   const userId = useAuthStore((s) => s.userId);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
 
@@ -62,6 +65,33 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
     retry: 1,
   });
 
+  const approveChargeMutation = useMutation({
+    mutationFn: ({ requestId }: { requestId: string; escrowId: string }) => api.approveChargeRequest(requestId),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
+      queryClient.invalidateQueries({ queryKey: ['escrow', variables.escrowId] });
+      queryClient.invalidateQueries({ queryKey: ['balance'] });
+      showSuccessToast('현장 승인 완료', '소비자 승인 후 XRPL 정산이 실행되었습니다.');
+    },
+    onError: (err: Error) => {
+      const apiErr = err as import('../../api/client').ApiError;
+      showErrorToast('현장 승인 실패', apiErr.userMessage ?? err.message);
+    },
+  });
+
+  const rejectChargeMutation = useMutation({
+    mutationFn: ({ requestId }: { requestId: string; escrowId: string }) => api.rejectChargeRequest(requestId),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
+      queryClient.invalidateQueries({ queryKey: ['escrow', variables.escrowId] });
+      showSuccessToast('차감 요청 거절', '사업자에게 거절 상태로 표시됩니다.');
+    },
+    onError: (err: Error) => {
+      const apiErr = err as import('../../api/client').ApiError;
+      showErrorToast('차감 거절 실패', apiErr.userMessage ?? err.message);
+    },
+  });
+
   const filteredEscrows = useMemo(() => {
     if (!escrows) return [];
     let result = escrows as EscrowWithBusiness[];
@@ -76,6 +106,20 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
     }
     return result;
   }, [escrows, statusFilter, searchQuery]);
+
+  const pendingChargeApproval = useMemo<PendingChargeApproval | null>(() => {
+    for (const escrow of (escrows ?? []) as EscrowWithBusiness[]) {
+      const request = escrow.chargeRequests?.find((item) => item.status === 'pending_approval');
+      if (request) {
+        return {
+          ...request,
+          escrowId: escrow.id,
+          businessName: escrow.business?.name ?? '사업자',
+        };
+      }
+    }
+    return null;
+  }, [escrows]);
 
   const hasSearchQuery = searchQuery.trim() !== '';
   const isFiltered = hasSearchQuery || statusFilter !== 'all';
@@ -100,6 +144,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
     refetch();
     refetchBalance();
   }, [refetch, refetchBalance]);
+  const approvalActionPending = approveChargeMutation.isPending || rejectChargeMutation.isPending;
 
   if (isLoading) {
     return (
@@ -131,27 +176,67 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
         }
         ListHeaderComponent={
           <>
-            {/* 잔액 카드 */}
+            {/* 원장 상태 카드 */}
             {balanceLoading ? (
               <View style={styles.balanceCard}>
                 <ActivityIndicator size="small" color="rgba(255,255,255,0.8)" />
               </View>
             ) : balanceError ? (
               <View style={[styles.balanceCard, styles.balanceCardError]}>
-                <Text style={styles.balanceLabel}>RLUSD 잔액</Text>
+                <Text style={styles.balanceLabel}>보호 결제 원장 상태</Text>
                 <Text style={styles.balanceValue}>조회 실패</Text>
               </View>
             ) : balanceData ? (
               <View style={styles.balanceCard}>
-                <Text style={styles.balanceLabel}>XRPL Testnet RLUSD 잔액</Text>
+                <Text style={styles.balanceLabel}>보호 결제 원장 상태</Text>
                 <Text style={styles.balanceValue}>
-                  {Number(balanceData.balance).toLocaleString()} RLUSD
+                  기술 검증용 잔액 {Number(balanceData.balance).toLocaleString()} RLUSD
+                </Text>
+                <Text style={styles.balanceDesc}>
+                  카드·계좌 결제가 TrustPay를 거쳐야 보호됩니다
+                </Text>
+                <Text style={styles.balanceDesc}>
+                  현금이나 가게 단말기 직접 결제는 보호 대상이 아닙니다
                 </Text>
                 <Text style={styles.balanceAddr}>
-                  {balanceData.xrplAddress.slice(0, 8)}...{balanceData.xrplAddress.slice(-6)}
+                  원장 주소 {balanceData.xrplAddress.slice(0, 8)}...{balanceData.xrplAddress.slice(-6)}
                 </Text>
               </View>
             ) : null}
+
+            {pendingChargeApproval && (
+              <View style={styles.approvalCard}>
+                <View style={styles.approvalHeader}>
+                  <Text style={styles.approvalEyebrow}>푸시 승인 대기</Text>
+                  <Text style={styles.approvalBadge}>현장 결제</Text>
+                </View>
+                <Text style={styles.approvalTitle}>
+                  {pendingChargeApproval.businessName}에서 {pendingChargeApproval.menuName} {formatKrwFromRlusd(pendingChargeApproval.amount)} 차감 요청
+                </Text>
+                <Text style={styles.approvalSub}>{formatRlusd(pendingChargeApproval.amount)}</Text>
+                <Text style={styles.approvalDesc}>
+                  지금 매장에서 승인하면 연결된 Token Escrow 단위만 정산됩니다.
+                </Text>
+                <View style={styles.approvalActions}>
+                  <TouchableOpacity
+                    style={[styles.approvalPrimaryButton, approvalActionPending && styles.buttonDisabled]}
+                    onPress={() => approveChargeMutation.mutate({ requestId: pendingChargeApproval.id, escrowId: pendingChargeApproval.escrowId })}
+                    disabled={approvalActionPending}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.approvalPrimaryText}>승인하고 정산</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.approvalSecondaryButton, approvalActionPending && styles.buttonDisabled]}
+                    onPress={() => rejectChargeMutation.mutate({ requestId: pendingChargeApproval.id, escrowId: pendingChargeApproval.escrowId })}
+                    disabled={approvalActionPending}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.approvalSecondaryText}>거절</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
             {/* 검색 바 */}
             <View style={styles.searchBar}>
@@ -304,17 +389,102 @@ const styles = StyleSheet.create({
   balanceCardError: { backgroundColor: colors.gray400 },
   balanceLabel: { fontSize: font.size.sm, color: 'rgba(255,255,255,0.75)' },
   balanceValue: {
-    fontSize: font.size.xxl,
+    fontSize: font.size.lg,
     fontWeight: font.weight.bold,
     color: colors.white,
     marginVertical: spacing.xs,
     letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  balanceDesc: {
+    fontSize: font.size.xs,
+    color: 'rgba(255,255,255,0.76)',
+    lineHeight: 18,
+    textAlign: 'center',
   },
   balanceAddr: {
     fontSize: font.size.xs,
     color: 'rgba(255,255,255,0.5)',
     fontFamily: font.mono,
+    marginTop: spacing.sm,
   },
+  approvalCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    ...shadow.md,
+  },
+  approvalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  approvalEyebrow: {
+    fontSize: font.size.xs,
+    color: colors.danger,
+    fontWeight: font.weight.bold,
+  },
+  approvalBadge: {
+    fontSize: font.size.xs,
+    color: colors.primary,
+    fontWeight: font.weight.semibold,
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    overflow: 'hidden',
+  },
+  approvalTitle: {
+    fontSize: font.size.md,
+    color: colors.gray900,
+    fontWeight: font.weight.bold,
+    lineHeight: 22,
+  },
+  approvalSub: {
+    fontSize: font.size.xs,
+    color: colors.gray400,
+    marginTop: 2,
+  },
+  approvalDesc: {
+    fontSize: font.size.sm,
+    color: colors.gray500,
+    lineHeight: 20,
+    marginTop: spacing.sm,
+  },
+  approvalActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  approvalPrimaryButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  approvalPrimaryText: {
+    color: colors.white,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+  },
+  approvalSecondaryButton: {
+    minHeight: 44,
+    borderRadius: radius.sm,
+    backgroundColor: colors.gray100,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  approvalSecondaryText: {
+    color: colors.gray700,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+  },
+  buttonDisabled: { opacity: 0.5 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
