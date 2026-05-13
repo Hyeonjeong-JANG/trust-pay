@@ -146,6 +146,19 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
             <Text style={styles.requestDesc}>
               {businessName}에서 생성한 결제 내용입니다. 금액을 확인한 뒤 계좌 승인으로 보호 결제를 시작하세요.
             </Text>
+            <View style={styles.requestAmountGrid}>
+              <Text style={styles.requestAmountText}>
+                결제 금액 {formatKrwFromRlusd(paymentRequest.paymentAmount ?? paymentRequest.totalAmount)}
+              </Text>
+              <Text style={styles.requestAmountText}>
+                실제 충전 금액 {formatKrwFromRlusd(paymentRequest.totalAmount)}
+              </Text>
+            </View>
+            <Text style={styles.requestSettlementText}>
+              {paymentRequest.paymentModel === 'voucher'
+                ? `사용기간 ${paymentRequest.validFrom ?? '-'} ~ ${paymentRequest.validUntil ?? '-'}`
+                : `매월 ${formatKrwFromRlusd(paymentRequest.monthlyAmount ?? monthlyAmount)} 정산`}
+            </Text>
           </View>
         )}
 
@@ -376,6 +389,21 @@ const styles = StyleSheet.create({
     fontSize: font.size.sm,
     color: colors.gray600,
     lineHeight: 20,
+  },
+  requestAmountGrid: {
+    gap: spacing.xs,
+    marginTop: spacing.md,
+  },
+  requestAmountText: {
+    fontSize: font.size.sm,
+    color: colors.gray900,
+    fontWeight: font.weight.semibold,
+  },
+  requestSettlementText: {
+    fontSize: font.size.sm,
+    color: colors.primaryDark,
+    fontWeight: font.weight.bold,
+    marginTop: spacing.sm,
   },
   protectionCard: {
     backgroundColor: colors.white,

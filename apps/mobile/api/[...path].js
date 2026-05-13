@@ -372,6 +372,7 @@ function createPaymentRequest(body) {
   if (!business) return null;
   const product = body.productId ? products.find((item) => item.id === body.productId) : null;
   const escrowType = product?.escrowType || body.escrowType || 'monthly';
+  const totalAmount = product?.totalAmount || Number(body.totalAmount);
   const request = {
     id: `payment-request-${Date.now()}`,
     code: `TP-${String(paymentRequests.length + 1).padStart(6, '0')}`,
@@ -380,11 +381,16 @@ function createPaymentRequest(body) {
     businessCategory: business.category,
     productId: product?.id || null,
     productName: product?.name || null,
-    totalAmount: product?.totalAmount || Number(body.totalAmount),
+    paymentModel: body.paymentModel || (escrowType === 'prepaid' ? 'voucher' : 'monthly'),
+    paymentAmount: product?.totalAmount || body.paymentAmount || totalAmount,
+    totalAmount,
+    monthlyAmount: product?.monthlyAmount || body.monthlyAmount || null,
     months: product?.months || body.months || null,
     escrowType,
     unitPrice: product?.unitPrice || body.unitPrice || null,
     validityMonths: product?.validityMonths || body.validityMonths || null,
+    validFrom: body.validFrom || null,
+    validUntil: body.validUntil || null,
     status: 'pending',
     createdAt: new Date().toISOString(),
   };

@@ -101,7 +101,7 @@ export function OnboardingScreen({ navigation }: ScreenProps<'Onboarding'>) {
       />
 
       {/* Dots + CTA */}
-      <View style={s.footer}>
+      <View testID="onboarding-footer" style={s.footer}>
         <View style={s.dots}>
           {SLIDES.map((_, i) => (
             <View key={i} style={[s.dot, i === activeIndex && s.dotActive]} />
@@ -167,11 +167,8 @@ const s = StyleSheet.create({
     lineHeight: 24,
   },
   footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 44,
     paddingHorizontal: spacing.xxl,
+    paddingBottom: 50,
     alignItems: 'center',
   },
   dots: {

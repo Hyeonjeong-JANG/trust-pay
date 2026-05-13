@@ -95,14 +95,17 @@ describe('OnboardingScreen', () => {
   });
 
   it('should keep the first onboarding screen vertically compact on tall web canvases', () => {
-    const { getAllByTestId } = render(
+    const { getAllByTestId, getByTestId } = render(
       <OnboardingScreen navigation={mockNavigation} route={mockRoute} />,
     );
 
     expect(getAllByTestId('onboarding-slide')[0].props.style).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ justifyContent: 'flex-start' }),
+        expect.objectContaining({ justifyContent: 'flex-start', paddingTop: 96 }),
       ]),
+    );
+    expect(getByTestId('onboarding-footer').props.style).toEqual(
+      expect.objectContaining({ paddingBottom: 50 }),
     );
   });
 });

@@ -53,6 +53,7 @@ export function ScanPaymentScreen({ navigation }: ScreenProps<'ScanPayment'>) {
 
       <View style={styles.inputCard}>
         <Text style={styles.label}>데모 QR 코드</Text>
+        <Text style={styles.guideText}>사업자 화면에 표시된 TP-xxxxxx 코드를 입력하세요.</Text>
         <TextInput
           style={styles.input}
           placeholder="예: TP-123456"
@@ -111,6 +112,7 @@ const styles = StyleSheet.create({
   fakeQrLight: { width: 20, height: 20, borderRadius: 4, backgroundColor: colors.gray200 },
   inputCard: { backgroundColor: colors.white, borderRadius: radius.lg, padding: spacing.lg, ...shadow.sm },
   label: { fontSize: font.size.sm, color: colors.gray700, fontWeight: font.weight.semibold, marginBottom: spacing.sm },
+  guideText: { fontSize: font.size.xs, color: colors.gray500, lineHeight: 18, marginBottom: spacing.sm },
   input: {
     backgroundColor: colors.gray50,
     borderRadius: radius.md,

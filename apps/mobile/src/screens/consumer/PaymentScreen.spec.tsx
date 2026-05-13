@@ -225,8 +225,11 @@ describe('PaymentScreen', () => {
               businessId: 'b-1',
               businessName: '파워짐 피트니스',
               businessCategory: '헬스장',
+              paymentAmount: 500,
               totalAmount: 600,
+              monthlyAmount: 100,
               months: 6,
+              paymentModel: 'monthly',
               escrowType: 'monthly',
               status: 'pending',
               createdAt: '2026-05-13T00:00:00Z',
@@ -238,6 +241,9 @@ describe('PaymentScreen', () => {
 
     expect(await findByText('사업자가 만든 결제 QR')).toBeTruthy();
     expect(await findByText('QR 코드 TP-123456')).toBeTruthy();
+    expect(await findByText('결제 금액 ₩675,000')).toBeTruthy();
+    expect(await findByText('실제 충전 금액 ₩810,000')).toBeTruthy();
+    expect(await findByText('매월 ₩135,000 정산')).toBeTruthy();
     fireEvent.press(getByText('계좌 승인 결제 요청'));
 
     await waitFor(() => {

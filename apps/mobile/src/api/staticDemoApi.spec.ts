@@ -136,8 +136,11 @@ describe('static Demo API fixture', () => {
   it('creates and resolves merchant-originated QR payment requests', async () => {
     const createResponse = await callApi('POST', '/api/payment-requests', {
       businessId: '00000000-0000-4000-a000-000000000020',
+      paymentAmount: 500,
       totalAmount: 600,
+      monthlyAmount: 100,
       months: 6,
+      paymentModel: 'monthly',
       escrowType: 'monthly',
     });
     const created = createResponse.body as any;
@@ -146,8 +149,11 @@ describe('static Demo API fixture', () => {
     expect(createResponse.statusCode).toBe(201);
     expect(created).toMatchObject({
       businessName: '파워짐 피트니스',
+      paymentAmount: 500,
       totalAmount: 600,
+      monthlyAmount: 100,
       months: 6,
+      paymentModel: 'monthly',
       escrowType: 'monthly',
       status: 'pending',
     });

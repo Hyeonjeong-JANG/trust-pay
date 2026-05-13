@@ -71,15 +71,18 @@ describe('BusinessDashboardScreen', () => {
     });
   });
 
-  it('should create a merchant-originated payment QR from a business-entered amount', async () => {
+  it('should create a monthly merchant QR with paid amount, protected amount, and fixed monthly settlement', async () => {
     const { api } = require('../../api/client');
     api.createPaymentRequest.mockResolvedValue({
       id: 'request-1',
       code: 'TP-123456',
       businessId: 'business-1',
       businessName: '파워짐',
+      paymentAmount: 500,
       totalAmount: 600,
+      monthlyAmount: 100,
       months: 6,
+      paymentModel: 'monthly',
       escrowType: 'monthly',
       status: 'pending',
       createdAt: '2026-05-13T00:00:00Z',
@@ -93,19 +96,72 @@ describe('BusinessDashboardScreen', () => {
     const { findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
 
     expect(await findByText('결제 QR 만들기')).toBeTruthy();
+    expect(await findByText('결제 금액')).toBeTruthy();
+    expect(await findByText('실제 충전 금액')).toBeTruthy();
+    expect(await findByText('매월 정산액')).toBeTruthy();
+    fireEvent.changeText(await findByPlaceholderText('예: 675,000'), '675000');
     fireEvent.changeText(await findByPlaceholderText('예: 810,000'), '810000');
+    fireEvent.changeText(await findByPlaceholderText('예: 135,000'), '135000');
     fireEvent.changeText(await findByPlaceholderText('예: 6'), '6');
     fireEvent.press(await findByText('QR 결제 만들기'));
 
     await waitFor(() => {
       expect(api.createPaymentRequest).toHaveBeenCalledWith({
         businessId: 'business-1',
+        paymentAmount: 500,
         totalAmount: 600,
+        monthlyAmount: 100,
         months: 6,
+        paymentModel: 'monthly',
         escrowType: 'monthly',
       });
     });
     expect(await findByText('TP-123456')).toBeTruthy();
+  });
+
+  it('should create a period voucher QR with paid amount, charged amount, and validity dates', async () => {
+    const { api } = require('../../api/client');
+    api.createPaymentRequest.mockResolvedValue({
+      id: 'request-voucher',
+      code: 'TP-654321',
+      businessId: 'business-1',
+      businessName: '파워짐',
+      paymentAmount: 66.666667,
+      totalAmount: 74.074074,
+      paymentModel: 'voucher',
+      escrowType: 'prepaid',
+      unitPrice: 7.407407,
+      validityMonths: 3,
+      validFrom: '2026-05-13',
+      validUntil: '2026-08-13',
+      status: 'pending',
+      createdAt: '2026-05-13T00:00:00Z',
+    });
+    api.getBusinessDashboard.mockResolvedValue({ totalReceived: 0, totalPending: 0, escrows: [] });
+
+    const { findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
+
+    fireEvent.press(await findByText('기간 금액권'));
+    fireEvent.changeText(await findByPlaceholderText('예: 90,000'), '90000');
+    fireEvent.changeText(await findByPlaceholderText('예: 100,000'), '100000');
+    fireEvent.changeText(await findByPlaceholderText('예: 2026-05-13'), '2026-05-13');
+    fireEvent.changeText(await findByPlaceholderText('예: 2026-08-13'), '2026-08-13');
+    fireEvent.press(await findByText('QR 결제 만들기'));
+
+    await waitFor(() => {
+      expect(api.createPaymentRequest).toHaveBeenCalledWith({
+        businessId: 'business-1',
+        paymentAmount: 66.666667,
+        totalAmount: 74.074074,
+        paymentModel: 'voucher',
+        escrowType: 'prepaid',
+        unitPrice: 7.407407,
+        validityMonths: 3,
+        validFrom: '2026-05-13',
+        validUntil: '2026-08-13',
+      });
+    });
+    expect(await findByText('TP-654321')).toBeTruthy();
   });
 
   it('should show prepaid settlement as per-use receipt', async () => {

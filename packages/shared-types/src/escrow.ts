@@ -118,11 +118,16 @@ export interface PaymentRequest {
   businessCategory?: string | null;
   productId?: string | null;
   productName?: string | null;
+  paymentModel?: 'monthly' | 'voucher';
+  paymentAmount?: number | null;
   totalAmount: number;
+  monthlyAmount?: number | null;
   months?: number | null;
   escrowType: EscrowType;
   unitPrice?: number | null;
   validityMonths?: number | null;
+  validFrom?: string | null;
+  validUntil?: string | null;
   status: 'pending' | 'used' | 'expired';
   createdAt: Date | string;
 }
@@ -130,11 +135,16 @@ export interface PaymentRequest {
 export interface CreatePaymentRequest {
   businessId: string;
   productId?: string;
+  paymentModel?: 'monthly' | 'voucher';
+  paymentAmount?: number;
   totalAmount: number;
+  monthlyAmount?: number;
   months?: number;
   escrowType?: EscrowType;
   unitPrice?: number;
   validityMonths?: number;
+  validFrom?: string;
+  validUntil?: string;
 }
 
 export interface FinishEscrowRequest {
