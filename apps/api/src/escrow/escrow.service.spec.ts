@@ -148,6 +148,17 @@ describe('EscrowService', () => {
         }),
         include: { entries: true },
       });
+      const createArgs = prisma.escrow.create.mock.calls[0][0];
+      expect(xrplService.finishEscrow).toHaveBeenCalledWith(
+        expect.anything(),
+        'rConsumerAddr',
+        100,
+      );
+      expect(createArgs.data.entries.create[0]).toMatchObject({
+        status: 'released',
+        txHash: 'FINISH_TX_HASH',
+      });
+      expect(createArgs.data.entries.create[1]).not.toHaveProperty('status');
       expect(result.entries).toHaveLength(3);
     });
 

@@ -485,11 +485,19 @@ function rippleTimeFromNow(month) {
   return Math.floor(date.getTime() / 1000) - rippleEpoch;
 }
 
-function makeEscrow({ id, consumerId = CONSUMER_ID, businessId, productId = null, totalAmount, monthlyAmount, months, escrowType = 'monthly', unitPrice = null, validityMonths = null, status, entryStatuses, entryTxHashPrefix = null }) {
+function rippleTimeFromDate(value) {
+  if (!value) return null;
+  const rippleEpoch = 946684800;
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  return Math.floor(date.getTime() / 1000) - rippleEpoch;
+}
+
+function makeEscrow({ id, consumerId = CONSUMER_ID, businessId, productId = null, totalAmount, monthlyAmount, months, escrowType = 'monthly', unitPrice = null, validityMonths = null, validFrom = null, validUntil = null, status, entryStatuses, entryTxHashPrefix = null }) {
   const business = businesses.find((item) => item.id === businessId);
   const consumer = consumers.find((item) => item.id === consumerId) || consumers[0];
-  const prepaidFinishAfter = rippleTimeFromNow(0);
-  const prepaidCancelAfter = rippleTimeFromNow(validityMonths || 1);
+  const prepaidFinishAfter = rippleTimeFromDate(validFrom) ?? rippleTimeFromNow(0);
+  const prepaidCancelAfter = rippleTimeFromDate(validUntil) ?? rippleTimeFromNow(validityMonths || 1);
   return {
     id,
     consumerId,
@@ -503,6 +511,8 @@ function makeEscrow({ id, consumerId = CONSUMER_ID, businessId, productId = null
     escrowType,
     unitPrice,
     validityMonths,
+    validFrom,
+    validUntil,
     currency: 'RLUSD',
     issuer: 'rDemoIssuerRLUSD000000000001',
     status,
@@ -514,8 +524,8 @@ function makeEscrow({ id, consumerId = CONSUMER_ID, businessId, productId = null
       month: index + 1,
       sequence: Number(id.slice(-3)) * 10 + index + 1,
       amount: String(monthlyAmount),
-      finishAfter: escrowType === 'prepaid' ? prepaidFinishAfter : rippleTimeFromNow(index + 1),
-      cancelAfter: escrowType === 'prepaid' ? prepaidCancelAfter : rippleTimeFromNow(index + 2),
+      finishAfter: escrowType === 'prepaid' ? prepaidFinishAfter : rippleTimeFromNow(index),
+      cancelAfter: escrowType === 'prepaid' ? prepaidCancelAfter : rippleTimeFromNow(index + 1),
       status: entryStatus,
       txHash: entryStatus === 'pending' ? null : entryTxHashPrefix ? `${entryTxHashPrefix}_${index + 1}` : `DEMO_${entryStatus.toUpperCase()}_${id.slice(-3)}_${index + 1}`,
     })),
@@ -675,6 +685,7 @@ module.exports = async function handler(req, res) {
     const monthlyAmount = isPrepaid ? unitPrice : totalAmount / months;
     const escrow = makeEscrow({
       id: `demo-created-${Date.now()}`,
+      consumerId: body.consumerId,
       businessId: body.businessId,
       productId: product?.id || null,
       totalAmount,
@@ -683,8 +694,10 @@ module.exports = async function handler(req, res) {
       escrowType: isPrepaid ? 'prepaid' : 'monthly',
       unitPrice: isPrepaid ? unitPrice : null,
       validityMonths: isPrepaid ? validityMonths : null,
+      validFrom: isPrepaid ? body.validFrom || null : null,
+      validUntil: isPrepaid ? body.validUntil || null : null,
       status: 'active',
-      entryStatuses: Array.from({ length: entryCount }, () => 'pending'),
+      entryStatuses: Array.from({ length: entryCount }, (_, index) => !isPrepaid && index === 0 ? 'released' : 'pending'),
     });
     escrows = [escrow, ...escrows];
     return send(res, 201, withRelations(escrow));

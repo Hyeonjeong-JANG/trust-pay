@@ -97,6 +97,8 @@ export class EscrowService {
     let unitPrice: number | undefined;
     let validityMonths: number | undefined;
     let escrowResults: EscrowResult[];
+    const initiallyReleasedMonths = new Set<number>();
+    const releasedTxHashes = new Map<number, string>();
 
     const createEscrowRecord = (
       results: EscrowResult[],
@@ -122,7 +124,8 @@ export class EscrowService {
             amount: r.amount,
             finishAfter: r.finishAfter,
             cancelAfter: r.cancelAfter,
-            txHash: r.txHash,
+            txHash: releasedTxHashes.get(r.month) ?? r.txHash,
+            ...(initiallyReleasedMonths.has(r.month) ? { status: 'released' } : {}),
           })),
         },
       },
@@ -147,12 +150,16 @@ export class EscrowService {
       entryMonths = entryCount;
       recordTotalAmount = roundRlusdAmount(requestedUnitPrice * entryCount);
       try {
+        const prepaidDateOptions = dto.validFrom || dto.validUntil
+          ? { validFrom: dto.validFrom, validUntil: dto.validUntil }
+          : undefined;
         escrowResults = await this.xrplService.createPrepaidEscrows(
           senderWallet,
           business.xrplAddress,
           formatRlusdAmount(requestedUnitPrice),
           entryCount,
           requestedValidityMonths,
+          ...(prepaidDateOptions ? [prepaidDateOptions] as const : []),
         );
       } catch (err) {
         if (err instanceof PartialPrepaidEscrowCreationError) {
@@ -176,6 +183,17 @@ export class EscrowService {
         formatRlusdAmount(monthlyAmount),
         requestedMonths,
       );
+      const firstEntry = escrowResults.find((result) => result.month === 1);
+      if (firstEntry) {
+        const businessWallet = safeWalletFromSeed(this.crypto.decrypt(business.xrplSecret));
+        const txHash = await this.xrplService.finishEscrow(
+          businessWallet,
+          consumer.xrplAddress,
+          firstEntry.sequence,
+        );
+        initiallyReleasedMonths.add(firstEntry.month);
+        releasedTxHashes.set(firstEntry.month, txHash);
+      }
     }
 
     const escrow = await createEscrowRecord(escrowResults);

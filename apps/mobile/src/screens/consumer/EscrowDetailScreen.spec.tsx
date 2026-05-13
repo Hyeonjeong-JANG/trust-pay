@@ -28,6 +28,11 @@ function renderWithProviders(ui: React.ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
+function isoDateToRippleTime(value: string) {
+  const rippleEpoch = 946684800;
+  return Math.floor(new Date(`${value}T00:00:00.000Z`).getTime() / 1000) - rippleEpoch;
+}
+
 describe('EscrowDetailScreen', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -63,6 +68,34 @@ describe('EscrowDetailScreen', () => {
     expect(queryByText(/finishAfter:/)).toBeNull();
   });
 
+  it('should show monthly usage period from the first settlement date through the final cancel date', async () => {
+    const { api } = require('../../api/client');
+    api.getEscrow.mockResolvedValue({
+      id: 'e-monthly-period',
+      status: 'active',
+      escrowType: 'monthly',
+      totalAmount: 111.111111,
+      monthlyAmount: 22.222222,
+      months: 5,
+      business: { name: '파워짐 피트니스' },
+      entries: [
+        { id: 'en-1', month: 1, amount: '22.222222', status: 'pending', finishAfter: isoDateToRippleTime('2026-05-13'), cancelAfter: isoDateToRippleTime('2026-06-13') },
+        { id: 'en-2', month: 2, amount: '22.222222', status: 'pending', finishAfter: isoDateToRippleTime('2026-06-13'), cancelAfter: isoDateToRippleTime('2026-07-13') },
+        { id: 'en-3', month: 3, amount: '22.222222', status: 'pending', finishAfter: isoDateToRippleTime('2026-07-13'), cancelAfter: isoDateToRippleTime('2026-08-13') },
+        { id: 'en-4', month: 4, amount: '22.222222', status: 'pending', finishAfter: isoDateToRippleTime('2026-08-13'), cancelAfter: isoDateToRippleTime('2026-09-13') },
+        { id: 'en-5', month: 5, amount: '22.222222', status: 'pending', finishAfter: isoDateToRippleTime('2026-09-13'), cancelAfter: isoDateToRippleTime('2026-10-13') },
+      ],
+    });
+
+    const { findByText } = renderWithProviders(
+      <EscrowDetailScreen route={{ params: { id: 'e-monthly-period' } } as any} navigation={{} as any} />,
+    );
+
+    expect(await findByText(/이용기간 2026\. 5\. 13\. ~ 2026\. 10\. 13\./)).toBeTruthy();
+    expect(await findByText('1월차')).toBeTruthy();
+    expect(await findByText(/정산 가능일: 2026\. 5\. 13\./)).toBeTruthy();
+  });
+
   it('should show prepaid ledger units with date-range usage period when there is no charge history', async () => {
     const { api } = require('../../api/client');
     api.getEscrow.mockResolvedValue({
@@ -85,10 +118,10 @@ describe('EscrowDetailScreen', () => {
       <EscrowDetailScreen route={{ params: { id: 'e-prepaid' } } as any} navigation={{} as any} />,
     );
 
-    expect(await findByText('보호단위')).toBeTruthy();
+    expect(await findByText('이용 단위')).toBeTruthy();
     expect(await findByText(/사용기한 2026\. 4\. 27\. ~ 2026\. 7\. 10\./)).toBeTruthy();
-    expect(await findByText('원장 보호 단위')).toBeTruthy();
-    expect(await findByText('보호 단위 1')).toBeTruthy();
+    expect(await findByText('이용 단위 내역')).toBeTruthy();
+    expect(await findByText('이용 단위 1')).toBeTruthy();
     expect(await findAllByText(/만료:/)).toHaveLength(2);
   });
 
@@ -182,7 +215,7 @@ describe('EscrowDetailScreen', () => {
     expect(await findByText('환불 완료 3개 단위')).toBeTruthy();
     expect(await findByText('XRPL 원장 상세')).toBeTruthy();
     expect(await findByText(/원장 증빙: USED_UNIT/)).toBeTruthy();
-    expect(queryByText('원장 보호 단위')).toBeNull();
+    expect(queryByText('이용 단위 내역')).toBeNull();
   });
 
   it('should let the consumer approve a pending menu charge request', async () => {

@@ -48,6 +48,8 @@ export const createEscrowSchema = z
       .min(1, 'Minimum 1 month')
       .max(36, 'Maximum 36 months')
       .optional(),
+    validFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.escrowType === 'monthly' && data.months === undefined) {

@@ -3,6 +3,41 @@ import { PartialPrepaidEscrowCreationError, XrplService } from './xrpl.service';
 import type { Wallet } from 'xrpl';
 
 describe('XrplService', () => {
+  function rippleTimeToDate(rippleTime: number): Date {
+    const rippleEpoch = 946684800;
+    return new Date((rippleTime + rippleEpoch) * 1000);
+  }
+
+  it('should create demo monthly escrows from the approval date on calendar month boundaries', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-13T09:00:00.000Z'));
+    const configService = {
+      get: jest.fn((key: string) => ({ demoMode: true } as Record<string, unknown>)[key]),
+    } as unknown as ConfigService;
+    const service = new XrplService(configService);
+
+    try {
+      const results = await service.createMonthlyEscrows(
+        { address: 'rSenderAddress' } as Wallet,
+        'rBusinessAddress',
+        '100',
+        3,
+      );
+
+      expect(results.map((entry) => rippleTimeToDate(entry.finishAfter).toISOString().slice(0, 10))).toEqual([
+        '2026-05-13',
+        '2026-06-13',
+        '2026-07-13',
+      ]);
+      expect(results.map((entry) => rippleTimeToDate(entry.cancelAfter).toISOString().slice(0, 10))).toEqual([
+        '2026-06-13',
+        '2026-07-13',
+        '2026-08-13',
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('should expose prepaid entries created before XRPL submission fails', async () => {
     const configService = {
       get: jest.fn((key: string) => {

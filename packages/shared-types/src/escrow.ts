@@ -89,6 +89,8 @@ export interface EscrowRecord {
   escrowType?: EscrowType;
   unitPrice?: number | null;
   validityMonths?: number | null;
+  validFrom?: string | null;
+  validUntil?: string | null;
   currency: string;
   issuer: string;
   status: EscrowStatus;
@@ -108,6 +110,8 @@ export interface CreateEscrowRequest {
   escrowType?: EscrowType;
   unitPrice?: number;
   validityMonths?: number;
+  validFrom?: string;
+  validUntil?: string;
 }
 
 export interface PaymentRequest {

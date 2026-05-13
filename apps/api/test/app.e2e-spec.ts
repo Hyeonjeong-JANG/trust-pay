@@ -290,7 +290,10 @@ describe('TrustPay E2E', () => {
       expect(res.body.totalAmount).toBe(150000);
       expect(res.body.monthlyAmount).toBe(50000);
       expect(res.body.entries).toHaveLength(3);
-      expect(res.body.entries[0].status).toBe('pending');
+      const entries = res.body.entries.sort((a: any, b: any) => a.month - b.month);
+      expect(entries[0].status).toBe('released');
+      expect(entries[0].txHash).toBe('FINISH_TX');
+      expect(entries[1].status).toBe('pending');
       escrowId = res.body.id;
     });
 
@@ -401,18 +404,8 @@ describe('TrustPay E2E', () => {
       await request(app.getHttpServer())
         .post(`/escrow/${escrowId}/finish`)
         .set('Authorization', auth(consumerToken))
-        .send({ entryMonth: 1 })
+        .send({ entryMonth: 2 })
         .expect(403);
-    });
-
-    it('should release month 1 entry', async () => {
-      const res = await request(app.getHttpServer())
-        .post(`/escrow/${escrowId}/finish`)
-        .set('Authorization', auth(businessToken))
-        .send({ entryMonth: 1 })
-        .expect(201);
-
-      expect(res.body).toHaveProperty('txHash', 'FINISH_TX');
     });
 
     it('should reject re-releasing month 1', async () => {

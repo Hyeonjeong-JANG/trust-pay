@@ -131,7 +131,7 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   });
 
   // ─── 3. 에스크로 생성 ───
-  it('에스크로 생성 — 3개월 150,000 RLUSD (데모 모드: 월 2분)', async () => {
+  it('에스크로 생성 — 3개월 150,000 RLUSD', async () => {
     const res = await request(app.getHttpServer())
       .post('/escrow')
       .set('Authorization', auth(consumerToken))
@@ -148,10 +148,13 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
     expect(res.body.entries).toHaveLength(3);
     expect(res.body.status).toBe('active');
 
-    // Verify each entry has demo tx hash
-    for (const entry of res.body.entries) {
-      expect(entry.status).toBe('pending');
-      expect(entry.txHash).toMatch(/^DEMO_ESCROW_/);
+    const entries = res.body.entries.sort((a: any, b: any) => a.month - b.month);
+    expect(entries[0].status).toBe('released');
+    expect(entries[0].txHash).toMatch(/^DEMO_FINISH_/);
+    expect(entries[1].status).toBe('pending');
+    expect(entries[2].status).toBe('pending');
+
+    for (const entry of entries) {
       expect(entry.finishAfter).toBeGreaterThan(0);
       expect(entry.cancelAfter).toBeGreaterThan(entry.finishAfter);
     }
@@ -185,18 +188,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
     expectNoWalletSecret(res.body);
   });
 
-  // ─── 6. Month 1 릴리즈 ───
-  it('에스크로 릴리즈 — Month 1 (사업자가 월 대금 수령)', async () => {
-    const res = await request(app.getHttpServer())
-      .post(`/escrow/${escrowId}/finish`)
-      .set('Authorization', auth(businessToken))
-      .send({ entryMonth: 1 })
-      .expect(201);
-
-    expect(res.body.txHash).toMatch(/^DEMO_FINISH_/);
-  });
-
-  it('릴리즈 후 상태 확인 — Month 1 released, 나머지 pending', async () => {
+  // ─── 6. Month 1 자동 릴리즈 ───
+  it('생성 후 상태 확인 — Month 1 released, 나머지 pending', async () => {
     const res = await request(app.getHttpServer())
       .get(`/escrow/${escrowId}`)
       .set('Authorization', auth(consumerToken))

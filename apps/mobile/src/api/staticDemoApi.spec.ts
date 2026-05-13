@@ -32,6 +32,16 @@ async function callApi(method: string, url: string, body?: unknown) {
   return response;
 }
 
+function isoDateToRippleTime(value: string) {
+  const rippleEpoch = 946684800;
+  return Math.floor(new Date(`${value}T00:00:00.000Z`).getTime() / 1000) - rippleEpoch;
+}
+
+function rippleTimeToIsoDate(value: number) {
+  const rippleEpoch = 946684800;
+  return new Date((value + rippleEpoch) * 1000).toISOString().slice(0, 10);
+}
+
 describe('static Demo API fixture', () => {
   it('matches digit-only demo phone login to the existing hyphenated consumer', async () => {
     const codeResponse = await callApi('POST', '/api/auth/request-code', {
@@ -159,5 +169,81 @@ describe('static Demo API fixture', () => {
     expect(created.code).toMatch(/^TP-/);
     expect(lookupResponse.statusCode).toBe(200);
     expect(lookupResponse.body).toMatchObject({ code: created.code, businessName: '파워짐 피트니스' });
+  });
+
+  it('creates monthly escrows from the approval date on calendar month boundaries', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-13T09:00:00.000Z'));
+
+    try {
+      const response = await callApi('POST', '/api/escrow', {
+        consumerId: '00000000-0000-4000-a000-000000000001',
+        businessId: '00000000-0000-4000-a000-000000000020',
+        totalAmount: 111.111111,
+        months: 5,
+      });
+      const escrow = response.body as any;
+
+      expect(response.statusCode).toBe(201);
+      expect(escrow.entries.map((entry: any) => rippleTimeToIsoDate(entry.finishAfter))).toEqual([
+        '2026-05-13',
+        '2026-06-13',
+        '2026-07-13',
+        '2026-08-13',
+        '2026-09-13',
+      ]);
+      expect(escrow.entries.map((entry: any) => rippleTimeToIsoDate(entry.cancelAfter))).toEqual([
+        '2026-06-13',
+        '2026-07-13',
+        '2026-08-13',
+        '2026-09-13',
+        '2026-10-13',
+      ]);
+      expect(escrow.entries.map((entry: any) => entry.status)).toEqual([
+        'released',
+        'pending',
+        'pending',
+        'pending',
+        'pending',
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('creates prepaid QR-approved escrows with merchant validity dates visible on the business dashboard', async () => {
+    const createResponse = await callApi('POST', '/api/escrow', {
+      consumerId: '00000000-0000-4000-a000-000000000002',
+      businessId: '00000000-0000-4000-a000-000000000010',
+      totalAmount: 100,
+      escrowType: 'prepaid',
+      unitPrice: 10,
+      validityMonths: 4,
+      validFrom: '2026-06-01',
+      validUntil: '2026-09-15',
+    });
+    const escrow = createResponse.body as any;
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(escrow).toMatchObject({
+      consumerId: '00000000-0000-4000-a000-000000000002',
+      businessId: '00000000-0000-4000-a000-000000000010',
+      escrowType: 'prepaid',
+      validFrom: '2026-06-01',
+      validUntil: '2026-09-15',
+    });
+    expect(escrow.entries).toHaveLength(10);
+    expect(new Set(escrow.entries.map((entry: any) => entry.finishAfter))).toEqual(new Set([isoDateToRippleTime('2026-06-01')]));
+    expect(new Set(escrow.entries.map((entry: any) => entry.cancelAfter))).toEqual(new Set([isoDateToRippleTime('2026-09-15')]));
+
+    const dashboardResponse = await callApi('GET', '/api/business/00000000-0000-4000-a000-000000000010/dashboard');
+    const visibleEscrow = (dashboardResponse.body as any).escrows.find((item: any) => item.id === escrow.id);
+
+    expect(dashboardResponse.statusCode).toBe(200);
+    expect(visibleEscrow).toMatchObject({
+      id: escrow.id,
+      consumer: { name: '이서연' },
+      validFrom: '2026-06-01',
+      validUntil: '2026-09-15',
+    });
   });
 });

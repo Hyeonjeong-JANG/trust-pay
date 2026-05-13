@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BusinessDashboardScreen } from './BusinessDashboardScreen';
 
@@ -39,6 +39,31 @@ describe('BusinessDashboardScreen', () => {
     const { api } = require('../../api/client');
     api.getBusinessProducts.mockResolvedValue([]);
     api.finishEscrow.mockResolvedValue({ txHash: 'AUTO_FINISH_TX' });
+  });
+
+  it('should periodically refresh the dashboard so merchant screens reflect customer approvals', async () => {
+    jest.useFakeTimers();
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 0,
+      totalPending: 0,
+      escrows: [],
+    });
+
+    try {
+      const { findByText } = renderWithProviders(<BusinessDashboardScreen />);
+
+      expect(await findByText('결제 QR 만들기')).toBeTruthy();
+      expect(api.getBusinessDashboard).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        jest.advanceTimersByTime(5000);
+      });
+
+      await waitFor(() => expect(api.getBusinessDashboard).toHaveBeenCalledTimes(2));
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should automatically receive eligible monthly settlements without a manual receive button', async () => {

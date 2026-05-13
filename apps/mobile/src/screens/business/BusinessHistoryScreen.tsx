@@ -11,23 +11,30 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
+import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { EscrowRecord, EscrowEntry } from '@prepaid-shield/shared-types';
+import type { EscrowRecord } from '@prepaid-shield/shared-types';
 import type { BusinessTabProps } from '../../navigation/types';
 
 interface HistoryItem {
   id: string;
-  type: 'received' | 'cancelled';
+  type: 'started' | 'received' | 'cancelled';
   date: Date;
   amount: number;
   consumerName: string;
-  month: number;
+  detail: string;
 }
 
 const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; bg: string }> = {
+  started: { icon: '🛡️', label: '보호 결제 시작', color: colors.primary, bg: colors.primaryLight },
   received: { icon: '💰', label: '대금 수령', color: colors.success, bg: colors.successLight },
   cancelled: { icon: '↩️', label: '취소/환불', color: colors.gray500, bg: colors.gray100 },
 };
+
+function getEscrowDetail(escrow: EscrowRecord): string {
+  if (escrow.escrowType === 'prepaid') return `기간 금액권 ${escrow.months}개 단위`;
+  return `월정액 ${escrow.months}개월`;
+}
 
 export function BusinessHistoryScreen(_props: BusinessTabProps<'BusinessHistory'>) {
   const userId = useAuthStore((s) => s.userId);
@@ -44,6 +51,16 @@ export function BusinessHistoryScreen(_props: BusinessTabProps<'BusinessHistory'
     const items: HistoryItem[] = [];
 
     for (const escrow of dashboard.escrows as (EscrowRecord & { consumer?: { name: string } })[]) {
+      const consumerName = escrow.consumer?.name ?? '소비자';
+      items.push({
+        id: `${escrow.id}:started`,
+        type: 'started',
+        date: new Date(escrow.createdAt ?? Date.now()),
+        amount: Number(escrow.totalAmount),
+        consumerName,
+        detail: getEscrowDetail(escrow),
+      });
+
       for (const entry of escrow.entries) {
         if (entry.status === 'released') {
           items.push({
@@ -51,8 +68,8 @@ export function BusinessHistoryScreen(_props: BusinessTabProps<'BusinessHistory'
             type: 'received',
             date: new Date((entry as any).updatedAt ?? (entry as any).createdAt ?? Date.now()),
             amount: Number(entry.amount),
-            consumerName: escrow.consumer?.name ?? '소비자',
-            month: entry.month,
+            consumerName,
+            detail: escrow.escrowType === 'prepaid' ? `이용 단위 ${entry.month}` : `${entry.month}월차`,
           });
         } else if (entry.status === 'refunded') {
           items.push({
@@ -60,8 +77,8 @@ export function BusinessHistoryScreen(_props: BusinessTabProps<'BusinessHistory'
             type: 'cancelled',
             date: new Date((entry as any).updatedAt ?? (entry as any).createdAt ?? Date.now()),
             amount: Number(entry.amount),
-            consumerName: escrow.consumer?.name ?? '소비자',
-            month: entry.month,
+            consumerName,
+            detail: escrow.escrowType === 'prepaid' ? `이용 단위 ${entry.month}` : `${entry.month}월차`,
           });
         }
       }
@@ -103,23 +120,27 @@ export function BusinessHistoryScreen(_props: BusinessTabProps<'BusinessHistory'
               <View style={styles.cardContent}>
                 <Text style={styles.cardLabel}>{config.label}</Text>
                 <Text style={styles.cardSub}>
-                  {item.consumerName} · {item.month}월차
+                  {item.consumerName} · {item.detail}
                 </Text>
               </View>
               <View style={styles.cardRight}>
-                <Text style={[styles.cardAmount, { color: config.color }]}>
-                  {item.type === 'received' ? '+' : '-'}{item.amount.toLocaleString()}
-                </Text>
-                <Text style={styles.cardCurrency}>RLUSD</Text>
+                <Text style={[styles.cardAmount, { color: config.color }]}>{item.type === 'received' ? '+' : item.type === 'cancelled' ? '-' : ''}{formatKrwFromRlusd(item.amount)}</Text>
+                <Text style={styles.cardCurrency}>{formatRlusd(item.amount)}</Text>
               </View>
             </View>
           );
         }}
+        ListHeaderComponent={
+          <View style={styles.headerCard}>
+            <Text style={styles.headerTitle}>전체 결제 내역</Text>
+            <Text style={styles.headerDesc}>손님이 계좌 승인한 보호 결제부터 정산과 환불까지 모두 표시됩니다</Text>
+          </View>
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📜</Text>
             <Text style={styles.emptyTitle}>거래 내역이 없습니다</Text>
-            <Text style={styles.emptyDesc}>릴리즈된 대금이 여기에 표시됩니다</Text>
+            <Text style={styles.emptyDesc}>보호 결제가 시작되면 여기에 표시됩니다</Text>
           </View>
         }
         contentContainerStyle={styles.listContent}
@@ -132,6 +153,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
   listContent: { padding: spacing.lg, paddingBottom: spacing.xxxl },
+  headerCard: {
+    backgroundColor: colors.white,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
+    ...shadow.sm,
+  },
+  headerTitle: { fontSize: font.size.lg, fontWeight: font.weight.bold, color: colors.gray900 },
+  headerDesc: { fontSize: font.size.sm, color: colors.gray500, marginTop: spacing.xs, lineHeight: 20 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

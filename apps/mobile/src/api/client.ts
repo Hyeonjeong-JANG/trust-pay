@@ -115,7 +115,7 @@ export const api = {
     request<BalanceResponse>(`/${role}/${id}/balance`),
 
   // Escrow
-  createEscrow: (data: { consumerId: string; businessId: string; productId?: string; totalAmount: number; months?: number; escrowType?: EscrowType; unitPrice?: number; validityMonths?: number }) =>
+  createEscrow: (data: { consumerId: string; businessId: string; productId?: string; totalAmount: number; months?: number; escrowType?: EscrowType; unitPrice?: number; validityMonths?: number; validFrom?: string; validUntil?: string }) =>
     request<EscrowRecord>('/escrow', { method: 'POST', body: JSON.stringify(data) }),
 
   createPaymentRequest: (data: CreatePaymentRequest) =>

@@ -256,4 +256,55 @@ describe('PaymentScreen', () => {
       expect(navigate).toHaveBeenCalledWith('ConsumerTabs', { screen: 'Home' });
     });
   });
+
+  it('should carry voucher QR validity dates into the created prepaid escrow', async () => {
+    const { api } = require('../../api/client');
+    const navigate = jest.fn();
+    const { findByText, getByText } = renderWithProviders(
+      <PaymentScreen
+        navigation={{ navigate } as any}
+        route={{
+          params: {
+            businessId: 'b-cafe',
+            businessName: '강남 블루보틀',
+            businessCategory: '카페',
+            paymentRequest: {
+              id: 'request-voucher',
+              code: 'TP-654321',
+              businessId: 'b-cafe',
+              businessName: '강남 블루보틀',
+              businessCategory: '카페',
+              paymentAmount: 66.666667,
+              totalAmount: 74.074074,
+              paymentModel: 'voucher',
+              escrowType: 'prepaid',
+              unitPrice: 7.407407,
+              validityMonths: 3,
+              validFrom: '2026-05-13',
+              validUntil: '2026-08-13',
+              status: 'pending',
+              createdAt: '2026-05-13T00:00:00Z',
+            },
+          },
+        } as any}
+      />,
+    );
+
+    expect(await findByText('사용기간 2026-05-13 ~ 2026-08-13')).toBeTruthy();
+    fireEvent.press(getByText('계좌 승인 결제 요청'));
+
+    await waitFor(() => {
+      expect(api.createEscrow).toHaveBeenCalledWith({
+        consumerId: 'consumer-1',
+        businessId: 'b-cafe',
+        totalAmount: 74.07407,
+        escrowType: 'prepaid',
+        unitPrice: 7.407407,
+        validityMonths: 3,
+        validFrom: '2026-05-13',
+        validUntil: '2026-08-13',
+      });
+      expect(navigate).toHaveBeenCalledWith('ConsumerTabs', { screen: 'Home' });
+    });
+  });
 });

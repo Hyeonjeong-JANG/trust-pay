@@ -7,4 +7,6 @@ export class CreateEscrowDto {
   escrowType?: 'monthly' | 'prepaid';
   unitPrice?: number;
   validityMonths?: number;
+  validFrom?: string;
+  validUntil?: string;
 }

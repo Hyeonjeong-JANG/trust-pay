@@ -108,8 +108,8 @@ export class XrplService implements OnModuleDestroy {
       const results: EscrowResult[] = [];
       for (let month = 1; month <= months; month++) {
         // Synthetic tx hashes let the app display ledger-like evidence without Testnet latency.
-        const finishDate = monthsFromNow(month, true);
-        const cancelDate = monthsFromNow(month + 1, true);
+        const finishDate = monthsFromNow(month - 1, false);
+        const cancelDate = monthsFromNow(month, false);
         results.push({
           month,
           sequence: this.demoSequence++,
@@ -146,9 +146,12 @@ export class XrplService implements OnModuleDestroy {
     unitPrice: string,
     entryCount: number,
     validityMonths: number,
+    options: { validFrom?: string; validUntil?: string } = {},
   ): Promise<EscrowResult[]> {
-    const finishAfter = isoToRippleTime(new Date(Date.now() + 60_000).toISOString());
-    const cancelAfter = isoToRippleTime(monthsFromNow(validityMonths, this.isDemoMode).toISOString());
+    const finishAfterDate = options.validFrom ? new Date(`${options.validFrom}T00:00:00.000Z`) : new Date(Date.now() + 60_000);
+    const cancelAfterDate = options.validUntil ? new Date(`${options.validUntil}T00:00:00.000Z`) : monthsFromNow(validityMonths, this.isDemoMode);
+    const finishAfter = isoToRippleTime(finishAfterDate.toISOString());
+    const cancelAfter = isoToRippleTime(cancelAfterDate.toISOString());
 
     if (this.isDemoMode) {
       const results: EscrowResult[] = [];

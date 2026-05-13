@@ -110,6 +110,8 @@ export function BusinessDashboardScreen() {
     queryFn: () => api.getBusinessDashboard(userId!),
     enabled: !!userId,
     retry: 2,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
   });
 
   const { data: balanceData, isLoading: balanceLoading, isError: balanceError, refetch: refetchBalance } = useQuery({

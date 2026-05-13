@@ -58,11 +58,18 @@ function isoToDate(value?: Date | string | null): string | null {
   return new Date(value).toLocaleDateString('ko-KR');
 }
 
-function getPrepaidUsageRange(entries: EscrowEntry[]): string | null {
+function getEntryUsageRange(entries: EscrowEntry[]): string | null {
   const starts = entries.map((entry) => entry.finishAfter).filter((value) => Number.isFinite(value));
   const ends = entries.map((entry) => entry.cancelAfter).filter((value) => Number.isFinite(value));
   if (starts.length === 0 || ends.length === 0) return null;
   return `${rippleTimeToDate(Math.min(...starts))} ~ ${rippleTimeToDate(Math.max(...ends))}`;
+}
+
+function getPrepaidUsageRange(escrow: EscrowWithRelations): string | null {
+  const explicitStart = isoToDate(escrow.validFrom);
+  const explicitEnd = isoToDate(escrow.validUntil);
+  if (explicitStart && explicitEnd) return `${explicitStart} ~ ${explicitEnd}`;
+  return getEntryUsageRange(escrow.entries);
 }
 
 function isChargeRequest(item: EscrowEntry | ChargeRequest): item is ChargeRequest {
@@ -148,7 +155,8 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   const totalEntries = escrow.entries.length || escrow.months;
   const progressPct = totalEntries > 0 ? (released / totalEntries) * 100 : 0;
   const escrowStyle = STATUS_STYLE[escrow.status] ?? STATUS_STYLE.cancelled;
-  const usageRange = isPrepaid ? getPrepaidUsageRange(escrow.entries) : null;
+  const usageRange = isPrepaid ? getPrepaidUsageRange(escrow) : getEntryUsageRange(escrow.entries);
+  const usageRangeLabel = isPrepaid ? '사용기한' : '이용기간';
   const releasedAmount = sumEntries(escrow.entries, 'released');
   const refundedAmount = sumEntries(escrow.entries, 'refunded');
   const settledChargeCount = chargeHistory.filter((request) => request.status === 'settled').length;
@@ -162,7 +170,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
       ? '차감 내역'
       : escrow.status === 'cancelled'
         ? 'XRPL 원장 상세'
-        : '원장 보호 단위'
+        : '이용 단위 내역'
     : '월별 내역';
   const listData: Array<EscrowEntry | ChargeRequest> = isPrepaid && chargeHistory.length > 0
     ? chargeHistory
@@ -197,7 +205,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 </View>
                 <View style={styles.amountDivider} />
                 <View style={styles.amountItem}>
-                  <Text style={styles.amountLabel}>{isPrepaid ? '보호단위' : '월별'}</Text>
+                  <Text style={styles.amountLabel}>{isPrepaid ? '이용 단위' : '월별'}</Text>
                   <Text style={styles.amountValue}>{formatKrwFromRlusd(isPrepaid ? escrow.unitPrice ?? escrow.monthlyAmount : escrow.monthlyAmount)}</Text>
                   <Text style={styles.amountUnit}>{formatRlusd(isPrepaid ? escrow.unitPrice ?? escrow.monthlyAmount : escrow.monthlyAmount)}</Text>
                 </View>
@@ -211,7 +219,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
 
               {usageRange && (
                 <View style={styles.usageRangeBox}>
-                  <Text style={styles.usageRangeValue}>사용기한 {usageRange}</Text>
+                  <Text style={styles.usageRangeValue}>{usageRangeLabel} {usageRange}</Text>
                 </View>
               )}
 
@@ -324,7 +332,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                   <Text style={styles.entryMonthText}>{item.month}</Text>
                 </View>
                 <View style={styles.entryInfo}>
-                  <Text style={styles.entryMonth}>{isPrepaid ? `보호 단위 ${item.month}` : `${item.month}월차`}</Text>
+                    <Text style={styles.entryMonth}>{isPrepaid ? `이용 단위 ${item.month}` : `${item.month}월차`}</Text>
                   <Text style={styles.entryDate}>
                     {isPrepaid ? '만료' : '정산 가능일'}: {rippleTimeToDate(isPrepaid ? item.cancelAfter : item.finishAfter)}
                   </Text>

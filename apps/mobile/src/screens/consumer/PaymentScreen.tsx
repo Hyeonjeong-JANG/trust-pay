@@ -94,6 +94,8 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
               escrowType: 'prepaid' as const,
               unitPrice: effectiveUnitPrice ?? undefined,
               validityMonths: effectiveValidityMonths ?? undefined,
+              ...(paymentRequest?.validFrom ? { validFrom: paymentRequest.validFrom } : {}),
+              ...(paymentRequest?.validUntil ? { validUntil: paymentRequest.validUntil } : {}),
             }),
       }),
     onSuccess: () => {

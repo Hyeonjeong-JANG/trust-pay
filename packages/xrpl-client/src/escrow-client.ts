@@ -80,8 +80,8 @@ export class XrplEscrowClient {
     const results: EscrowResult[] = [];
 
     for (let month = 1; month <= months; month++) {
-      const finishDate = monthsFromNow(month, demoMode);
-      const cancelDate = monthsFromNow(month + 1, demoMode);
+      const finishDate = monthsFromNow(month - 1, demoMode);
+      const cancelDate = monthsFromNow(month, demoMode);
 
       const finishAfter = isoToRippleTime(finishDate.toISOString());
       const cancelAfter = isoToRippleTime(cancelDate.toISOString());
