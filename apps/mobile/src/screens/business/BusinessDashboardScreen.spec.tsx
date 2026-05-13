@@ -203,20 +203,107 @@ describe('BusinessDashboardScreen', () => {
     const { findAllByText, findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
     expect(await findByText(/이미 보호 원장에 잠긴 이용권에서 이용분 차감 요청을 보냅니다/)).toBeTruthy();
+    expect(await findByText('차감 메뉴 등록')).toBeTruthy();
+    expect(await findByText('차감 항목 선택')).toBeTruthy();
+    expect(await findByText('직접 입력')).toBeTruthy();
     expect((await findAllByText('이용금액 직접 입력')).length).toBeGreaterThan(0);
     expect(await findByText('고객 이용분 승인 요청')).toBeTruthy();
     expect(await findByText(/₩6,750\/회/)).toBeTruthy();
     expect((await findAllByText('5.00 RLUSD')).length).toBeGreaterThan(0);
-    fireEvent.changeText(await findByPlaceholderText('예: 67,500'), '67500');
-    fireEvent.press(await findByText('입력 금액 승인 요청'));
+    fireEvent.changeText(await findByPlaceholderText('예: 수건 대여'), '락커 대여');
+    fireEvent.changeText(await findByPlaceholderText('예: 67,500'), '6750');
+    fireEvent.press(await findByText('직접 입력 승인 요청'));
 
     await waitFor(() => {
       expect(api.createChargeRequest).toHaveBeenCalledWith('e-prepaid', {
-        menuName: '직접 입력 이용금액',
-        amount: 50,
+        menuName: '락커 대여',
+        amount: 5,
       });
       const { showSuccessToast } = require('../../utils/toast');
       expect(showSuccessToast).toHaveBeenCalledWith('이용분 승인 요청 전송', '소비자 승인 대기 상태로 등록되었습니다.');
+    });
+  });
+
+  it('should add multiple merchant menus and request a selected menu from the dropdown', async () => {
+    const { api } = require('../../api/client');
+    api.createChargeRequest.mockResolvedValue({ id: 'charge-menu', status: 'pending_approval' });
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 0,
+      totalPending: 814.81481,
+      escrows: [
+        {
+          id: 'e-prepaid-menu',
+          status: 'active',
+          escrowType: 'prepaid',
+          totalAmount: 814.81481,
+          monthlyAmount: 81.481481,
+          months: 10,
+          unitPrice: 81.481481,
+          consumer: { id: 'consumer-1', name: '김민수' },
+          entries: [
+            { id: 'en-1', month: 1, amount: '81.481481', status: 'pending', finishAfter: 830607775 },
+            { id: 'en-2', month: 2, amount: '81.481481', status: 'pending', finishAfter: 830607775 },
+          ],
+        },
+      ],
+    });
+
+    const { findAllByText, findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+    expect(await findByText('차감 메뉴 등록')).toBeTruthy();
+    fireEvent.changeText(await findByPlaceholderText('예: PT 1회'), 'PT 1회');
+    fireEvent.changeText(await findByPlaceholderText('예: 110,000'), '110000');
+    fireEvent.press(await findByText('메뉴 추가'));
+    fireEvent.changeText(await findByPlaceholderText('예: PT 1회'), '락커 2개월');
+    fireEvent.changeText(await findByPlaceholderText('예: 110,000'), '220000');
+    fireEvent.press(await findByText('메뉴 추가'));
+
+    fireEvent.press(await findByText('차감 항목 선택'));
+    expect((await findAllByText('락커 2개월 · ₩220,000')).length).toBeGreaterThan(1);
+    const ptOptions = await findAllByText('PT 1회 · ₩110,000');
+    fireEvent.press(ptOptions[ptOptions.length - 1]);
+    fireEvent.press(await findByText('선택 항목 승인 요청'));
+
+    await waitFor(() => {
+      expect(api.createChargeRequest).toHaveBeenCalledWith('e-prepaid-menu', {
+        menuName: 'PT 1회',
+        amount: 81.481481,
+      });
+    });
+  });
+
+  it('should explain prepaid unit multiples before sending an invalid direct charge request', async () => {
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 0,
+      totalPending: 814.81481,
+      escrows: [
+        {
+          id: 'e-prepaid-invalid',
+          status: 'active',
+          escrowType: 'prepaid',
+          totalAmount: 814.81481,
+          monthlyAmount: 81.481481,
+          months: 10,
+          unitPrice: 81.481481,
+          consumer: { id: 'consumer-1', name: '김민수' },
+          entries: [
+            { id: 'en-1', month: 1, amount: '81.481481', status: 'pending', finishAfter: 830607775 },
+          ],
+        },
+      ],
+    });
+
+    const { findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+    fireEvent.changeText(await findByPlaceholderText('예: 수건 대여'), '수건 대여');
+    fireEvent.changeText(await findByPlaceholderText('예: 67,500'), '67500');
+    fireEvent.press(await findByText('직접 입력 승인 요청'));
+
+    await waitFor(() => {
+      const { showErrorToast } = require('../../utils/toast');
+      expect(showErrorToast).toHaveBeenCalledWith('차감 요청 실패', expect.stringContaining('₩110,000 단위'));
+      expect(api.createChargeRequest).not.toHaveBeenCalled();
     });
   });
 });

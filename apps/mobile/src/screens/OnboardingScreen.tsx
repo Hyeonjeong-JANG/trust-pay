@@ -45,8 +45,8 @@ const SLIDES: Slide[] = [
   {
     key: '4',
     illustration: <RocketIllustration size={120} />,
-    title: '데모 준비 완료',
-    desc: '소비자와 사업자 로그인만으로 Demo Mode를 확인합니다.\nTestnet Mode에서는 tx hash로 원장 증거를 검증합니다.',
+    title: 'QR로 간편하게 시작',
+    desc: '사업자는 결제 QR만 만들고\n손님은 계좌 승인만 하면 보호 결제가 시작됩니다.',
   },
 ];
 
@@ -93,9 +93,11 @@ export function OnboardingScreen({ navigation }: ScreenProps<'Onboarding'>) {
         viewabilityConfig={viewabilityConfig}
         renderItem={({ item }) => (
           <View testID="onboarding-slide" style={[s.slide, { width }]}>
-            <View style={s.illustrationWrap}>{item.illustration}</View>
-            <Text style={s.slideTitle}>{item.title}</Text>
-            <Text style={s.slideDesc}>{item.desc}</Text>
+            <View testID="onboarding-content" style={s.contentWrap}>
+              <View style={s.illustrationWrap}>{item.illustration}</View>
+              <Text style={s.slideTitle}>{item.title}</Text>
+              <Text style={s.slideDesc}>{item.desc}</Text>
+            </View>
           </View>
         )}
       />
@@ -145,10 +147,12 @@ const s = StyleSheet.create({
   },
   slide: {
     flex: 1,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 96,
     paddingHorizontal: spacing.xxxl,
+  },
+  contentWrap: {
+    alignItems: 'center',
   },
   illustrationWrap: {
     marginBottom: spacing.xl,

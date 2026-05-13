@@ -18,7 +18,7 @@ import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, BusinessSummaryRowSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
-import { formatKrwFromRlusd, formatRlusd, krwToRlusd } from '../../utils/money';
+import { formatKrwFromRlusd, formatRlusd, getWholeUnitCount, krwToRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowRecord, EscrowEntry, ProductMenuItem } from '@prepaid-shield/shared-types';
 import type { BusinessTabProps } from '../../navigation/types';
@@ -33,6 +33,33 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
 
 type EscrowWithConsumer = EscrowRecord & { consumer?: { id: string; name: string } };
 type ChargeRequestPayload = { menuItemId: string } | { menuName: string; amount: number };
+type MenuDraft = { name: string; amount: string };
+type ChargeMenuOption = {
+  id: string;
+  label: string;
+  menuName: string;
+  amount: number;
+  menuItemId?: string;
+};
+
+const DIRECT_CHARGE_OPTION_ID = 'direct';
+
+function getChargeUnitAmount(escrow: EscrowRecord): number {
+  return Number(escrow.unitPrice ?? escrow.monthlyAmount);
+}
+
+function getChargeAmountError(escrow: EscrowRecord, amount: number): string | null {
+  const unitAmount = getChargeUnitAmount(escrow);
+  const unitCount = getWholeUnitCount(amount, unitAmount);
+  if (unitCount === null) {
+    return `이 이용권은 ${formatKrwFromRlusd(unitAmount)} 단위로 차감됩니다. 단위의 배수로 입력해주세요.`;
+  }
+  const availableCount = escrow.entries?.filter((entry) => entry.status === 'pending').length ?? 0;
+  if (availableCount < unitCount) {
+    return `차감 가능한 이용권이 ${availableCount}개 남았습니다. ${formatKrwFromRlusd(unitAmount)} 단위 ${availableCount}개 이하로 요청해주세요.`;
+  }
+  return null;
+}
 
 export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashboard'>) {
   const userId = useAuthStore((s) => s.userId);
@@ -40,6 +67,11 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [manualChargeAmounts, setManualChargeAmounts] = useState<Record<string, string>>({});
+  const [manualChargeNames, setManualChargeNames] = useState<Record<string, string>>({});
+  const [menuDrafts, setMenuDrafts] = useState<Record<string, MenuDraft>>({});
+  const [customMenus, setCustomMenus] = useState<Record<string, ChargeMenuOption[]>>({});
+  const [selectedChargeOptionIds, setSelectedChargeOptionIds] = useState<Record<string, string>>({});
+  const [openChargeDropdowns, setOpenChargeDropdowns] = useState<Record<string, boolean>>({});
   const autoFinishedKeysRef = useRef<Set<string>>(new Set());
 
   const { data: dashboard, isLoading, isError, error, refetch, isRefetching } = useQuery({
@@ -76,17 +108,76 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
     refetchBalance();
   }, [refetch, refetchBalance]);
 
-  const submitManualChargeRequest = useCallback((escrowId: string) => {
-    const amount = krwToRlusd(manualChargeAmounts[escrowId] ?? '');
+  const updateMenuDraft = useCallback((escrowId: string, patch: Partial<MenuDraft>) => {
+    setMenuDrafts((current) => {
+      const currentDraft = current[escrowId] ?? { name: '', amount: '' };
+      return { ...current, [escrowId]: { ...currentDraft, ...patch } };
+    });
+  }, []);
+
+  const addCustomMenu = useCallback((escrow: EscrowWithConsumer) => {
+    const draft = menuDrafts[escrow.id] ?? { name: '', amount: '' };
+    const menuName = draft.name.trim();
+    const amount = krwToRlusd(draft.amount);
+    if (!menuName || amount <= 0) {
+      showErrorToast('메뉴 추가 실패', '차감 항목명과 금액을 입력해주세요.');
+      return;
+    }
+    const amountError = getChargeAmountError(escrow, amount);
+    if (amountError) {
+      showErrorToast('메뉴 추가 실패', amountError);
+      return;
+    }
+    const menu: ChargeMenuOption = {
+      id: `custom-${escrow.id}-${Date.now()}`,
+      label: `${menuName} · ${formatKrwFromRlusd(amount)}`,
+      menuName,
+      amount,
+    };
+    setCustomMenus((current) => ({
+      ...current,
+      [escrow.id]: [...(current[escrow.id] ?? []), menu],
+    }));
+    setSelectedChargeOptionIds((current) => ({ ...current, [escrow.id]: menu.id }));
+    setMenuDrafts((current) => ({ ...current, [escrow.id]: { name: '', amount: '' } }));
+  }, [menuDrafts]);
+
+  const submitChargeRequest = useCallback((escrow: EscrowWithConsumer, selectedOption?: ChargeMenuOption) => {
+    if (selectedOption) {
+      const amountError = getChargeAmountError(escrow, selectedOption.amount);
+      if (amountError) {
+        showErrorToast('차감 요청 실패', amountError);
+        return;
+      }
+      chargeRequestMutation.mutate({
+        escrowId: escrow.id,
+        payload: selectedOption.menuItemId
+          ? { menuItemId: selectedOption.menuItemId }
+          : { menuName: selectedOption.menuName, amount: selectedOption.amount },
+      });
+      return;
+    }
+
+    const menuName = (manualChargeNames[escrow.id] ?? '').trim();
+    const amount = krwToRlusd(manualChargeAmounts[escrow.id] ?? '');
+    if (!menuName) {
+      showErrorToast('차감 요청 실패', '차감 항목명을 입력해주세요.');
+      return;
+    }
     if (amount <= 0) {
       showErrorToast('차감 요청 실패', '이용금액을 입력해주세요.');
       return;
     }
+    const amountError = getChargeAmountError(escrow, amount);
+    if (amountError) {
+      showErrorToast('차감 요청 실패', amountError);
+      return;
+    }
     chargeRequestMutation.mutate({
-      escrowId,
-      payload: { menuName: '직접 입력 이용금액', amount },
+      escrowId: escrow.id,
+      payload: { menuName, amount },
     });
-  }, [chargeRequestMutation, manualChargeAmounts]);
+  }, [chargeRequestMutation, manualChargeAmounts, manualChargeNames]);
 
   useEffect(() => {
     const escrows = (dashboard?.escrows ?? []) as EscrowWithConsumer[];
@@ -265,6 +356,22 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
           const releasedCount = (item.entries?.length ?? 0) - pendingEntries.length;
           const totalEntries = item.entries?.length || item.months;
           const progressPct = totalEntries > 0 ? (releasedCount / totalEntries) * 100 : 0;
+          const draft = menuDrafts[item.id] ?? { name: '', amount: '' };
+          const menuOptions: ChargeMenuOption[] = [
+            ...((item.product?.menuItems ?? []).map((menu: ProductMenuItem) => ({
+              id: menu.id,
+              label: `${menu.name} · ${formatKrwFromRlusd(menu.amount)}`,
+              menuName: menu.name,
+              amount: Number(menu.amount),
+              menuItemId: menu.id,
+            }))),
+            ...(customMenus[item.id] ?? []),
+          ];
+          const selectedOptionId = selectedChargeOptionIds[item.id] ?? DIRECT_CHARGE_OPTION_ID;
+          const selectedOption = menuOptions.find((option) => option.id === selectedOptionId);
+          const isDirectSelected = selectedOptionId === DIRECT_CHARGE_OPTION_ID || !selectedOption;
+          const isDropdownOpen = !!openChargeDropdowns[item.id];
+          const unitAmount = getChargeUnitAmount(item);
           return (
             <View style={styles.card}>
               <TouchableOpacity
@@ -299,46 +406,126 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
                 )}
               </TouchableOpacity>
               {isPrepaid && (
-                <View style={styles.manualChargeBox}>
-                  <Text style={styles.manualChargeTitle}>이용금액 직접 입력</Text>
-                  <Text style={styles.manualChargeDesc}>
-                    실제 이용한 원화 금액을 입력하면 TrustPay가 RLUSD 보호 단위로 환산해 소비자 승인 요청을 보냅니다.
-                  </Text>
-                  <TextInput
-                    style={styles.manualChargeInput}
-                    placeholder="예: 67,500"
-                    placeholderTextColor={colors.gray400}
-                    keyboardType="number-pad"
-                    value={manualChargeAmounts[item.id] ?? ''}
-                    onChangeText={(value) => setManualChargeAmounts((current) => ({ ...current, [item.id]: value }))}
-                  />
-                  <TouchableOpacity
-                    style={[styles.manualChargeButton, chargeRequestMutation.isPending && styles.buttonDisabled]}
-                    onPress={() => submitManualChargeRequest(item.id)}
-                    disabled={chargeRequestMutation.isPending}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.manualChargeButtonText}>입력 금액 승인 요청</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              {isPrepaid && !!item.product?.menuItems?.length && (
-                <View style={styles.menuRequestList}>
-                  <Text style={styles.menuRequestTitle}>고객 이용분 승인 요청</Text>
-                  {item.product.menuItems.map((menu: ProductMenuItem) => (
+                <View style={styles.chargeRequestBox}>
+                  <View style={styles.menuBuilderBox}>
+                    <Text style={styles.manualChargeTitle}>차감 메뉴 등록</Text>
+                    <Text style={styles.manualChargeDesc}>
+                      자주 차감하는 항목을 여러 개 추가해두고 요청 시 드롭다운에서 선택합니다. 이 이용권은 {formatKrwFromRlusd(unitAmount)} 단위로 차감됩니다.
+                    </Text>
+                    <View style={styles.menuDraftRow}>
+                      <TextInput
+                        style={[styles.manualChargeInput, styles.menuNameInput]}
+                        placeholder="예: PT 1회"
+                        placeholderTextColor={colors.gray400}
+                        value={draft.name}
+                        onChangeText={(value) => updateMenuDraft(item.id, { name: value })}
+                      />
+                      <TextInput
+                        style={[styles.manualChargeInput, styles.menuAmountInput]}
+                        placeholder="예: 110,000"
+                        placeholderTextColor={colors.gray400}
+                        keyboardType="number-pad"
+                        value={draft.amount}
+                        onChangeText={(value) => updateMenuDraft(item.id, { amount: value })}
+                      />
+                    </View>
                     <TouchableOpacity
-                      key={menu.id}
-                      style={[styles.menuRequestButton, chargeRequestMutation.isPending && styles.buttonDisabled]}
-                      onPress={() => chargeRequestMutation.mutate({ escrowId: item.id, payload: { menuItemId: menu.id } })}
-                      disabled={chargeRequestMutation.isPending}
+                      style={styles.secondaryButton}
+                      onPress={() => addCustomMenu(item)}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.menuRequestButtonText}>
-                        {menu.name} 이용분 승인 요청 ({formatKrwFromRlusd(menu.amount)})
-                      </Text>
-                      <Text style={styles.menuRequestButtonSub}>{formatRlusd(menu.amount)}</Text>
+                      <Text style={styles.secondaryButtonText}>메뉴 추가</Text>
                     </TouchableOpacity>
-                  ))}
+                    {!!customMenus[item.id]?.length && (
+                      <View style={styles.addedMenuList}>
+                        {customMenus[item.id].map((menu) => (
+                          <Text key={menu.id} style={styles.addedMenuText}>{menu.label}</Text>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.menuRequestList}>
+                    <Text style={styles.menuRequestTitle}>고객 이용분 승인 요청</Text>
+                    <TouchableOpacity
+                      style={styles.dropdownButton}
+                      onPress={() => setOpenChargeDropdowns((current) => ({ ...current, [item.id]: !current[item.id] }))}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.dropdownLabel}>차감 항목 선택</Text>
+                      <Text style={styles.dropdownValue}>{selectedOption?.label ?? '직접 입력'}</Text>
+                    </TouchableOpacity>
+                    {isDropdownOpen && (
+                      <View style={styles.dropdownList}>
+                        <TouchableOpacity
+                          style={styles.dropdownOption}
+                          onPress={() => {
+                            setSelectedChargeOptionIds((current) => ({ ...current, [item.id]: DIRECT_CHARGE_OPTION_ID }));
+                            setOpenChargeDropdowns((current) => ({ ...current, [item.id]: false }));
+                          }}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={styles.dropdownOptionText}>직접 입력</Text>
+                        </TouchableOpacity>
+                        {menuOptions.map((option) => (
+                          <TouchableOpacity
+                            key={option.id}
+                            style={styles.dropdownOption}
+                            onPress={() => {
+                              setSelectedChargeOptionIds((current) => ({ ...current, [item.id]: option.id }));
+                              setOpenChargeDropdowns((current) => ({ ...current, [item.id]: false }));
+                            }}
+                            activeOpacity={0.75}
+                          >
+                            <Text style={styles.dropdownOptionText}>{option.label}</Text>
+                            <Text style={styles.dropdownOptionSub}>{formatRlusd(option.amount)}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    {isDirectSelected ? (
+                      <View style={styles.manualChargeBox}>
+                        <Text style={styles.manualChargeTitle}>이용금액 직접 입력</Text>
+                        <Text style={styles.manualChargeDesc}>
+                          어떤 이용분인지 항목명을 적고, 이용권 단위의 배수 금액으로 소비자 승인 요청을 보냅니다.
+                        </Text>
+                        <TextInput
+                          style={styles.manualChargeInput}
+                          placeholder="예: 수건 대여"
+                          placeholderTextColor={colors.gray400}
+                          value={manualChargeNames[item.id] ?? ''}
+                          onChangeText={(value) => setManualChargeNames((current) => ({ ...current, [item.id]: value }))}
+                        />
+                        <TextInput
+                          style={styles.manualChargeInput}
+                          placeholder="예: 67,500"
+                          placeholderTextColor={colors.gray400}
+                          keyboardType="number-pad"
+                          value={manualChargeAmounts[item.id] ?? ''}
+                          onChangeText={(value) => setManualChargeAmounts((current) => ({ ...current, [item.id]: value }))}
+                        />
+                        <TouchableOpacity
+                          style={[styles.manualChargeButton, chargeRequestMutation.isPending && styles.buttonDisabled]}
+                          onPress={() => submitChargeRequest(item)}
+                          disabled={chargeRequestMutation.isPending}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.manualChargeButtonText}>직접 입력 승인 요청</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.manualChargeButton, chargeRequestMutation.isPending && styles.buttonDisabled]}
+                        onPress={() => submitChargeRequest(item, selectedOption)}
+                        disabled={chargeRequestMutation.isPending}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.manualChargeButtonText}>선택 항목 승인 요청</Text>
+                        {selectedOption && <Text style={styles.menuRequestButtonSub}>{formatRlusd(selectedOption.amount)}</Text>}
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               )}
             </View>
@@ -512,11 +699,38 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     textAlign: 'center',
   },
-  manualChargeBox: {
+  chargeRequestBox: {
     backgroundColor: colors.gray50,
     borderRadius: radius.md,
     padding: spacing.md,
     marginTop: spacing.md,
+    gap: spacing.md,
+  },
+  menuBuilderBox: {
+    backgroundColor: colors.white,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  menuDraftRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  menuNameInput: { flex: 1 },
+  menuAmountInput: { width: 128 },
+  secondaryButton: {
+    backgroundColor: colors.successLight,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+  },
+  secondaryButtonText: { color: colors.success, fontWeight: font.weight.semibold, fontSize: font.size.sm },
+  addedMenuList: { gap: spacing.xs },
+  addedMenuText: { fontSize: font.size.xs, color: colors.gray500 },
+  manualChargeBox: {
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    padding: spacing.md,
     gap: spacing.sm,
   },
   manualChargeTitle: {
@@ -547,7 +761,6 @@ const styles = StyleSheet.create({
   },
   manualChargeButtonText: { color: colors.white, fontWeight: font.weight.semibold, fontSize: font.size.sm },
   menuRequestList: {
-    marginTop: spacing.md,
     gap: spacing.sm,
   },
   menuRequestTitle: {
@@ -555,13 +768,30 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.semibold,
     color: colors.gray700,
   },
-  menuRequestButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
+  dropdownButton: {
+    backgroundColor: colors.white,
     borderRadius: radius.sm,
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    padding: spacing.md,
   },
-  menuRequestButtonText: { color: colors.white, fontWeight: font.weight.semibold, fontSize: font.size.sm },
+  dropdownLabel: { fontSize: font.size.xs, color: colors.gray400, marginBottom: 2 },
+  dropdownValue: { fontSize: font.size.md, color: colors.gray900, fontWeight: font.weight.semibold },
+  dropdownList: {
+    backgroundColor: colors.white,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    overflow: 'hidden',
+  },
+  dropdownOption: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+  },
+  dropdownOptionText: { fontSize: font.size.sm, color: colors.gray800, fontWeight: font.weight.semibold },
+  dropdownOptionSub: { fontSize: font.size.xs, color: colors.gray400, marginTop: 1 },
   menuRequestButtonSub: { color: 'rgba(255,255,255,0.75)', fontSize: font.size.xs, marginTop: 2 },
   emptyContainer: { alignItems: 'center', paddingTop: 60 },
   emptyIcon: { fontSize: 40, marginBottom: spacing.md },

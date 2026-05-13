@@ -46,5 +46,5 @@ export function getWholeUnitCount(total: number, unit: number): number | null {
   if (!Number.isFinite(total) || !Number.isFinite(unit) || total <= 0 || unit <= 0) return null;
   const count = total / unit;
   const rounded = Math.round(count);
-  return Math.abs(count - rounded) <= 1e-9 ? rounded : null;
+  return Math.abs(count - rounded) <= 1e-4 ? rounded : null;
 }

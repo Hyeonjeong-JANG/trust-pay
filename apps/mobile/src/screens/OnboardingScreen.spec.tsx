@@ -51,7 +51,17 @@ describe('OnboardingScreen', () => {
     expect(getByText('선불금을 월별로 보호')).toBeTruthy();
     expect(getByText('XLS-85 Token Escrow')).toBeTruthy();
     expect(getByText('RLUSD 스테이블코인')).toBeTruthy();
-    expect(getByText('데모 준비 완료')).toBeTruthy();
+    expect(getByText('QR로 간편하게 시작')).toBeTruthy();
+  });
+
+  it('should explain the service benefit instead of demo readiness', () => {
+    const { getByText, queryByText } = render(
+      <OnboardingScreen navigation={mockNavigation} route={mockRoute} />,
+    );
+
+    expect(queryByText('데모 준비 완료')).toBeNull();
+    expect(getByText(/사업자는 결제 QR만 만들고/)).toBeTruthy();
+    expect(getByText(/손님은 계좌 승인만 하면 보호 결제가 시작됩니다/)).toBeTruthy();
   });
 
   it('should show skip button', () => {
@@ -94,15 +104,18 @@ describe('OnboardingScreen', () => {
     ).toBeTruthy();
   });
 
-  it('should keep the first onboarding screen vertically compact on tall web canvases', () => {
+  it('should center only the onboarding content while preserving footer position', () => {
     const { getAllByTestId, getByTestId } = render(
       <OnboardingScreen navigation={mockNavigation} route={mockRoute} />,
     );
 
     expect(getAllByTestId('onboarding-slide')[0].props.style).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ justifyContent: 'flex-start', paddingTop: 96 }),
+        expect.objectContaining({ justifyContent: 'center' }),
       ]),
+    );
+    expect(getAllByTestId('onboarding-content')[0].props.style).toEqual(
+      expect.objectContaining({ alignItems: 'center' }),
     );
     expect(getByTestId('onboarding-footer').props.style).toEqual(
       expect.objectContaining({ paddingBottom: 50 }),
