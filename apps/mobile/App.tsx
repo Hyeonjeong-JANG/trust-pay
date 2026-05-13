@@ -10,6 +10,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import Toast from 'react-native-toast-message';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { NetworkBanner } from './src/components/NetworkBanner';
+import { RealtimeNotificationCenter } from './src/components/RealtimeNotificationCenter';
 import { useAuthStore } from './src/store/auth';
 import { useAppStore } from './src/store/app';
 import { LoginScreen } from './src/screens/LoginScreen';
@@ -189,6 +190,7 @@ export default function App() {
         <NavigationContainer>
           <NetworkBanner />
           <AppNavigator />
+          <RealtimeNotificationCenter />
           <StatusBar style="auto" />
         </NavigationContainer>
         <Toast />
