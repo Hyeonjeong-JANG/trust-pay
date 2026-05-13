@@ -94,14 +94,16 @@ describe('ConsumerDashboardScreen', () => {
     expect(await findByText('내 선불 보호')).toBeTruthy();
   });
 
-  it('should show FAB button after loading', async () => {
+  it('should route consumers to QR scan checkout instead of business selection', async () => {
     const { api } = require('../../api/client');
     api.getConsumerEscrows.mockResolvedValue([]);
 
     const { findByText } = renderWithProviders(
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
-    expect(await findByText('+')).toBeTruthy();
+    fireEvent.press(await findByText('QR 스캔 결제'));
+
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('ScanPayment');
   });
 
   it('should show active-empty state message when no active escrows', async () => {
@@ -113,7 +115,7 @@ describe('ConsumerDashboardScreen', () => {
     );
 
     expect(await findByText('진행중인 보호가 없습니다')).toBeTruthy();
-    expect(await findByText(/완료·취소된 보호는 상단 필터에서 확인할 수 있습니다/)).toBeTruthy();
+    expect(await findByText(/사업자가 제시한 QR을 스캔해 보호 결제를 시작하세요/)).toBeTruthy();
   });
 
   it('should default the home list to active escrows while keeping all filter chips visible', async () => {

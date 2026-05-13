@@ -207,4 +207,47 @@ describe('PaymentScreen', () => {
       expect(navigate).toHaveBeenCalledWith('ConsumerTabs', { screen: 'Home' });
     });
   });
+
+  it('should create escrow directly from a merchant QR payment request', async () => {
+    const { api } = require('../../api/client');
+    const navigate = jest.fn();
+    const { findByText, getByText } = renderWithProviders(
+      <PaymentScreen
+        navigation={{ navigate } as any}
+        route={{
+          params: {
+            businessId: 'b-1',
+            businessName: '파워짐 피트니스',
+            businessCategory: '헬스장',
+            paymentRequest: {
+              id: 'request-1',
+              code: 'TP-123456',
+              businessId: 'b-1',
+              businessName: '파워짐 피트니스',
+              businessCategory: '헬스장',
+              totalAmount: 600,
+              months: 6,
+              escrowType: 'monthly',
+              status: 'pending',
+              createdAt: '2026-05-13T00:00:00Z',
+            },
+          },
+        } as any}
+      />,
+    );
+
+    expect(await findByText('사업자가 만든 결제 QR')).toBeTruthy();
+    expect(await findByText('QR 코드 TP-123456')).toBeTruthy();
+    fireEvent.press(getByText('계좌 승인 결제 요청'));
+
+    await waitFor(() => {
+      expect(api.createEscrow).toHaveBeenCalledWith({
+        consumerId: 'consumer-1',
+        businessId: 'b-1',
+        totalAmount: 600,
+        months: 6,
+      });
+      expect(navigate).toHaveBeenCalledWith('ConsumerTabs', { screen: 'Home' });
+    });
+  });
 });

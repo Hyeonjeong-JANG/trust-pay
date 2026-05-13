@@ -128,9 +128,9 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
   const emptyDesc = hasSearchQuery
     ? '다른 검색어나 필터를 시도해보세요'
     : statusFilter === 'active'
-      ? '완료·취소된 보호는 상단 필터에서 확인할 수 있습니다'
+      ? '사업자가 제시한 QR을 스캔해 보호 결제를 시작하세요'
       : statusFilter === 'all'
-        ? '아래 + 버튼을 눌러 XRPL Token Escrow로 월별 릴리즈되는 선불 보호를 시작하세요'
+        ? '아래 QR 스캔 결제로 사업자 청구를 승인하세요'
         : '다른 상태 필터를 선택해 내 선불 보호를 확인해보세요';
 
   const displayName = name?.trim() || '고객';
@@ -345,10 +345,10 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
       />
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate('BusinessSelect')}
+        onPress={() => navigation.navigate('ScanPayment')}
         activeOpacity={0.85}
       >
-        <Text style={styles.fabText}>+</Text>
+        <Text style={styles.fabText}>QR 스캔 결제</Text>
       </TouchableOpacity>
     </View>
   );
@@ -649,13 +649,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 24,
     right: 24,
-    width: 56,
+    minWidth: 132,
     height: 56,
     borderRadius: 28,
     backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
     ...shadow.lg,
   },
-  fabText: { color: colors.white, fontSize: 28, fontWeight: font.weight.normal, marginTop: -2 },
+  fabText: { color: colors.white, fontSize: font.size.sm, fontWeight: font.weight.bold },
 });

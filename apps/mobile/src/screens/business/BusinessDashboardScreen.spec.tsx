@@ -14,6 +14,8 @@ jest.mock('../../api/client', () => ({
     getBalance: jest.fn().mockResolvedValue({ xrplAddress: 'rBusiness123456', balance: '1200' }),
     finishEscrow: jest.fn(),
     createChargeRequest: jest.fn(),
+    getBusinessProducts: jest.fn(),
+    createPaymentRequest: jest.fn(),
   },
 }));
 
@@ -32,9 +34,14 @@ function renderWithProviders(ui: React.ReactElement) {
 }
 
 describe('BusinessDashboardScreen', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    const { api } = require('../../api/client');
+    api.getBusinessProducts.mockResolvedValue([]);
+    api.finishEscrow.mockResolvedValue({ txHash: 'AUTO_FINISH_TX' });
+  });
 
-  it('should explain EscrowFinish-based merchant settlement', async () => {
+  it('should automatically receive eligible monthly settlements without a manual receive button', async () => {
     const { api } = require('../../api/client');
     api.getBusinessDashboard.mockResolvedValue({
       totalReceived: 300,
@@ -54,11 +61,51 @@ describe('BusinessDashboardScreen', () => {
       ],
     });
 
-    const { findAllByText, findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
+    const { findAllByText, findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen />);
 
     expect(await findByText(/EscrowFinish로 수령 가능한 월차/)).toBeTruthy();
-    expect(await findByText('1월차 수령 가능 (₩135,000)')).toBeTruthy();
     expect((await findAllByText('100.00 RLUSD')).length).toBeGreaterThan(0);
+    expect(queryByText('1월차 수령 가능 (₩135,000)')).toBeNull();
+    await waitFor(() => {
+      expect(api.finishEscrow).toHaveBeenCalledWith('e-1', 1);
+    });
+  });
+
+  it('should create a merchant-originated payment QR from a business-entered amount', async () => {
+    const { api } = require('../../api/client');
+    api.createPaymentRequest.mockResolvedValue({
+      id: 'request-1',
+      code: 'TP-123456',
+      businessId: 'business-1',
+      businessName: '파워짐',
+      totalAmount: 600,
+      months: 6,
+      escrowType: 'monthly',
+      status: 'pending',
+      createdAt: '2026-05-13T00:00:00Z',
+    });
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 0,
+      totalPending: 0,
+      escrows: [],
+    });
+
+    const { findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
+
+    expect(await findByText('결제 QR 만들기')).toBeTruthy();
+    fireEvent.changeText(await findByPlaceholderText('예: 810,000'), '810000');
+    fireEvent.changeText(await findByPlaceholderText('예: 6'), '6');
+    fireEvent.press(await findByText('QR 결제 만들기'));
+
+    await waitFor(() => {
+      expect(api.createPaymentRequest).toHaveBeenCalledWith({
+        businessId: 'business-1',
+        totalAmount: 600,
+        months: 6,
+        escrowType: 'monthly',
+      });
+    });
+    expect(await findByText('TP-123456')).toBeTruthy();
   });
 
   it('should show prepaid settlement as per-use receipt', async () => {
@@ -97,7 +144,7 @@ describe('BusinessDashboardScreen', () => {
     const { findAllByText, findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
 
     expect(await findByText(/이미 보호 원장에 잠긴 이용권에서 이용분 차감 요청을 보냅니다/)).toBeTruthy();
-    expect(await findByText('이용금액 직접 입력')).toBeTruthy();
+    expect((await findAllByText('이용금액 직접 입력')).length).toBeGreaterThan(0);
     expect(await findByText('고객 이용분 승인 요청')).toBeTruthy();
     expect(await findByText(/₩6,750\/회/)).toBeTruthy();
     expect((await findAllByText('5.00 RLUSD')).length).toBeGreaterThan(0);

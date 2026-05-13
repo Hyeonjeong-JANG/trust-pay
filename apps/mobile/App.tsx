@@ -21,6 +21,7 @@ import { HistoryScreen } from './src/screens/consumer/HistoryScreen';
 import { ProfileScreen } from './src/screens/consumer/ProfileScreen';
 import { BusinessSelectScreen } from './src/screens/consumer/BusinessSelectScreen';
 import { PaymentScreen } from './src/screens/consumer/PaymentScreen';
+import { ScanPaymentScreen } from './src/screens/consumer/ScanPaymentScreen';
 import { EscrowDetailScreen } from './src/screens/consumer/EscrowDetailScreen';
 import { BusinessDashboardScreen } from './src/screens/business/BusinessDashboardScreen';
 import { BusinessHistoryScreen } from './src/screens/business/BusinessHistoryScreen';
@@ -131,6 +132,7 @@ function AppNavigator() {
     <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="ConsumerTabs" component={ConsumerTabs} options={{ headerShown: false }} />
       <Stack.Screen name="BusinessSelect" component={BusinessSelectScreen} options={{ title: '사업자 선택' }} />
+      <Stack.Screen name="ScanPayment" component={ScanPaymentScreen} options={{ title: 'QR 스캔 결제' }} />
       <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: '보호 결제' }} />
       <Stack.Screen name="EscrowDetail" component={EscrowDetailScreen} options={{ title: '에스크로 상세' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: '알림' }} />

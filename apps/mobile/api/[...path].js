@@ -365,6 +365,33 @@ let chargeRequests = [
   },
 ];
 
+let paymentRequests = [];
+
+function createPaymentRequest(body) {
+  const business = businesses.find((item) => item.id === body.businessId);
+  if (!business) return null;
+  const product = body.productId ? products.find((item) => item.id === body.productId) : null;
+  const escrowType = product?.escrowType || body.escrowType || 'monthly';
+  const request = {
+    id: `payment-request-${Date.now()}`,
+    code: `TP-${String(paymentRequests.length + 1).padStart(6, '0')}`,
+    businessId: business.id,
+    businessName: business.name,
+    businessCategory: business.category,
+    productId: product?.id || null,
+    productName: product?.name || null,
+    totalAmount: product?.totalAmount || Number(body.totalAmount),
+    months: product?.months || body.months || null,
+    escrowType,
+    unitPrice: product?.unitPrice || body.unitPrice || null,
+    validityMonths: product?.validityMonths || body.validityMonths || null,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
+  paymentRequests = [request, ...paymentRequests];
+  return request;
+}
+
 let escrows = [
   makeEscrow({
     id: '00000000-0000-4000-a000-000000000100',
@@ -564,6 +591,20 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'GET' && path === '/business') {
     return send(res, 200, businesses);
+  }
+
+  if (req.method === 'POST' && path === '/payment-requests') {
+    const request = createPaymentRequest(body);
+    if (!request || !Number.isFinite(request.totalAmount) || request.totalAmount <= 0) {
+      return send(res, 400, { message: '결제 QR 요청 정보를 확인해주세요' });
+    }
+    return send(res, 201, request);
+  }
+
+  if (req.method === 'GET' && parts[0] === 'payment-requests' && parts[1]) {
+    const code = decodeURIComponent(parts[1]).toUpperCase();
+    const request = paymentRequests.find((item) => item.code === code);
+    return request ? send(res, 200, request) : send(res, 404, { message: 'Payment request not found' });
   }
 
   if (req.method === 'GET' && parts[0] === 'business' && parts[2] === 'balance') {

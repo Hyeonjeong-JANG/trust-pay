@@ -132,4 +132,27 @@ describe('static Demo API fixture', () => {
       status: 'pending_approval',
     });
   });
+
+  it('creates and resolves merchant-originated QR payment requests', async () => {
+    const createResponse = await callApi('POST', '/api/payment-requests', {
+      businessId: '00000000-0000-4000-a000-000000000020',
+      totalAmount: 600,
+      months: 6,
+      escrowType: 'monthly',
+    });
+    const created = createResponse.body as any;
+    const lookupResponse = await callApi('GET', `/api/payment-requests/${created.code}`);
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(created).toMatchObject({
+      businessName: '파워짐 피트니스',
+      totalAmount: 600,
+      months: 6,
+      escrowType: 'monthly',
+      status: 'pending',
+    });
+    expect(created.code).toMatch(/^TP-/);
+    expect(lookupResponse.statusCode).toBe(200);
+    expect(lookupResponse.body).toMatchObject({ code: created.code, businessName: '파워짐 피트니스' });
+  });
 });

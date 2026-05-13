@@ -1,6 +1,7 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps, NavigatorScreenParams } from '@react-navigation/native';
+import type { PaymentRequest } from '@prepaid-shield/shared-types';
 
 // Consumer bottom tabs
 export type ConsumerTabParamList = {
@@ -23,7 +24,8 @@ export type RootStackParamList = {
   Login: undefined;
   ConsumerTabs: NavigatorScreenParams<ConsumerTabParamList>;
   BusinessSelect: undefined;
-  Payment: { businessId: string; businessName: string; businessCategory?: string };
+  ScanPayment: undefined;
+  Payment: { businessId: string; businessName: string; businessCategory?: string; paymentRequest?: PaymentRequest };
   EscrowDetail: { id: string };
   BusinessDetail: { businessId: string };
   BusinessTabs: NavigatorScreenParams<BusinessTabParamList>;

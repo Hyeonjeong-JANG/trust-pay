@@ -93,4 +93,16 @@ describe('OnboardingScreen', () => {
       getByText(/finishAfter 이후 월별로 릴리즈/),
     ).toBeTruthy();
   });
+
+  it('should keep the first onboarding screen vertically compact on tall web canvases', () => {
+    const { getAllByTestId } = render(
+      <OnboardingScreen navigation={mockNavigation} route={mockRoute} />,
+    );
+
+    expect(getAllByTestId('onboarding-slide')[0].props.style).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ justifyContent: 'flex-start' }),
+      ]),
+    );
+  });
 });

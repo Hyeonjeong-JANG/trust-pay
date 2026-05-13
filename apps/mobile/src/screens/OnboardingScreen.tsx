@@ -26,25 +26,25 @@ interface Slide {
 const SLIDES: Slide[] = [
   {
     key: '1',
-    illustration: <ShieldIllustration size={140} />,
+    illustration: <ShieldIllustration size={120} />,
     title: '선불금을 월별로 보호',
     desc: '이미 이용한 월차만 사업자에게 릴리즈되고\n남은 월차는 취소 시 환불할 수 있습니다.',
   },
   {
     key: '2',
-    illustration: <EscrowIllustration size={140} />,
+    illustration: <EscrowIllustration size={120} />,
     title: 'XLS-85 Token Escrow',
     desc: 'XRP Ledger Testnet의 Token Escrow로 각 월차를 잠급니다.\nfinishAfter 이후 월별로 릴리즈되어 흐름이 원장에 남습니다.',
   },
   {
     key: '3',
-    illustration: <StablecoinIllustration size={140} />,
+    illustration: <StablecoinIllustration size={120} />,
     title: 'RLUSD 스테이블코인',
     desc: '달러에 연동된 RLUSD로 가격 변동 걱정 없이\n안정적으로 결제할 수 있습니다.',
   },
   {
     key: '4',
-    illustration: <RocketIllustration size={140} />,
+    illustration: <RocketIllustration size={120} />,
     title: '데모 준비 완료',
     desc: '소비자와 사업자 로그인만으로 Demo Mode를 확인합니다.\nTestnet Mode에서는 tx hash로 원장 증거를 검증합니다.',
   },
@@ -92,7 +92,7 @@ export function OnboardingScreen({ navigation }: ScreenProps<'Onboarding'>) {
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         renderItem={({ item }) => (
-          <View style={[s.slide, { width }]}>
+          <View testID="onboarding-slide" style={[s.slide, { width }]}>
             <View style={s.illustrationWrap}>{item.illustration}</View>
             <Text style={s.slideTitle}>{item.title}</Text>
             <Text style={s.slideDesc}>{item.desc}</Text>
@@ -145,12 +145,13 @@ const s = StyleSheet.create({
   },
   slide: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
+    paddingTop: 96,
     paddingHorizontal: spacing.xxxl,
   },
   illustrationWrap: {
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.xl,
   },
   slideTitle: {
     fontSize: font.size.xxl,
@@ -166,8 +167,11 @@ const s = StyleSheet.create({
     lineHeight: 24,
   },
   footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 44,
     paddingHorizontal: spacing.xxl,
-    paddingBottom: 50,
     alignItems: 'center',
   },
   dots: {

@@ -35,8 +35,9 @@ function getDefaultEscrowType(businessCategory?: string): EscrowType {
 export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
   const userId = useAuthStore((s) => s.userId);
   const queryClient = useQueryClient();
-  const { businessId, businessName, businessCategory } = route.params;
-  const defaultEscrowType = getDefaultEscrowType(businessCategory);
+  const { businessId, businessName, businessCategory, paymentRequest } = route.params;
+  const isRequestCheckout = !!paymentRequest;
+  const defaultEscrowType = paymentRequest?.escrowType ?? getDefaultEscrowType(businessCategory);
 
   const [amount, setAmount] = useState('');
   const [months, setMonths] = useState('6');
@@ -64,16 +65,16 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
   const monthsValue = Number(months);
   const unitPriceValue = parseKrwInput(unitPrice);
   const validityMonthsValue = Number(validityMonths);
-  const effectiveEscrowType = selectedProduct?.escrowType ?? escrowType;
-  const effectiveAmount = selectedProduct?.totalAmount ?? krwToRlusd(amountValue);
-  const effectiveMonths = selectedProduct?.months ?? monthsValue;
-  const effectiveUnitPrice = selectedProduct?.unitPrice ?? krwToRlusd(unitPriceValue);
-  const effectiveValidityMonths = selectedProduct?.validityMonths ?? validityMonthsValue;
-  const effectiveAmountKrw = selectedProduct ? rlusdToKrw(selectedProduct.totalAmount) : amountValue;
-  const effectiveUnitPriceKrw = selectedProduct && effectiveUnitPrice ? rlusdToKrw(effectiveUnitPrice) : unitPriceValue;
+  const effectiveEscrowType = paymentRequest?.escrowType ?? selectedProduct?.escrowType ?? escrowType;
+  const effectiveAmount = paymentRequest?.totalAmount ?? selectedProduct?.totalAmount ?? krwToRlusd(amountValue);
+  const effectiveMonths = paymentRequest?.months ?? selectedProduct?.months ?? monthsValue;
+  const effectiveUnitPrice = paymentRequest?.unitPrice ?? selectedProduct?.unitPrice ?? krwToRlusd(unitPriceValue);
+  const effectiveValidityMonths = paymentRequest?.validityMonths ?? selectedProduct?.validityMonths ?? validityMonthsValue;
+  const effectiveAmountKrw = paymentRequest ? rlusdToKrw(paymentRequest.totalAmount) : selectedProduct ? rlusdToKrw(selectedProduct.totalAmount) : amountValue;
+  const effectiveUnitPriceKrw = paymentRequest && effectiveUnitPrice ? rlusdToKrw(effectiveUnitPrice) : selectedProduct && effectiveUnitPrice ? rlusdToKrw(effectiveUnitPrice) : unitPriceValue;
   const prepaidEntryCount = getWholeUnitCount(effectiveAmountKrw, effectiveUnitPriceKrw);
   const isPrepaidDivisible = prepaidEntryCount !== null;
-  const canSubmit = selectedProduct ? true : escrowType === 'monthly'
+  const canSubmit = paymentRequest ? true : selectedProduct ? true : escrowType === 'monthly'
     ? amountValue > 0 && !!months
     : amountValue > 0 && unitPriceValue > 0 && !!validityMonths && isPrepaidDivisible;
   const payloadTotalAmount = effectiveEscrowType === 'prepaid' && effectiveUnitPrice && prepaidEntryCount
@@ -85,7 +86,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
       api.createEscrow({
         consumerId: userId!,
         businessId,
-        ...(selectedProduct ? { productId: selectedProduct.id } : {}),
+        ...(paymentRequest?.productId ? { productId: paymentRequest.productId } : selectedProduct ? { productId: selectedProduct.id } : {}),
         totalAmount: payloadTotalAmount,
         ...(effectiveEscrowType === 'monthly'
           ? { months: effectiveMonths }
@@ -138,6 +139,16 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           </View>
         </View>
 
+        {paymentRequest && (
+          <View style={styles.requestCard}>
+            <Text style={styles.requestEyebrow}>사업자가 만든 결제 QR</Text>
+            <Text style={styles.requestTitle}>QR 코드 {paymentRequest.code}</Text>
+            <Text style={styles.requestDesc}>
+              {businessName}에서 생성한 결제 내용입니다. 금액을 확인한 뒤 계좌 승인으로 보호 결제를 시작하세요.
+            </Text>
+          </View>
+        )}
+
         <View style={styles.protectionCard}>
           <Text style={styles.protectionEyebrow}>TrustPay 계좌 승인으로 결제</Text>
           <Text style={styles.protectionTitle}>카카오페이처럼 앱에서 승인하면 선불금이 보호됩니다</Text>
@@ -151,7 +162,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           </View>
         </View>
 
-        {!!products.length && (
+        {!isRequestCheckout && !!products.length && (
           <View style={styles.formCard}>
             <Text style={styles.sectionLabel}>등록 상품 선택</Text>
             {products.map((product) => {
@@ -196,7 +207,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           </View>
         )}
 
-        <View style={styles.formCard}>
+        {!isRequestCheckout && <View style={styles.formCard}>
           <View style={styles.typeRow}>
             {(['monthly', 'prepaid'] as EscrowType[]).map((type) => (
               <Pressable
@@ -267,7 +278,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
               </View>
             </>
           )}
-        </View>
+        </View>}
 
         <View style={styles.infoCard}>
           <Text style={styles.infoLabel}>{effectiveEscrowType === 'monthly' ? '월별 릴리즈 금액' : '보호 단위'}</Text>
@@ -342,6 +353,29 @@ const styles = StyleSheet.create({
     fontSize: font.size.lg,
     fontWeight: font.weight.semibold,
     color: colors.gray900,
+  },
+  requestCard: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  requestEyebrow: {
+    fontSize: font.size.xs,
+    color: colors.primary,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.xs,
+  },
+  requestTitle: {
+    fontSize: font.size.lg,
+    color: colors.gray900,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.xs,
+  },
+  requestDesc: {
+    fontSize: font.size.sm,
+    color: colors.gray600,
+    lineHeight: 20,
   },
   protectionCard: {
     backgroundColor: colors.white,

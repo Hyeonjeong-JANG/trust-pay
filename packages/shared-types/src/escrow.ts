@@ -110,6 +110,33 @@ export interface CreateEscrowRequest {
   validityMonths?: number;
 }
 
+export interface PaymentRequest {
+  id: string;
+  code: string;
+  businessId: string;
+  businessName: string;
+  businessCategory?: string | null;
+  productId?: string | null;
+  productName?: string | null;
+  totalAmount: number;
+  months?: number | null;
+  escrowType: EscrowType;
+  unitPrice?: number | null;
+  validityMonths?: number | null;
+  status: 'pending' | 'used' | 'expired';
+  createdAt: Date | string;
+}
+
+export interface CreatePaymentRequest {
+  businessId: string;
+  productId?: string;
+  totalAmount: number;
+  months?: number;
+  escrowType?: EscrowType;
+  unitPrice?: number;
+  validityMonths?: number;
+}
+
 export interface FinishEscrowRequest {
   entryMonth: number;
 }
