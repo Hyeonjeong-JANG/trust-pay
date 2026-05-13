@@ -18,7 +18,7 @@ import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, BusinessSummaryRowSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
-import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
+import { formatKrwFromRlusd, formatRlusd, krwToRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowRecord, EscrowEntry, ProductMenuItem } from '@prepaid-shield/shared-types';
 
@@ -31,12 +31,14 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
 ];
 
 type EscrowWithConsumer = EscrowRecord & { consumer?: { id: string; name: string } };
+type ChargeRequestPayload = { menuItemId: string } | { menuName: string; amount: number };
 
 export function BusinessDashboardScreen() {
   const userId = useAuthStore((s) => s.userId);
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [manualChargeAmounts, setManualChargeAmounts] = useState<Record<string, string>>({});
 
   const { data: dashboard, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['businessDashboard', userId],
@@ -67,8 +69,8 @@ export function BusinessDashboardScreen() {
   });
 
   const chargeRequestMutation = useMutation({
-    mutationFn: ({ escrowId, menuItemId }: { escrowId: string; menuItemId: string }) =>
-      api.createChargeRequest(escrowId, { menuItemId }),
+    mutationFn: ({ escrowId, payload }: { escrowId: string; payload: ChargeRequestPayload }) =>
+      api.createChargeRequest(escrowId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
       showSuccessToast('이용분 승인 요청 전송', '소비자 승인 대기 상태로 등록되었습니다.');
@@ -83,6 +85,18 @@ export function BusinessDashboardScreen() {
     refetch();
     refetchBalance();
   }, [refetch, refetchBalance]);
+
+  const submitManualChargeRequest = useCallback((escrowId: string) => {
+    const amount = krwToRlusd(manualChargeAmounts[escrowId] ?? '');
+    if (amount <= 0) {
+      showErrorToast('차감 요청 실패', '이용금액을 입력해주세요.');
+      return;
+    }
+    chargeRequestMutation.mutate({
+      escrowId,
+      payload: { menuName: '직접 입력 이용금액', amount },
+    });
+  }, [chargeRequestMutation, manualChargeAmounts]);
 
   const filteredEscrows = useMemo(() => {
     const all = (dashboard?.escrows ?? []) as EscrowWithConsumer[];
@@ -243,6 +257,30 @@ export function BusinessDashboardScreen() {
               <View style={styles.progressBarBg}>
                 <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
               </View>
+              {isPrepaid && (
+                <View style={styles.manualChargeBox}>
+                  <Text style={styles.manualChargeTitle}>이용금액 직접 입력</Text>
+                  <Text style={styles.manualChargeDesc}>
+                    실제 이용한 원화 금액을 입력하면 TrustPay가 RLUSD 보호 단위로 환산해 소비자 승인 요청을 보냅니다.
+                  </Text>
+                  <TextInput
+                    style={styles.manualChargeInput}
+                    placeholder="예: 67,500"
+                    placeholderTextColor={colors.gray400}
+                    keyboardType="number-pad"
+                    value={manualChargeAmounts[item.id] ?? ''}
+                    onChangeText={(value) => setManualChargeAmounts((current) => ({ ...current, [item.id]: value }))}
+                  />
+                  <TouchableOpacity
+                    style={[styles.manualChargeButton, chargeRequestMutation.isPending && styles.buttonDisabled]}
+                    onPress={() => submitManualChargeRequest(item.id)}
+                    disabled={chargeRequestMutation.isPending}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.manualChargeButtonText}>입력 금액 승인 요청</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
               {isPrepaid && !!item.product?.menuItems?.length && (
                 <View style={styles.menuRequestList}>
                   <Text style={styles.menuRequestTitle}>고객 이용분 승인 요청</Text>
@@ -250,7 +288,7 @@ export function BusinessDashboardScreen() {
                     <TouchableOpacity
                       key={menu.id}
                       style={[styles.menuRequestButton, chargeRequestMutation.isPending && styles.buttonDisabled]}
-                      onPress={() => chargeRequestMutation.mutate({ escrowId: item.id, menuItemId: menu.id })}
+                      onPress={() => chargeRequestMutation.mutate({ escrowId: item.id, payload: { menuItemId: menu.id } })}
                       disabled={chargeRequestMutation.isPending}
                       activeOpacity={0.8}
                     >
@@ -411,6 +449,40 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.5 },
   releaseButtonText: { color: colors.white, fontWeight: font.weight.semibold, fontSize: font.size.sm },
   releaseButtonSub: { color: 'rgba(255,255,255,0.75)', fontSize: font.size.xs, marginTop: 2 },
+  manualChargeBox: {
+    backgroundColor: colors.gray50,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  manualChargeTitle: {
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    color: colors.gray800,
+  },
+  manualChargeDesc: {
+    fontSize: font.size.xs,
+    color: colors.gray500,
+    lineHeight: 18,
+  },
+  manualChargeInput: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: Platform.OS === 'ios' ? spacing.md : spacing.sm,
+    fontSize: font.size.md,
+    color: colors.gray900,
+  },
+  manualChargeButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+  },
+  manualChargeButtonText: { color: colors.white, fontWeight: font.weight.semibold, fontSize: font.size.sm },
   menuRequestList: {
     marginTop: spacing.md,
     gap: spacing.sm,

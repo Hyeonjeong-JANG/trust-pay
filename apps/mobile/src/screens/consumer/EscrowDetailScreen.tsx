@@ -86,20 +86,6 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   });
   const escrow = data as EscrowWithRelations | undefined;
 
-  const cancelMutation = useMutation({
-    mutationFn: () => api.cancelEscrow(id),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['escrow', id] });
-      queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
-      queryClient.invalidateQueries({ queryKey: ['balance'] });
-      showSuccessToast('취소 완료', `${data.cancelled}건 환불됨`);
-    },
-    onError: (err: Error) => {
-      const apiErr = err as ApiError;
-      showErrorToast('취소 실패', apiErr.userMessage ?? err.message);
-    },
-  });
-
   const approveChargeMutation = useMutation({
     mutationFn: (requestId: string) => api.approveChargeRequest(requestId),
     onSuccess: () => {
@@ -127,13 +113,16 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
     },
   });
 
-  const handleCancel = () => {
+  const handleRefundReviewRequest = () => {
     Alert.alert(
-      '에스크로 취소',
-      '모든 대기 중인 항목이 환불됩니다. 계속하시겠습니까?',
+      '환불 검토 요청',
+      '즉시 에스크로를 취소하지 않습니다. 실제 결제액, 보너스 혜택, 사용분, 약관상 공제액을 확인한 뒤 환불 가능 금액을 산정합니다.',
       [
-        { text: '아니오', style: 'cancel' },
-        { text: '네, 취소합니다', style: 'destructive', onPress: () => cancelMutation.mutate() },
+        { text: '닫기', style: 'cancel' },
+        {
+          text: '요청 접수',
+          onPress: () => showSuccessToast('환불 검토 요청 접수', '약관과 사용 내역을 확인한 뒤 환불 가능 금액을 안내합니다.'),
+        },
       ],
     );
   };
@@ -360,16 +349,18 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
         }}
         ListFooterComponent={
           escrow.status === 'active' && pending > 0 ? (
-            <TouchableOpacity
-              style={[styles.cancelButton, cancelMutation.isPending && styles.buttonDisabled]}
-              onPress={handleCancel}
-              disabled={cancelMutation.isPending}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.cancelButtonText}>
-                {cancelMutation.isPending ? '취소 중...' : '에스크로 취소'}
+            <View style={styles.refundReviewCard}>
+              <Text style={styles.refundReviewDesc}>
+                실제 결제액, 보너스 혜택, 사용분 공제 후 환불 가능 금액을 산정합니다.
               </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.refundReviewButton}
+                onPress={handleRefundReviewRequest}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.refundReviewButtonText}>환불 검토 요청</Text>
+              </TouchableOpacity>
+            </View>
           ) : null
         }
         contentContainerStyle={styles.listContent}
@@ -615,13 +606,25 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     fontFamily: font.mono,
   },
-  cancelButton: {
-    backgroundColor: colors.danger,
+  refundReviewCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    marginTop: spacing.lg,
+    ...shadow.sm,
+  },
+  refundReviewDesc: {
+    fontSize: font.size.sm,
+    color: colors.gray600,
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
+  refundReviewButton: {
+    backgroundColor: colors.primary,
     paddingVertical: spacing.lg,
     borderRadius: radius.md,
     alignItems: 'center',
-    marginTop: spacing.lg,
   },
   buttonDisabled: { opacity: 0.5 },
-  cancelButtonText: { color: colors.white, fontSize: font.size.md, fontWeight: font.weight.semibold },
+  refundReviewButtonText: { color: colors.white, fontSize: font.size.md, fontWeight: font.weight.semibold },
 });

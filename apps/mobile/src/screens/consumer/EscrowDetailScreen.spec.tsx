@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EscrowDetailScreen } from './EscrowDetailScreen';
@@ -224,5 +225,47 @@ describe('EscrowDetailScreen', () => {
     await waitFor(() => {
       expect(api.approveChargeRequest).toHaveBeenCalledWith('charge-1');
     });
+  });
+
+  it('should request refund review without directly cancelling escrow entries', async () => {
+    const { api } = require('../../api/client');
+    const { showSuccessToast } = require('../../utils/toast');
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    api.getEscrow.mockResolvedValue({
+      id: 'e-prepaid-refund',
+      status: 'active',
+      escrowType: 'prepaid',
+      totalAmount: 300,
+      monthlyAmount: 10,
+      months: 30,
+      unitPrice: 10,
+      validityMonths: 6,
+      business: { name: '헤어살롱 루나' },
+      entries: [
+        { id: 'en-1', month: 1, amount: '10', status: 'released', finishAfter: 830607775, cancelAfter: 837000000 },
+        { id: 'en-2', month: 2, amount: '10', status: 'pending', finishAfter: 830607775, cancelAfter: 837000000 },
+      ],
+      chargeRequests: [],
+    });
+
+    const { findByText } = renderWithProviders(
+      <EscrowDetailScreen route={{ params: { id: 'e-prepaid-refund' } } as any} navigation={{} as any} />,
+    );
+
+    expect(await findByText('환불 검토 요청')).toBeTruthy();
+    expect(await findByText(/실제 결제액, 보너스 혜택, 사용분 공제 후 환불 가능 금액을 산정합니다/)).toBeTruthy();
+    fireEvent.press(await findByText('환불 검토 요청'));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      '환불 검토 요청',
+      expect.stringContaining('즉시 에스크로를 취소하지 않습니다'),
+      expect.any(Array),
+    );
+    const actions = alertSpy.mock.calls[0][2] as Array<{ text: string; onPress?: () => void }>;
+    actions[1].onPress?.();
+
+    expect(api.cancelEscrow).not.toHaveBeenCalled();
+    expect(showSuccessToast).toHaveBeenCalledWith('환불 검토 요청 접수', '약관과 사용 내역을 확인한 뒤 환불 가능 금액을 안내합니다.');
+    alertSpy.mockRestore();
   });
 });

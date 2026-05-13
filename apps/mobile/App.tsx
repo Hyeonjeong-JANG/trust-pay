@@ -139,7 +139,9 @@ function AppNavigator() {
 }
 
 export default function App() {
-  const hasHydrated = useAppStore((s) => s._hasHydrated);
+  const appHasHydrated = useAppStore((s) => s._hasHydrated);
+  const authHasHydrated = useAuthStore((s) => s._hasHydrated);
+  const hasHydrated = appHasHydrated && authHasHydrated;
 
   useEffect(() => {
     if (hasHydrated) {

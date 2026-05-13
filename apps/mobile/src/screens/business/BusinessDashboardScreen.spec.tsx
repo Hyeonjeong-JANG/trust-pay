@@ -54,7 +54,7 @@ describe('BusinessDashboardScreen', () => {
       ],
     });
 
-    const { findAllByText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
+    const { findAllByText, findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
 
     expect(await findByText(/EscrowFinish로 수령 가능한 월차/)).toBeTruthy();
     expect(await findByText('1월차 수령 가능 (₩135,000)')).toBeTruthy();
@@ -94,16 +94,21 @@ describe('BusinessDashboardScreen', () => {
       ],
     });
 
-    const { findAllByText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
+    const { findAllByText, findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
 
     expect(await findByText(/이미 보호 원장에 잠긴 이용권에서 이용분 차감 요청을 보냅니다/)).toBeTruthy();
+    expect(await findByText('이용금액 직접 입력')).toBeTruthy();
     expect(await findByText('고객 이용분 승인 요청')).toBeTruthy();
     expect(await findByText(/₩6,750\/회/)).toBeTruthy();
     expect((await findAllByText('5.00 RLUSD')).length).toBeGreaterThan(0);
-    fireEvent.press(await findByText('아메리카노 이용분 승인 요청 (₩6,750)'));
+    fireEvent.changeText(await findByPlaceholderText('예: 67,500'), '67500');
+    fireEvent.press(await findByText('입력 금액 승인 요청'));
 
     await waitFor(() => {
-      expect(api.createChargeRequest).toHaveBeenCalledWith('e-prepaid', { menuItemId: 'menu-americano' });
+      expect(api.createChargeRequest).toHaveBeenCalledWith('e-prepaid', {
+        menuName: '직접 입력 이용금액',
+        amount: 50,
+      });
       const { showSuccessToast } = require('../../utils/toast');
       expect(showSuccessToast).toHaveBeenCalledWith('이용분 승인 요청 전송', '소비자 승인 대기 상태로 등록되었습니다.');
     });

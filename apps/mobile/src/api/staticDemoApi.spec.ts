@@ -117,4 +117,19 @@ describe('static Demo API fixture', () => {
       '브런치 세트:15',
     ]);
   });
+
+  it('creates manual prepaid usage charge requests with business-entered amount', async () => {
+    const response = await callApi('POST', '/api/escrow/00000000-0000-4000-a000-000000000400/charge-requests', {
+      menuName: '직접 입력 이용금액',
+      amount: 10,
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.body).toMatchObject({
+      menuItemId: null,
+      menuName: '직접 입력 이용금액',
+      amount: 10,
+      status: 'pending_approval',
+    });
+  });
 });

@@ -657,6 +657,43 @@ describe('EscrowService', () => {
       expect(result.status).toBe('pending_approval');
     });
 
+    it('should create a manual business-entered charge request without a menu item', async () => {
+      prisma.escrow.findUnique.mockResolvedValue(prepaidEscrow);
+      prisma.chargeRequest.create.mockResolvedValue({
+        id: 'charge-manual',
+        escrowId: 'escrow-prepaid-1',
+        menuItemId: null,
+        menuName: '직접 입력 이용금액',
+        amount: 20,
+        status: 'pending_approval',
+        entryIds: JSON.stringify(['entry-1', 'entry-2']),
+      });
+
+      const result = await service.createChargeRequest(
+        'escrow-prepaid-1',
+        { menuName: '직접 입력 이용금액', amount: 20 },
+        businessUser,
+      );
+
+      expect(prisma.productMenuItem.findUnique).not.toHaveBeenCalled();
+      expect(prisma.chargeRequest.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          escrowId: 'escrow-prepaid-1',
+          consumerId: 'consumer-1',
+          businessId: 'business-1',
+          productId: 'product-salon',
+          menuItemId: null,
+          menuName: '직접 입력 이용금액',
+          amount: 20,
+          status: 'pending_approval',
+          entryIds: JSON.stringify(['entry-1', 'entry-2']),
+        }),
+        include: { menuItem: true, escrow: { include: { business: true, consumer: true } } },
+      });
+      expect(xrplService.finishEscrow).not.toHaveBeenCalled();
+      expect(result.status).toBe('pending_approval');
+    });
+
     it('should finish reserved entries only after consumer approval', async () => {
       prisma.chargeRequest.findUnique.mockResolvedValue({
         id: 'charge-1',

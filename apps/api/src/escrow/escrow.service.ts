@@ -7,6 +7,7 @@ import { Wallet } from 'xrpl';
 import type { EscrowResult } from '@prepaid-shield/xrpl-client';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import type { SessionUser } from '../common/session-token';
+import type { CreateChargeRequestInput } from '@prepaid-shield/validators';
 
 const MAX_PREPAID_ESCROW_ENTRIES = 50;
 const RESERVED_CHARGE_STATUSES = new Set(['pending_approval']);
@@ -248,7 +249,7 @@ export class EscrowService {
 
   async createChargeRequest(
     escrowId: string,
-    dto: { menuItemId: string },
+    dto: CreateChargeRequestInput,
     user: SessionUser,
   ) {
     const escrow = await this.prisma.escrow.findUnique({
@@ -263,17 +264,27 @@ export class EscrowService {
       throw new BadRequestException('진행 중인 이용권 에스크로만 차감 요청을 만들 수 있습니다');
     }
 
-    const menuItem = await this.prisma.productMenuItem.findUnique({
-      where: { id: dto.menuItemId },
-      include: { product: true },
-    });
-    if (!menuItem || !menuItem.isActive) throw new NotFoundException('Menu item not found');
-    if (menuItem.product.businessId !== escrow.businessId || menuItem.productId !== escrow.productId) {
-      throw new BadRequestException('메뉴가 해당 에스크로 상품에 속하지 않습니다');
+    let menuItem: any = null;
+    let requestedAmount: number;
+    let menuName: string;
+
+    if ('menuItemId' in dto) {
+      menuItem = await this.prisma.productMenuItem.findUnique({
+        where: { id: dto.menuItemId },
+        include: { product: true },
+      });
+      if (!menuItem || !menuItem.isActive) throw new NotFoundException('Menu item not found');
+      if (menuItem.product.businessId !== escrow.businessId || menuItem.productId !== escrow.productId) {
+        throw new BadRequestException('메뉴가 해당 에스크로 상품에 속하지 않습니다');
+      }
+      requestedAmount = Number(menuItem.amount);
+      menuName = menuItem.name;
+    } else {
+      requestedAmount = Number(dto.amount);
+      menuName = dto.menuName;
     }
 
     const unitAmount = Number(escrow.unitPrice ?? escrow.monthlyAmount);
-    const requestedAmount = Number(menuItem.amount);
     const requiredEntryCount = getWholeRatio(requestedAmount, unitAmount);
     if (requiredEntryCount === null) {
       throw new BadRequestException(`메뉴 금액은 ${unitAmount} RLUSD 단위로 나누어 떨어져야 합니다`);
@@ -301,8 +312,8 @@ export class EscrowService {
         consumerId: escrow.consumerId,
         businessId: escrow.businessId,
         productId: escrow.productId,
-        menuItemId: menuItem.id,
-        menuName: menuItem.name,
+        menuItemId: menuItem?.id ?? null,
+        menuName,
         amount: requestedAmount,
         status: 'pending_approval',
         entryIds: JSON.stringify(selectedEntryIds),

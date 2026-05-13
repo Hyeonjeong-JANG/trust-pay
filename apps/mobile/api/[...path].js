@@ -635,10 +635,18 @@ module.exports = async function handler(req, res) {
     const escrow = escrows.find((item) => item.id === parts[1]);
     if (!escrow) return send(res, 404, { message: 'Escrow not found' });
     const product = products.find((item) => item.id === escrow.productId);
-    const menuItem = product?.menuItems.find((item) => item.id === body.menuItemId);
-    if (!menuItem) return send(res, 404, { message: 'Menu item not found' });
+    const menuItem = body.menuItemId
+      ? product?.menuItems.find((item) => item.id === body.menuItemId)
+      : null;
+    if (body.menuItemId && !menuItem) return send(res, 404, { message: 'Menu item not found' });
 
-    const requiredEntryCount = menuItem.amount / escrow.monthlyAmount;
+    const requestAmount = Number(menuItem?.amount ?? body.amount);
+    const requestMenuName = menuItem?.name ?? body.menuName;
+    if (!requestMenuName || !Number.isFinite(requestAmount) || requestAmount <= 0) {
+      return send(res, 400, { message: '차감 요청 금액을 확인해주세요' });
+    }
+
+    const requiredEntryCount = requestAmount / escrow.monthlyAmount;
     const reservedEntryIds = new Set(
       chargeRequests
         .filter((item) => item.escrowId === escrow.id && item.status === 'pending_approval')
@@ -656,9 +664,9 @@ module.exports = async function handler(req, res) {
       consumerId: escrow.consumerId,
       businessId: escrow.businessId,
       productId: escrow.productId,
-      menuItemId: menuItem.id,
-      menuName: menuItem.name,
-      amount: menuItem.amount,
+      menuItemId: menuItem?.id ?? null,
+      menuName: requestMenuName,
+      amount: requestAmount,
       status: 'pending_approval',
       entryIds: JSON.stringify(selectedEntryIds),
       requestedAt: new Date().toISOString(),

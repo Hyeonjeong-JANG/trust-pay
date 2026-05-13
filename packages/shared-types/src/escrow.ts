@@ -114,9 +114,9 @@ export interface FinishEscrowRequest {
   entryMonth: number;
 }
 
-export interface CreateChargeRequest {
-  menuItemId: string;
-}
+export type CreateChargeRequest =
+  | { menuItemId: string }
+  | { menuName: string; amount: number };
 
 export interface CancelEscrowRequest {
   escrowId: string;

@@ -12,7 +12,7 @@ import { EscrowService } from './escrow.service';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import { FinishEscrowDto } from './dto/finish-escrow.dto';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
-import { createChargeRequestSchema, createEscrowSchema, finishEscrowSchema } from '@prepaid-shield/validators';
+import { createChargeRequestSchema, createEscrowSchema, finishEscrowSchema, type CreateChargeRequestInput } from '@prepaid-shield/validators';
 import { AuthGuard } from '../common/auth.guard';
 
 @Controller('escrow')
@@ -39,7 +39,7 @@ export class EscrowController {
   @Post(':id/charge-requests')
   createChargeRequest(
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(createChargeRequestSchema)) dto: { menuItemId: string },
+    @Body(new ZodValidationPipe(createChargeRequestSchema)) dto: CreateChargeRequestInput,
     @Req() req: any,
   ) {
     return this.escrowService.createChargeRequest(id, dto, req.user);

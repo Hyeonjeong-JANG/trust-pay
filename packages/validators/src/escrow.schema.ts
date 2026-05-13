@@ -75,9 +75,15 @@ export const finishEscrowSchema = z.object({
   entryMonth: z.number().int().min(1),
 });
 
-export const createChargeRequestSchema = z.object({
-  menuItemId: z.string().uuid(),
-});
+export const createChargeRequestSchema = z.union([
+  z.object({
+    menuItemId: z.string().uuid(),
+  }),
+  z.object({
+    menuName: z.string().min(1).max(100),
+    amount: z.number().positive('Amount must be positive').max(100_000_000, 'Amount exceeds maximum'),
+  }),
+]);
 
 export const cancelEscrowSchema = z.object({
   escrowId: z.string().uuid(),
