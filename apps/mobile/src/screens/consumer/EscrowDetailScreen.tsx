@@ -161,7 +161,13 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   const settledChargeRequests = chargeHistory.filter((request) => request.status === 'settled');
   const settledChargeAmount = settledChargeRequests.reduce((sum, request) => sum + Number(request.amount), 0);
   const settledChargeCount = settledChargeRequests.length;
-  const prepaidUsedAmount = isPrepaid && settledChargeAmount > 0 ? settledChargeAmount : releasedAmount;
+  const prepaidUsedAmount = isPrepaid
+    ? settledChargeAmount > 0
+      ? settledChargeAmount
+      : escrow.status === 'cancelled'
+        ? releasedAmount
+        : 0
+    : releasedAmount;
   const prepaidRemainingAmount = Math.max(Number(escrow.totalAmount) - prepaidUsedAmount - refundedAmount, 0);
   const progressPct = isPrepaid
     ? Number(escrow.totalAmount) > 0 ? (prepaidUsedAmount / Number(escrow.totalAmount)) * 100 : 0
@@ -172,15 +178,9 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
       : `사용 ${formatKrwFromRlusd(prepaidUsedAmount)} · 잔액 ${formatKrwFromRlusd(prepaidRemainingAmount)} · 차감 ${settledChargeCount}건`
     : `${released}개월 정산 완료 · ${pending}개월 예정${refunded > 0 ? ` · ${refunded}개월 환불` : ''}`;
   const sectionTitle = isPrepaid
-    ? chargeHistory.length > 0
-      ? '차감 내역'
-      : escrow.status === 'cancelled'
-        ? 'XRPL 원장 상세'
-        : '보호 원장 내역'
+    ? '차감 내역'
     : '월별 내역';
-  const listData: Array<EscrowEntry | ChargeRequest> = isPrepaid && chargeHistory.length > 0
-    ? chargeHistory
-    : escrow.entries;
+  const listData: Array<EscrowEntry | ChargeRequest> = isPrepaid ? chargeHistory : escrow.entries;
 
   return (
     <View style={styles.container}>
@@ -338,9 +338,9 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                   <Text style={styles.entryMonthText}>{item.month}</Text>
                 </View>
                 <View style={styles.entryInfo}>
-                    <Text style={styles.entryMonth}>{isPrepaid ? `보호 원장 항목 ${item.month}` : `${item.month}월차`}</Text>
+                    <Text style={styles.entryMonth}>{item.month}월차</Text>
                   <Text style={styles.entryDate}>
-                    {isPrepaid ? '만료' : '정산 가능일'}: {rippleTimeToDate(isPrepaid ? item.cancelAfter : item.finishAfter)}
+                    정산 가능일: {rippleTimeToDate(item.finishAfter)}
                   </Text>
                 </View>
                 <View style={[styles.entryBadge, { backgroundColor: entryStyle.bg }]}>
@@ -361,6 +361,14 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
             </View>
           );
         }}
+        ListEmptyComponent={
+          isPrepaid ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyTitle}>아직 차감 내역이 없습니다</Text>
+              <Text style={styles.emptyDesc}>사업자가 실제 사용금액을 요청하면 여기에 표시됩니다</Text>
+            </View>
+          ) : null
+        }
         ListFooterComponent={
           escrow.status === 'active' && pending > 0 ? (
             <View style={styles.refundReviewCard}>
@@ -470,6 +478,16 @@ const styles = StyleSheet.create({
     color: colors.gray900,
     marginBottom: spacing.md,
   },
+  emptyContainer: {
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    padding: spacing.xl,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    ...shadow.sm,
+  },
+  emptyTitle: { fontSize: font.size.md, fontWeight: font.weight.bold, color: colors.gray800 },
+  emptyDesc: { fontSize: font.size.sm, color: colors.gray500, textAlign: 'center', marginTop: spacing.xs, lineHeight: 20 },
   chargeRequestCard: {
     backgroundColor: colors.primaryLight,
     borderRadius: radius.lg,

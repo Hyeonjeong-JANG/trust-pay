@@ -62,7 +62,7 @@ describe('BusinessEscrowDetailScreen', () => {
     expect(await findByText(/원장 증빙: MONTH_1_TX/)).toBeTruthy();
   });
 
-  it('should show prepaid validity and usage units for the merchant', async () => {
+  it('should show prepaid validity and hide internal ledger units for the merchant', async () => {
     const { api } = require('../../api/client');
     api.getEscrow.mockResolvedValue({
       id: 'e-prepaid-business',
@@ -82,14 +82,17 @@ describe('BusinessEscrowDetailScreen', () => {
       ],
     });
 
-    const { findByText } = renderWithProviders(
+    const { findByText, queryByText } = renderWithProviders(
       <BusinessEscrowDetailScreen route={{ params: { id: 'e-prepaid-business' } } as any} navigation={{} as any} />,
     );
 
     expect(await findByText('고객 이서연')).toBeTruthy();
     expect(await findByText(/사용기한 2026\. 5\. 13\. ~ 2026\. 8\. 13\./)).toBeTruthy();
-    expect(await findByText('보호 원장 내역')).toBeTruthy();
-    expect(await findByText('보호 원장 항목 1')).toBeTruthy();
+    expect(await findByText('차감 내역')).toBeTruthy();
+    expect(await findByText('아직 차감 내역이 없습니다')).toBeTruthy();
+    expect(queryByText('보호 원장 내역')).toBeNull();
+    expect(queryByText('보호 원장 항목 1')).toBeNull();
+    expect(queryByText(/만료:/)).toBeNull();
   });
 
   it('should send prepaid charge requests from the detail screen using a selected menu', async () => {

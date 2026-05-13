@@ -109,23 +109,26 @@ describe('EscrowDetailScreen', () => {
       validityMonths: 3,
       business: { name: '강남 블루보틀' },
       entries: [
-        { id: 'en-1', month: 1, amount: '5', status: 'released', finishAfter: 830607775, cancelAfter: 837000000, txHash: 'PREPAID1' },
+        { id: 'en-1', month: 1, amount: '5', status: 'pending', finishAfter: 830607775, cancelAfter: 837000000, txHash: 'PREPAID1' },
         { id: 'en-2', month: 2, amount: '5', status: 'pending', finishAfter: 830607775, cancelAfter: 837000000 },
       ],
     });
 
-    const { findByText, findAllByText, queryByText } = renderWithProviders(
+    const { findAllByText, findByText, queryByText } = renderWithProviders(
       <EscrowDetailScreen route={{ params: { id: 'e-prepaid' } } as any} navigation={{} as any} />,
     );
 
     expect(await findByText('잔액')).toBeTruthy();
-    expect(await findByText('₩195,750')).toBeTruthy();
+    expect((await findAllByText('₩202,500')).length).toBeGreaterThan(0);
     expect(await findByText(/사용기한 2026\. 4\. 27\. ~ 2026\. 7\. 10\./)).toBeTruthy();
-    expect(await findByText('보호 원장 내역')).toBeTruthy();
-    expect(await findByText('보호 원장 항목 1')).toBeTruthy();
+    expect(await findByText('차감 내역')).toBeTruthy();
+    expect(await findByText('아직 차감 내역이 없습니다')).toBeTruthy();
+    expect(queryByText('보호 원장 내역')).toBeNull();
+    expect(queryByText('보호 원장 항목 1')).toBeNull();
+    expect(queryByText(/만료:/)).toBeNull();
+    expect(queryByText(/원장 증빙: PREPAID1/)).toBeNull();
     expect(queryByText('이용 단위')).toBeNull();
     expect(queryByText('이용 단위 내역')).toBeNull();
-    expect(await findAllByText(/만료:/)).toHaveLength(2);
   });
 
   it('should show prepaid menu charge history instead of raw same-priced entry rounds', async () => {
@@ -184,6 +187,8 @@ describe('EscrowDetailScreen', () => {
     expect((await findAllByText('15.00 RLUSD')).length).toBeGreaterThan(0);
     expect(await findByText(/사용기한 2026\. 4\. 27\. ~ 2026\. 7\. 10\./)).toBeTruthy();
     expect(await findByText(/원장 증빙: TX_AMERICANO/)).toBeTruthy();
+    expect(queryByText('보호 원장 항목 1')).toBeNull();
+    expect(queryByText(/원장 증빙: TX_UNIT_1/)).toBeNull();
     expect(queryByText('1회차')).toBeNull();
     expect(queryByText('150 RLUSD')).toBeNull();
   });
@@ -216,8 +221,10 @@ describe('EscrowDetailScreen', () => {
     expect(await findByText('사용 ₩135,000')).toBeTruthy();
     expect(await findByText('환불 ₩405,000')).toBeTruthy();
     expect(await findByText('환불 완료 ₩405,000')).toBeTruthy();
-    expect(await findByText('XRPL 원장 상세')).toBeTruthy();
-    expect(await findByText(/원장 증빙: USED_UNIT/)).toBeTruthy();
+    expect(await findByText('차감 내역')).toBeTruthy();
+    expect(queryByText('XRPL 원장 상세')).toBeNull();
+    expect(queryByText(/원장 증빙: USED_UNIT/)).toBeNull();
+    expect(queryByText('보호 원장 항목 1')).toBeNull();
     expect(queryByText('이용 단위 내역')).toBeNull();
   });
 

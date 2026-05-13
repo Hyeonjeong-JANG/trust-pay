@@ -12,6 +12,7 @@ import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import { SummaryCardSkeleton, TimelineEntrySkeleton } from '../../components/Skeleton';
+import { formatKrwFromRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowEntry, EscrowRecord } from '@prepaid-shield/shared-types';
 import type { ConsumerTabProps } from '../../navigation/types';
@@ -28,9 +29,7 @@ interface ScheduleItem {
 
 interface PrepaidSummary {
   escrow: EscrowWithBusiness;
-  total: number;
-  remaining: number;
-  expiresAt: string;
+  remainingAmount: number;
 }
 
 const RIPPLE_EPOCH = 946684800;
@@ -103,13 +102,19 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
     return (escrows as EscrowWithBusiness[])
       .filter((escrow) => escrow.status === 'active' && escrow.escrowType === 'prepaid')
       .map((escrow) => {
-        const pendingEntries = escrow.entries.filter((entry) => entry.status === 'pending');
-        const expiry = pendingEntries[0]?.cancelAfter ?? escrow.entries[0]?.cancelAfter;
+        const settledChargeAmount = escrow.chargeRequests
+          ?.filter((request) => request.status === 'settled')
+          .reduce((sum, request) => sum + Number(request.amount), 0) ?? 0;
+        const releasedEntryAmount = escrow.entries
+          .filter((entry) => entry.status === 'released')
+          .reduce((sum, entry) => sum + Number(entry.amount), 0);
+        const refundedEntryAmount = escrow.entries
+          .filter((entry) => entry.status === 'refunded')
+          .reduce((sum, entry) => sum + Number(entry.amount), 0);
+        const usedAmount = settledChargeAmount > 0 ? settledChargeAmount : releasedEntryAmount;
         return {
           escrow,
-          total: escrow.entries.length || escrow.months,
-          remaining: pendingEntries.length,
-          expiresAt: expiry ? formatDate(rippleTimeToDate(expiry)) : '-',
+          remainingAmount: Math.max(Number(escrow.totalAmount) - usedAmount - refundedEntryAmount, 0),
         };
       });
   }, [escrows]);
@@ -163,10 +168,10 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
             </View>
             {prepaidSummaries.length > 0 && (
               <View style={styles.prepaidCard}>
-                <Text style={styles.prepaidTitle}>이용권 잔여</Text>
+                <Text style={styles.prepaidTitle}>금액권 잔액</Text>
                 {prepaidSummaries.map((item) => (
                   <Text key={item.escrow.id} style={styles.prepaidText}>
-                    {item.escrow.business?.name ?? '사업자'} - {item.remaining}/{item.total}회 남음, 만료: {item.expiresAt}
+                    {item.escrow.business?.name ?? '사업자'} - 잔액 {formatKrwFromRlusd(item.remainingAmount)}
                   </Text>
                 ))}
               </View>

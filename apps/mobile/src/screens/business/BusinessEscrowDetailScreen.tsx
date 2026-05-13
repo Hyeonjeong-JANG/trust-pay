@@ -19,7 +19,7 @@ import { formatKrwFromRlusd, formatRlusd, krwToRlusd } from '../../utils/money';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { colors, font, radius, shadow, spacing } from '../../theme';
 import type { ScreenProps } from '../../navigation/types';
-import type { CreateChargeRequest, EscrowEntry, EscrowRecord, ProductMenuItem } from '@prepaid-shield/shared-types';
+import type { ChargeRequest, CreateChargeRequest, EscrowEntry, EscrowRecord, ProductMenuItem } from '@prepaid-shield/shared-types';
 
 type EscrowWithRelations = EscrowRecord & {
   business?: { name: string };
@@ -40,6 +40,10 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   pending: { bg: colors.entry.pendingBg, text: colors.entry.pending },
   released: { bg: colors.entry.releasedBg, text: colors.entry.released },
   refunded: { bg: colors.entry.refundedBg, text: colors.entry.refunded },
+  pending_approval: { bg: colors.entry.pendingBg, text: colors.entry.pending },
+  settled: { bg: colors.entry.releasedBg, text: colors.entry.released },
+  rejected: { bg: colors.entry.refundedBg, text: colors.entry.refunded },
+  expired: { bg: colors.entry.refundedBg, text: colors.entry.refunded },
   active: { bg: colors.escrow.activeBg, text: colors.escrow.active },
   completed: { bg: colors.escrow.completedBg, text: colors.escrow.completed },
   cancelled: { bg: colors.escrow.cancelledBg, text: colors.escrow.cancelled },
@@ -49,6 +53,10 @@ const STATUS_KO: Record<string, string> = {
   pending: '대기',
   released: '정산 완료',
   refunded: '환불됨',
+  pending_approval: '승인 대기',
+  settled: '정산 완료',
+  rejected: '거절됨',
+  expired: '만료됨',
   active: '진행중',
   completed: '완료',
   cancelled: '취소됨',
@@ -78,10 +86,13 @@ function getPrepaidUsageRange(escrow: EscrowWithRelations): string | null {
   return getEntryUsageRange(escrow.entries);
 }
 
-function getEntryTitle(isPrepaid: boolean, entry: EscrowEntry): string {
-  if (isPrepaid) return `보호 원장 항목 ${entry.month}`;
+function getEntryTitle(entry: EscrowEntry): string {
   const suffix = entry.status === 'released' ? '정산 완료' : entry.status === 'refunded' ? '환불' : '정산 예정';
   return `${entry.month}월차 ${suffix}`;
+}
+
+function isChargeRequest(item: EscrowEntry | ChargeRequest): item is ChargeRequest {
+  return 'menuName' in item;
 }
 
 export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscrowDetail'>) {
@@ -151,6 +162,8 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
     ? `사용 ${formatKrwFromRlusd(prepaidUsedAmount)} · 잔액 ${formatKrwFromRlusd(prepaidRemainingAmount)}${refunded > 0 ? ` · 환불 ${refunded}건` : ''}`
     : `${released}개월 정산 완료 · ${pending}개월 예정${refunded > 0 ? ` · ${refunded}개월 환불` : ''}`;
   const localMenus = escrow.businessId ? menusByBusinessId[escrow.businessId] ?? [] : [];
+  const chargeHistory = escrow.chargeRequests ?? [];
+  const listData: Array<EscrowEntry | ChargeRequest> = isPrepaid ? chargeHistory : entries;
   const chargeMenuOptions: ChargeMenuOption[] = [
     ...((escrow.product?.menuItems ?? []).map((menu: ProductMenuItem) => ({
       id: menu.id,
@@ -195,7 +208,7 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
   return (
     <View style={styles.container}>
       <FlatList
-        data={entries}
+        data={listData}
         keyExtractor={(item) => item.id}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />
@@ -328,10 +341,45 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                 )}
               </View>
             )}
-            <Text style={styles.sectionTitle}>{isPrepaid ? '보호 원장 내역' : '월별 정산 내역'}</Text>
+            <Text style={styles.sectionTitle}>{isPrepaid ? '차감 내역' : '월별 정산 내역'}</Text>
           </>
         }
         renderItem={({ item }) => {
+          if (isChargeRequest(item)) {
+            const requestStyle = STATUS_STYLE[item.status] ?? STATUS_STYLE.refunded;
+            const approvedDate = isoToDate(item.approvedAt);
+            const settledDate = isoToDate(item.settledAt);
+            return (
+              <View style={styles.entryCard}>
+                <View style={styles.entryHeader}>
+                  <View style={styles.entryMonthCircle}>
+                    <Text style={styles.entryMonthText}>✓</Text>
+                  </View>
+                  <View style={styles.entryInfo}>
+                    <Text style={styles.entryTitle}>{item.menuName} {formatKrwFromRlusd(item.amount)}</Text>
+                    <Text style={styles.entryDate}>
+                      {approvedDate ? `승인: ${approvedDate}` : `요청: ${isoToDate(item.requestedAt) ?? '-'}`}
+                      {settledDate ? ` · 정산: ${settledDate}` : ''}
+                    </Text>
+                  </View>
+                  <View style={[styles.entryBadge, { backgroundColor: requestStyle.bg }]}>
+                    <Text style={[styles.entryBadgeText, { color: requestStyle.text }]}>
+                      {STATUS_KO[item.status] ?? item.status}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.entryBottom}>
+                  <Text style={styles.entryAmount}>{formatRlusd(item.amount)}</Text>
+                  {item.txHash && (
+                    <Text style={styles.txHash} numberOfLines={1}>
+                      정산 증빙: {item.txHash}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            );
+          }
+
           const entryStyle = STATUS_STYLE[item.status] ?? STATUS_STYLE.refunded;
           return (
             <View style={styles.entryCard}>
@@ -340,9 +388,9 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                   <Text style={styles.entryMonthText}>{item.month}</Text>
                 </View>
                 <View style={styles.entryInfo}>
-                  <Text style={styles.entryTitle}>{getEntryTitle(isPrepaid, item)}</Text>
+                  <Text style={styles.entryTitle}>{getEntryTitle(item)}</Text>
                   <Text style={styles.entryDate}>
-                    {isPrepaid ? '만료' : '정산 가능일'}: {rippleTimeToDate(isPrepaid ? item.cancelAfter : item.finishAfter)}
+                    정산 가능일: {rippleTimeToDate(item.finishAfter)}
                   </Text>
                 </View>
                 <View style={[styles.entryBadge, { backgroundColor: entryStyle.bg }]}> 
@@ -365,8 +413,8 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
         }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>정산 단위가 없습니다</Text>
-            <Text style={styles.emptyDesc}>손님 승인 후 정산 일정이 표시됩니다</Text>
+            <Text style={styles.emptyTitle}>{isPrepaid ? '아직 차감 내역이 없습니다' : '정산 단위가 없습니다'}</Text>
+            <Text style={styles.emptyDesc}>{isPrepaid ? '실제 사용금액 차감 요청을 보내면 여기에 표시됩니다' : '손님 승인 후 정산 일정이 표시됩니다'}</Text>
           </View>
         }
         contentContainerStyle={styles.listContent}
