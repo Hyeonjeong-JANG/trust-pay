@@ -150,9 +150,11 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
               <Text style={styles.requestAmountText}>
                 결제 금액 {formatKrwFromRlusd(paymentRequest.paymentAmount ?? paymentRequest.totalAmount)}
               </Text>
-              <Text style={styles.requestAmountText}>
-                실제 충전 금액 {formatKrwFromRlusd(paymentRequest.totalAmount)}
-              </Text>
+              {paymentRequest.paymentModel === 'voucher' && (
+                <Text style={styles.requestAmountText}>
+                  실제 충전 금액 {formatKrwFromRlusd(paymentRequest.totalAmount)}
+                </Text>
+              )}
             </View>
             <Text style={styles.requestSettlementText}>
               {paymentRequest.paymentModel === 'voucher'

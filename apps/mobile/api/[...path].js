@@ -373,6 +373,12 @@ function createPaymentRequest(body) {
   const product = body.productId ? products.find((item) => item.id === body.productId) : null;
   const escrowType = product?.escrowType || body.escrowType || 'monthly';
   const totalAmount = product?.totalAmount || Number(body.totalAmount);
+  const months = product?.months || body.months || null;
+  const monthlyAmount = product?.monthlyAmount || body.monthlyAmount || (
+    escrowType === 'monthly' && Number.isFinite(totalAmount) && Number(months) > 0
+      ? Math.round((totalAmount / Number(months)) * 1_000_000) / 1_000_000
+      : null
+  );
   const request = {
     id: `payment-request-${Date.now()}`,
     code: `TP-${String(paymentRequests.length + 1).padStart(6, '0')}`,
@@ -384,8 +390,8 @@ function createPaymentRequest(body) {
     paymentModel: body.paymentModel || (escrowType === 'prepaid' ? 'voucher' : 'monthly'),
     paymentAmount: product?.totalAmount || body.paymentAmount || totalAmount,
     totalAmount,
-    monthlyAmount: product?.monthlyAmount || body.monthlyAmount || null,
-    months: product?.months || body.months || null,
+    monthlyAmount,
+    months,
     escrowType,
     unitPrice: product?.unitPrice || body.unitPrice || null,
     validityMonths: product?.validityMonths || body.validityMonths || null,

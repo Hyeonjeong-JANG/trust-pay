@@ -71,14 +71,14 @@ describe('BusinessDashboardScreen', () => {
     });
   });
 
-  it('should create a monthly merchant QR with paid amount, protected amount, and fixed monthly settlement', async () => {
+  it('should create a monthly merchant QR from only amount and month count', async () => {
     const { api } = require('../../api/client');
     api.createPaymentRequest.mockResolvedValue({
       id: 'request-1',
       code: 'TP-123456',
       businessId: 'business-1',
       businessName: '파워짐',
-      paymentAmount: 500,
+      paymentAmount: 600,
       totalAmount: 600,
       monthlyAmount: 100,
       months: 6,
@@ -93,22 +93,21 @@ describe('BusinessDashboardScreen', () => {
       escrows: [],
     });
 
-    const { findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
+    const { findByPlaceholderText, findByText, queryByText, queryByPlaceholderText } = renderWithProviders(<BusinessDashboardScreen />);
 
     expect(await findByText('결제 QR 만들기')).toBeTruthy();
     expect(await findByText('결제 금액')).toBeTruthy();
-    expect(await findByText('실제 충전 금액')).toBeTruthy();
-    expect(await findByText('매월 정산액')).toBeTruthy();
-    fireEvent.changeText(await findByPlaceholderText('예: 675,000'), '675000');
     fireEvent.changeText(await findByPlaceholderText('예: 810,000'), '810000');
-    fireEvent.changeText(await findByPlaceholderText('예: 135,000'), '135000');
+    expect(queryByText('실제 충전 금액')).toBeNull();
+    expect(queryByText('매월 정산액')).toBeNull();
+    expect(queryByPlaceholderText('예: 135,000')).toBeNull();
     fireEvent.changeText(await findByPlaceholderText('예: 6'), '6');
     fireEvent.press(await findByText('QR 결제 만들기'));
 
     await waitFor(() => {
       expect(api.createPaymentRequest).toHaveBeenCalledWith({
         businessId: 'business-1',
-        paymentAmount: 500,
+        paymentAmount: 600,
         totalAmount: 600,
         monthlyAmount: 100,
         months: 6,
@@ -142,10 +141,15 @@ describe('BusinessDashboardScreen', () => {
     const { findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
 
     fireEvent.press(await findByText('기간 금액권'));
+    expect(await findByText('실제 충전 금액')).toBeTruthy();
     fireEvent.changeText(await findByPlaceholderText('예: 90,000'), '90000');
     fireEvent.changeText(await findByPlaceholderText('예: 100,000'), '100000');
-    fireEvent.changeText(await findByPlaceholderText('예: 2026-05-13'), '2026-05-13');
-    fireEvent.changeText(await findByPlaceholderText('예: 2026-08-13'), '2026-08-13');
+    expect((await findByPlaceholderText('예: 2026-05-13')).props.type).toBe('date');
+    expect((await findByPlaceholderText('예: 2026-08-13')).props.type).toBe('date');
+    expect((await findByPlaceholderText('예: 2026-05-13')).props.inputMode).toBe('none');
+    expect((await findByPlaceholderText('예: 2026-08-13')).props.inputMode).toBe('none');
+    fireEvent.changeText(await findByPlaceholderText('예: 2026-05-13'), '20260513');
+    fireEvent.changeText(await findByPlaceholderText('예: 2026-08-13'), '20260813');
     fireEvent.press(await findByText('QR 결제 만들기'));
 
     await waitFor(() => {

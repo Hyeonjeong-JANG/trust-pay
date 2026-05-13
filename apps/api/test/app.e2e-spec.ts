@@ -231,6 +231,47 @@ describe('TrustPay E2E', () => {
     });
   });
 
+  describe('POST /payment-requests — 사업자 QR 결제 생성', () => {
+    it('should create a business QR payment request and let a consumer resolve it', async () => {
+      const createRes = await request(app.getHttpServer())
+        .post('/payment-requests')
+        .set('Authorization', auth(businessToken))
+        .send({
+          businessId,
+          paymentAmount: 600,
+          totalAmount: 600,
+          months: 6,
+          paymentModel: 'monthly',
+          escrowType: 'monthly',
+        })
+        .expect(201);
+
+      expect(createRes.body).toMatchObject({
+        businessId,
+        businessName: '테스트카페',
+        paymentAmount: 600,
+        totalAmount: 600,
+        monthlyAmount: 100,
+        months: 6,
+        paymentModel: 'monthly',
+        escrowType: 'monthly',
+        status: 'pending',
+      });
+      expect(createRes.body.code).toMatch(/^TP-/);
+
+      const lookupRes = await request(app.getHttpServer())
+        .get(`/payment-requests?code=${createRes.body.code}`)
+        .set('Authorization', auth(consumerToken))
+        .expect(200);
+
+      expect(lookupRes.body).toMatchObject({
+        code: createRes.body.code,
+        businessId,
+        businessName: '테스트카페',
+      });
+    });
+  });
+
   // ─── 5. Create Escrow ───
   describe('POST /escrow — 에스크로 생성', () => {
     it('should create escrow with monthly entries', async () => {

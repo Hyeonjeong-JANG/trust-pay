@@ -42,6 +42,54 @@ function monthsBetweenDates(from: string, until: string): number {
   return Math.max(1, monthDiff || 1);
 }
 
+function normalizeDateInput(value: string): string {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length !== 8) return trimmed;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+}
+
+type DateInputProps = {
+  value: string;
+  placeholder: string;
+  onChangeText: (value: string) => void;
+};
+
+function DateInput({ value, placeholder, onChangeText }: DateInputProps) {
+  if (Platform.OS === 'web') {
+    return React.createElement('input', {
+      type: 'date',
+      value,
+      placeholder,
+      'aria-label': placeholder,
+      onChange: (event: React.ChangeEvent<HTMLInputElement>) => onChangeText(normalizeDateInput(event.target.value)),
+      onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (!['Tab', 'Shift', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+          event.preventDefault();
+        }
+      },
+      onPaste: (event: React.ClipboardEvent<HTMLInputElement>) => {
+        event.preventDefault();
+        onChangeText(normalizeDateInput(event.clipboardData.getData('text')));
+      },
+      style: StyleSheet.flatten([styles.manualChargeInput, styles.webDateInput]) as any,
+    });
+  }
+
+  return (
+    <TextInput
+      {...({ type: 'date' } as any)}
+      inputMode="none"
+      style={styles.manualChargeInput}
+      placeholder={placeholder}
+      placeholderTextColor={colors.gray400}
+      value={value}
+      onChangeText={(nextValue) => onChangeText(normalizeDateInput(nextValue))}
+    />
+  );
+}
+
 export function BusinessDashboardScreen() {
   const userId = useAuthStore((s) => s.userId);
   const queryClient = useQueryClient();
@@ -51,7 +99,6 @@ export function BusinessDashboardScreen() {
   const [qrPaymentModel, setQrPaymentModel] = useState<QrPaymentModel>('monthly');
   const [qrPaymentAmount, setQrPaymentAmount] = useState('');
   const [qrProtectedAmount, setQrProtectedAmount] = useState('');
-  const [qrMonthlyAmount, setQrMonthlyAmount] = useState('');
   const [qrMonths, setQrMonths] = useState('6');
   const [qrValidFrom, setQrValidFrom] = useState('');
   const [qrValidUntil, setQrValidUntil] = useState('');
@@ -88,9 +135,11 @@ export function BusinessDashboardScreen() {
   const paymentRequestMutation = useMutation({
     mutationFn: () => {
       const paymentAmount = krwToRlusd(qrPaymentAmount);
-      const totalAmount = krwToRlusd(qrProtectedAmount);
       if (qrPaymentModel === 'voucher') {
-        const validityMonths = monthsBetweenDates(qrValidFrom, qrValidUntil);
+        const totalAmount = krwToRlusd(qrProtectedAmount);
+        const validFrom = normalizeDateInput(qrValidFrom);
+        const validUntil = normalizeDateInput(qrValidUntil);
+        const validityMonths = monthsBetweenDates(validFrom, validUntil);
         return api.createPaymentRequest({
           businessId: userId!,
           paymentAmount,
@@ -99,16 +148,17 @@ export function BusinessDashboardScreen() {
           escrowType: 'prepaid',
           unitPrice: roundRlusd(totalAmount / 10),
           validityMonths,
-          validFrom: qrValidFrom,
-          validUntil: qrValidUntil,
+          validFrom,
+          validUntil,
         });
       }
+      const months = Number(qrMonths);
       return api.createPaymentRequest({
         businessId: userId!,
         paymentAmount,
-        totalAmount,
-        monthlyAmount: krwToRlusd(qrMonthlyAmount),
-        months: Number(qrMonths),
+        totalAmount: paymentAmount,
+        monthlyAmount: months > 0 ? roundRlusd(paymentAmount / months) : 0,
+        months,
         paymentModel: 'monthly',
         escrowType: 'monthly',
       });
@@ -142,15 +192,16 @@ export function BusinessDashboardScreen() {
 
   const submitPaymentRequest = useCallback(() => {
     const paymentAmount = krwToRlusd(qrPaymentAmount);
-    const totalAmount = krwToRlusd(qrProtectedAmount);
-    const isMonthlyReady = qrPaymentModel === 'monthly' && krwToRlusd(qrMonthlyAmount) > 0 && Number(qrMonths) > 0;
-    const isVoucherReady = qrPaymentModel === 'voucher' && monthsBetweenDates(qrValidFrom, qrValidUntil) > 0;
-    if (paymentAmount <= 0 || totalAmount <= 0 || (!isMonthlyReady && !isVoucherReady)) {
+    const isMonthlyReady = qrPaymentModel === 'monthly' && Number(qrMonths) > 0;
+    const isVoucherReady = qrPaymentModel === 'voucher'
+      && krwToRlusd(qrProtectedAmount) > 0
+      && monthsBetweenDates(normalizeDateInput(qrValidFrom), normalizeDateInput(qrValidUntil)) > 0;
+    if (paymentAmount <= 0 || (!isMonthlyReady && !isVoucherReady)) {
       showErrorToast('QR 생성 실패', '결제 금액, 실제 충전 금액, 정산 조건을 입력해주세요.');
       return;
     }
     paymentRequestMutation.mutate();
-  }, [paymentRequestMutation, qrMonthlyAmount, qrMonths, qrPaymentAmount, qrPaymentModel, qrProtectedAmount, qrValidFrom, qrValidUntil]);
+  }, [paymentRequestMutation, qrMonths, qrPaymentAmount, qrPaymentModel, qrProtectedAmount, qrValidFrom, qrValidUntil]);
 
   useEffect(() => {
     const escrows = (dashboard?.escrows ?? []) as EscrowWithConsumer[];
@@ -288,41 +339,17 @@ export function BusinessDashboardScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              <View style={styles.qrInputRow}>
-                <View style={styles.qrInputGroup}>
-                  <Text style={styles.qrInputLabel}>결제 금액</Text>
-                  <TextInput
-                    style={styles.manualChargeInput}
-                    placeholder={qrPaymentModel === 'monthly' ? '예: 675,000' : '예: 90,000'}
-                    placeholderTextColor={colors.gray400}
-                    keyboardType="number-pad"
-                    value={qrPaymentAmount}
-                    onChangeText={setQrPaymentAmount}
-                  />
-                </View>
-                <View style={styles.qrInputGroup}>
-                  <Text style={styles.qrInputLabel}>실제 충전 금액</Text>
-                  <TextInput
-                    style={styles.manualChargeInput}
-                    placeholder={qrPaymentModel === 'monthly' ? '예: 810,000' : '예: 100,000'}
-                    placeholderTextColor={colors.gray400}
-                    keyboardType="number-pad"
-                    value={qrProtectedAmount}
-                    onChangeText={setQrProtectedAmount}
-                  />
-                </View>
-              </View>
               {qrPaymentModel === 'monthly' ? (
                 <View style={styles.qrInputRow}>
                   <View style={styles.qrInputGroup}>
-                    <Text style={styles.qrInputLabel}>매월 정산액</Text>
+                    <Text style={styles.qrInputLabel}>결제 금액</Text>
                     <TextInput
                       style={styles.manualChargeInput}
-                      placeholder="예: 135,000"
+                      placeholder="예: 810,000"
                       placeholderTextColor={colors.gray400}
                       keyboardType="number-pad"
-                      value={qrMonthlyAmount}
-                      onChangeText={setQrMonthlyAmount}
+                      value={qrPaymentAmount}
+                      onChangeText={setQrPaymentAmount}
                     />
                   </View>
                   <View style={styles.qrMonthsGroup}>
@@ -338,28 +365,50 @@ export function BusinessDashboardScreen() {
                   </View>
                 </View>
               ) : (
-                <View style={styles.qrInputRow}>
-                  <View style={styles.qrInputGroup}>
-                    <Text style={styles.qrInputLabel}>사용 시작일</Text>
-                    <TextInput
-                      style={styles.manualChargeInput}
-                      placeholder="예: 2026-05-13"
-                      placeholderTextColor={colors.gray400}
-                      value={qrValidFrom}
-                      onChangeText={setQrValidFrom}
-                    />
+                <>
+                  <View style={styles.qrInputRow}>
+                    <View style={styles.qrInputGroup}>
+                      <Text style={styles.qrInputLabel}>결제 금액</Text>
+                      <TextInput
+                        style={styles.manualChargeInput}
+                        placeholder="예: 90,000"
+                        placeholderTextColor={colors.gray400}
+                        keyboardType="number-pad"
+                        value={qrPaymentAmount}
+                        onChangeText={setQrPaymentAmount}
+                      />
+                    </View>
+                    <View style={styles.qrInputGroup}>
+                      <Text style={styles.qrInputLabel}>실제 충전 금액</Text>
+                      <TextInput
+                        style={styles.manualChargeInput}
+                        placeholder="예: 100,000"
+                        placeholderTextColor={colors.gray400}
+                        keyboardType="number-pad"
+                        value={qrProtectedAmount}
+                        onChangeText={setQrProtectedAmount}
+                      />
+                    </View>
                   </View>
-                  <View style={styles.qrInputGroup}>
-                    <Text style={styles.qrInputLabel}>사용 종료일</Text>
-                    <TextInput
-                      style={styles.manualChargeInput}
-                      placeholder="예: 2026-08-13"
-                      placeholderTextColor={colors.gray400}
-                      value={qrValidUntil}
-                      onChangeText={setQrValidUntil}
-                    />
+                  <View style={styles.qrInputRow}>
+                    <View style={styles.qrInputGroup}>
+                      <Text style={styles.qrInputLabel}>사용 시작일</Text>
+                      <DateInput
+                        placeholder="예: 2026-05-13"
+                        value={qrValidFrom}
+                        onChangeText={setQrValidFrom}
+                      />
+                    </View>
+                    <View style={styles.qrInputGroup}>
+                      <Text style={styles.qrInputLabel}>사용 종료일</Text>
+                      <DateInput
+                        placeholder="예: 2026-08-13"
+                        value={qrValidUntil}
+                        onChangeText={setQrValidUntil}
+                      />
+                    </View>
                   </View>
-                </View>
+                </>
               )}
               <TouchableOpacity
                 style={[styles.manualChargeButton, paymentRequestMutation.isPending && styles.buttonDisabled]}
@@ -641,6 +690,11 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.semibold,
     marginBottom: spacing.xs,
   },
+  webDateInput: {
+    width: '100%',
+    boxSizing: 'border-box',
+    outlineStyle: 'none',
+  } as any,
   generatedQrBox: {
     flexDirection: 'row',
     alignItems: 'center',

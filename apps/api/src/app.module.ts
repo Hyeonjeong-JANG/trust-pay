@@ -5,6 +5,7 @@ import { ConsumerModule } from './consumer/consumer.module';
 import { EscrowModule } from './escrow/escrow.module';
 import { XrplModule } from './xrpl/xrpl.module';
 import { BusinessModule } from './business/business.module';
+import { PaymentRequestModule } from './payment-request/payment-request.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { CryptoService } from './common/crypto.service';
 import configuration from './config/configuration';
@@ -22,6 +23,7 @@ import configuration from './config/configuration';
     ConsumerModule,
     EscrowModule,
     BusinessModule,
+    PaymentRequestModule,
   ],
   providers: [CryptoService],
   exports: [CryptoService],
