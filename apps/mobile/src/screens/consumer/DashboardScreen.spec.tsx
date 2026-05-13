@@ -173,15 +173,14 @@ describe('ConsumerDashboardScreen', () => {
       },
     ]);
 
-    const { findByText } = renderWithProviders(
+    const { findByText, queryByText } = renderWithProviders(
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
     expect(await findByText('테스트카페')).toBeTruthy();
     expect(await findByText('월정액 정산')).toBeTruthy();
-    expect(await findByText('1/3개월 릴리즈됨')).toBeTruthy();
-    expect(await findByText('대기 보호금 ₩135,000,000')).toBeTruthy();
-    expect(await findByText('100,000.00 RLUSD')).toBeTruthy();
+    expect(await findByText('정산 ₩67,500,000 · 잔여 ₩135,000,000')).toBeTruthy();
+    expect(queryByText(/대기 보호금/)).toBeNull();
   });
 
   it('should render prepaid escrow progress by used and remaining amounts', async () => {

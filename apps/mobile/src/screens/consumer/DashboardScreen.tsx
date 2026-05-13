@@ -302,6 +302,11 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
           const fallbackMonthly = item.months > 0 ? item.totalAmount / item.months : 0;
           const totalEntries = item.entries.length || item.months;
           const prepaidAmounts = isPrepaid ? getPrepaidAmounts(item) : null;
+          const monthlyReleasedAmount = isPrepaid
+            ? 0
+            : item.entries
+                .filter((entry: EscrowEntry) => entry.status === 'released')
+                .reduce((sum, entry) => sum + Number(entry.amount ?? fallbackMonthly), 0);
           const monthlyPendingAmount = pendingEntries.reduce(
             (sum, entry) => sum + Number(entry.amount ?? fallbackMonthly),
             0,
@@ -336,15 +341,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
               {isPrepaid ? (
                 <Text style={styles.progress}>사용 {formatKrwFromRlusd(prepaidAmounts?.usedAmount ?? 0)} · 잔액 {formatKrwFromRlusd(prepaidAmounts?.remainingAmount ?? 0)}</Text>
               ) : (
-                <Text style={styles.progress}>{released}/{item.months}개월 릴리즈됨</Text>
-              )}
-              {!isPrepaid && monthlyPendingAmount > 0 && (
-                <>
-                  <Text style={styles.pendingProtect}>
-                    대기 보호금 {formatKrwFromRlusd(monthlyPendingAmount)}
-                  </Text>
-                  <Text style={styles.pendingProtectSub}>{formatRlusd(monthlyPendingAmount)}</Text>
-                </>
+                <Text style={styles.progress}>정산 {formatKrwFromRlusd(monthlyReleasedAmount)} · 잔여 {formatKrwFromRlusd(monthlyPendingAmount)}</Text>
               )}
               {pendingChargeCount > 0 && (
                 <Text style={styles.pendingApproval}>
@@ -634,17 +631,6 @@ const styles = StyleSheet.create({
     fontSize: font.size.sm,
     color: colors.gray400,
     marginTop: spacing.xs,
-  },
-  pendingProtect: {
-    fontSize: font.size.sm,
-    color: colors.primary,
-    fontWeight: font.weight.semibold,
-    marginTop: spacing.xs,
-  },
-  pendingProtectSub: {
-    fontSize: font.size.xs,
-    color: colors.gray400,
-    marginTop: 1,
   },
   pendingApproval: {
     fontSize: font.size.sm,
