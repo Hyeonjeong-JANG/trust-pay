@@ -3,6 +3,7 @@ import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { useAppStore } from '../store/app';
 import { formatKrwFromRlusd, formatRlusd } from '../utils/money';
 import { colors, font, radius, shadow, spacing } from '../theme';
 import type { BusinessDashboard, ChargeRequest, EscrowRecord } from '@prepaid-shield/shared-types';
@@ -58,18 +59,35 @@ export function buildBusinessRealtimeEvents(dashboard?: BusinessDashboard): Real
         }]
       : [];
     const chargeEvents = (escrow.chargeRequests ?? [])
-      .filter((request) => request.status === 'settled')
-      .map((request: ChargeRequest) => ({
-        id: `business-charge-${request.id}`,
-        title: '차감 정산 완료',
-        body: `${consumerName}님이 ${request.menuName} ${formatKrwFromRlusd(request.amount)} 차감을 승인했습니다.`,
-        detail: formatRlusd(request.amount),
-      }));
+      .flatMap((request: ChargeRequest) => {
+        if (request.status === 'settled') {
+          return [{
+            id: `business-charge-${request.id}`,
+            title: '차감 정산 완료',
+            body: `${consumerName}님이 ${request.menuName} ${formatKrwFromRlusd(request.amount)} 차감을 승인했습니다.`,
+            detail: formatRlusd(request.amount),
+          }];
+        }
+        if (request.status === 'rejected') {
+          return [{
+            id: `business-charge-rejected-${request.id}`,
+            title: '차감 요청 거절',
+            body: `${consumerName}님이 ${request.menuName} ${formatKrwFromRlusd(request.amount)} 차감 요청을 거절했습니다.`,
+            detail: formatRlusd(request.amount),
+          }];
+        }
+        return [];
+      });
     return [...escrowEvents, ...chargeEvents];
   });
 }
 
-function useRealtimeEventQueue(events: RealtimeEvent[], scopeKey: string) {
+function useRealtimeEventQueue(
+  events: RealtimeEvent[],
+  scopeKey: string,
+  seenIds: string[],
+  markSeen: (id: string) => void,
+) {
   const seenRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const scopeRef = useRef(scopeKey);
@@ -78,19 +96,22 @@ function useRealtimeEventQueue(events: RealtimeEvent[], scopeKey: string) {
   useEffect(() => {
     if (scopeRef.current !== scopeKey) {
       scopeRef.current = scopeKey;
-      seenRef.current = new Set();
+      seenRef.current = new Set(seenIds);
       initializedRef.current = false;
       setQueue([]);
     }
-  }, [scopeKey]);
+  }, [scopeKey, seenIds]);
+
+  useEffect(() => {
+    for (const id of seenIds) seenRef.current.add(id);
+  }, [seenIds]);
 
   useEffect(() => {
     if (!initializedRef.current) {
-      seenRef.current = new Set(events.map((event) => event.id));
+      seenRef.current = new Set([...seenIds, ...events.map((event) => event.id)]);
       initializedRef.current = true;
       return;
     }
-
     const nextEvents = events.filter((event) => !seenRef.current.has(event.id));
     if (nextEvents.length === 0) return;
 
@@ -99,15 +120,21 @@ function useRealtimeEventQueue(events: RealtimeEvent[], scopeKey: string) {
       notifySystem(event);
     }
     setQueue((current) => [...current, ...nextEvents]);
-  }, [events]);
+  }, [events, seenIds]);
 
-  const dismiss = () => setQueue((current) => current.slice(1));
+  const dismiss = () => setQueue((current) => {
+    const [dismissed, ...rest] = current;
+    if (dismissed) markSeen(dismissed.id);
+    return rest;
+  });
   return { activeEvent: queue[0], dismiss };
 }
 
 export function RealtimeNotificationCenter() {
   const role = useAuthStore((s) => s.role);
   const userId = useAuthStore((s) => s.userId);
+  const seenIds = useAppStore((s) => s.realtimeNotificationSeenIds);
+  const markSeen = useAppStore((s) => s.markRealtimeNotificationSeen);
 
   const { data: consumerEscrows } = useQuery({
     queryKey: ['consumerEscrows', userId],
@@ -128,7 +155,12 @@ export function RealtimeNotificationCenter() {
   const events = role === 'business'
     ? buildBusinessRealtimeEvents(businessDashboard)
     : buildConsumerRealtimeEvents((consumerEscrows ?? []) as EscrowWithBusiness[]);
-  const { activeEvent, dismiss } = useRealtimeEventQueue(events, `${role ?? 'none'}:${userId ?? 'none'}`);
+  const { activeEvent, dismiss } = useRealtimeEventQueue(
+    events,
+    `${role ?? 'none'}:${userId ?? 'none'}`,
+    seenIds,
+    markSeen,
+  );
 
   return (
     <Modal visible={!!activeEvent} transparent animationType="fade" onRequestClose={dismiss}>
