@@ -18,9 +18,10 @@ import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, BusinessSummaryRowSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
-import { formatKrwFromRlusd, formatRlusd, krwToRlusd, roundRlusd } from '../../utils/money';
+import { formatKrwFromRlusd, formatRlusd, krwToRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { EscrowRecord, EscrowEntry, ProductMenuItem, PaymentRequest } from '@prepaid-shield/shared-types';
+import type { EscrowRecord, EscrowEntry, ProductMenuItem } from '@prepaid-shield/shared-types';
+import type { BusinessTabProps } from '../../navigation/types';
 
 type StatusFilter = 'all' | 'active' | 'completed' | 'cancelled';
 const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
@@ -32,77 +33,13 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
 
 type EscrowWithConsumer = EscrowRecord & { consumer?: { id: string; name: string } };
 type ChargeRequestPayload = { menuItemId: string } | { menuName: string; amount: number };
-type QrPaymentModel = 'monthly' | 'voucher';
 
-function monthsBetweenDates(from: string, until: string): number {
-  const start = new Date(from);
-  const end = new Date(until);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return 0;
-  const monthDiff = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-  return Math.max(1, monthDiff || 1);
-}
-
-function normalizeDateInput(value: string): string {
-  const trimmed = value.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-  const digits = trimmed.replace(/\D/g, '');
-  if (digits.length !== 8) return trimmed;
-  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
-}
-
-type DateInputProps = {
-  value: string;
-  placeholder: string;
-  onChangeText: (value: string) => void;
-};
-
-function DateInput({ value, placeholder, onChangeText }: DateInputProps) {
-  if (Platform.OS === 'web') {
-    return React.createElement('input', {
-      type: 'date',
-      value,
-      placeholder,
-      'aria-label': placeholder,
-      onChange: (event: React.ChangeEvent<HTMLInputElement>) => onChangeText(normalizeDateInput(event.target.value)),
-      onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
-        if (!['Tab', 'Shift', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
-          event.preventDefault();
-        }
-      },
-      onPaste: (event: React.ClipboardEvent<HTMLInputElement>) => {
-        event.preventDefault();
-        onChangeText(normalizeDateInput(event.clipboardData.getData('text')));
-      },
-      style: StyleSheet.flatten([styles.manualChargeInput, styles.webDateInput]) as any,
-    });
-  }
-
-  return (
-    <TextInput
-      {...({ type: 'date' } as any)}
-      inputMode="none"
-      style={styles.manualChargeInput}
-      placeholder={placeholder}
-      placeholderTextColor={colors.gray400}
-      value={value}
-      onChangeText={(nextValue) => onChangeText(normalizeDateInput(nextValue))}
-    />
-  );
-}
-
-export function BusinessDashboardScreen() {
+export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashboard'>) {
   const userId = useAuthStore((s) => s.userId);
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [manualChargeAmounts, setManualChargeAmounts] = useState<Record<string, string>>({});
-  const [qrPaymentModel, setQrPaymentModel] = useState<QrPaymentModel>('monthly');
-  const [qrPaymentAmount, setQrPaymentAmount] = useState('');
-  const [qrProtectedAmount, setQrProtectedAmount] = useState('');
-  const [qrMonths, setQrMonths] = useState('6');
-  const [qrValidFrom, setQrValidFrom] = useState('');
-  const [qrValidUntil, setQrValidUntil] = useState('');
-  const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
   const autoFinishedKeysRef = useRef<Set<string>>(new Set());
 
   const { data: dashboard, isLoading, isError, error, refetch, isRefetching } = useQuery({
@@ -134,47 +71,6 @@ export function BusinessDashboardScreen() {
     },
   });
 
-  const paymentRequestMutation = useMutation({
-    mutationFn: () => {
-      const paymentAmount = krwToRlusd(qrPaymentAmount);
-      if (qrPaymentModel === 'voucher') {
-        const totalAmount = krwToRlusd(qrProtectedAmount);
-        const validFrom = normalizeDateInput(qrValidFrom);
-        const validUntil = normalizeDateInput(qrValidUntil);
-        const validityMonths = monthsBetweenDates(validFrom, validUntil);
-        return api.createPaymentRequest({
-          businessId: userId!,
-          paymentAmount,
-          totalAmount,
-          paymentModel: 'voucher',
-          escrowType: 'prepaid',
-          unitPrice: roundRlusd(totalAmount / 10),
-          validityMonths,
-          validFrom,
-          validUntil,
-        });
-      }
-      const months = Number(qrMonths);
-      return api.createPaymentRequest({
-        businessId: userId!,
-        paymentAmount,
-        totalAmount: paymentAmount,
-        monthlyAmount: months > 0 ? roundRlusd(paymentAmount / months) : 0,
-        months,
-        paymentModel: 'monthly',
-        escrowType: 'monthly',
-      });
-    },
-    onSuccess: (request) => {
-      setPaymentRequest(request);
-      showSuccessToast('결제 QR 생성', '손님이 QR 코드를 스캔하면 계좌 승인 결제를 시작합니다.');
-    },
-    onError: (err: Error) => {
-      const apiErr = err as ApiError;
-      showErrorToast('QR 생성 실패', apiErr.userMessage ?? err.message);
-    },
-  });
-
   const onRefresh = useCallback(() => {
     refetch();
     refetchBalance();
@@ -191,19 +87,6 @@ export function BusinessDashboardScreen() {
       payload: { menuName: '직접 입력 이용금액', amount },
     });
   }, [chargeRequestMutation, manualChargeAmounts]);
-
-  const submitPaymentRequest = useCallback(() => {
-    const paymentAmount = krwToRlusd(qrPaymentAmount);
-    const isMonthlyReady = qrPaymentModel === 'monthly' && Number(qrMonths) > 0;
-    const isVoucherReady = qrPaymentModel === 'voucher'
-      && krwToRlusd(qrProtectedAmount) > 0
-      && monthsBetweenDates(normalizeDateInput(qrValidFrom), normalizeDateInput(qrValidUntil)) > 0;
-    if (paymentAmount <= 0 || (!isMonthlyReady && !isVoucherReady)) {
-      showErrorToast('QR 생성 실패', '결제 금액, 실제 충전 금액, 정산 조건을 입력해주세요.');
-      return;
-    }
-    paymentRequestMutation.mutate();
-  }, [paymentRequestMutation, qrMonths, qrPaymentAmount, qrPaymentModel, qrProtectedAmount, qrValidFrom, qrValidUntil]);
 
   useEffect(() => {
     const escrows = (dashboard?.escrows ?? []) as EscrowWithConsumer[];
@@ -245,7 +128,11 @@ export function BusinessDashboardScreen() {
     return result;
   }, [dashboard?.escrows, statusFilter, searchQuery]);
 
-  const isFiltered = searchQuery.trim() !== '' || statusFilter !== 'all';
+  const sectionLabel = searchQuery.trim()
+    ? '검색 결과'
+    : statusFilter === 'all'
+      ? '에스크로'
+      : `${FILTER_OPTIONS.find((option) => option.key === statusFilter)?.label ?? '진행중'} 에스크로`;
 
   if (isLoading) {
     return (
@@ -316,124 +203,20 @@ export function BusinessDashboardScreen() {
               </View>
             </View>
 
-            <View style={styles.qrCard}>
-              <View style={styles.qrHeader}>
-                <View>
-                  <Text style={styles.qrEyebrow}>사업자 결제 생성</Text>
-                  <Text style={styles.qrTitle}>결제 QR 만들기</Text>
-                </View>
-                <Text style={styles.qrBadge}>QR</Text>
+            <TouchableOpacity
+              style={styles.createPaymentCard}
+              onPress={() => navigation.navigate('BusinessCreatePayment')}
+              activeOpacity={0.85}
+            >
+              <View style={styles.createPaymentIcon}>
+                <Text style={styles.createPaymentIconText}>+</Text>
               </View>
-              <Text style={styles.qrDesc}>
-                사업자가 결제 내용을 먼저 만들고, 손님은 QR을 스캔해 계좌 승인만 합니다.
-              </Text>
-              <View style={styles.qrModeRow}>
-                {(['monthly', 'voucher'] as QrPaymentModel[]).map((model) => (
-                  <TouchableOpacity
-                    key={model}
-                    style={[styles.qrModeButton, qrPaymentModel === model && styles.qrModeButtonActive]}
-                    onPress={() => setQrPaymentModel(model)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.qrModeText, qrPaymentModel === model && styles.qrModeTextActive]}>
-                      {model === 'monthly' ? '월정액' : '기간 금액권'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.createPaymentCopy}>
+                <Text style={styles.createPaymentTitle}>새 보호 결제 만들기</Text>
+                <Text style={styles.createPaymentDesc}>월정액 또는 기간 금액권 QR을 손님에게 보여주세요.</Text>
               </View>
-              {qrPaymentModel === 'monthly' ? (
-                <View style={styles.qrInputRow}>
-                  <View style={styles.qrInputGroup}>
-                    <Text style={styles.qrInputLabel}>결제 금액</Text>
-                    <TextInput
-                      style={styles.manualChargeInput}
-                      placeholder="예: 810,000"
-                      placeholderTextColor={colors.gray400}
-                      keyboardType="number-pad"
-                      value={qrPaymentAmount}
-                      onChangeText={setQrPaymentAmount}
-                    />
-                  </View>
-                  <View style={styles.qrMonthsGroup}>
-                    <Text style={styles.qrInputLabel}>개월</Text>
-                    <TextInput
-                      style={styles.manualChargeInput}
-                      placeholder="예: 6"
-                      placeholderTextColor={colors.gray400}
-                      keyboardType="number-pad"
-                      value={qrMonths}
-                      onChangeText={setQrMonths}
-                    />
-                  </View>
-                </View>
-              ) : (
-                <>
-                  <View style={styles.qrInputRow}>
-                    <View style={styles.qrInputGroup}>
-                      <Text style={styles.qrInputLabel}>결제 금액</Text>
-                      <TextInput
-                        style={styles.manualChargeInput}
-                        placeholder="예: 90,000"
-                        placeholderTextColor={colors.gray400}
-                        keyboardType="number-pad"
-                        value={qrPaymentAmount}
-                        onChangeText={setQrPaymentAmount}
-                      />
-                    </View>
-                    <View style={styles.qrInputGroup}>
-                      <Text style={styles.qrInputLabel}>실제 충전 금액</Text>
-                      <TextInput
-                        style={styles.manualChargeInput}
-                        placeholder="예: 100,000"
-                        placeholderTextColor={colors.gray400}
-                        keyboardType="number-pad"
-                        value={qrProtectedAmount}
-                        onChangeText={setQrProtectedAmount}
-                      />
-                    </View>
-                  </View>
-                  <View style={styles.qrInputRow}>
-                    <View style={styles.qrInputGroup}>
-                      <Text style={styles.qrInputLabel}>사용 시작일</Text>
-                      <DateInput
-                        placeholder="예: 2026-05-13"
-                        value={qrValidFrom}
-                        onChangeText={setQrValidFrom}
-                      />
-                    </View>
-                    <View style={styles.qrInputGroup}>
-                      <Text style={styles.qrInputLabel}>사용 종료일</Text>
-                      <DateInput
-                        placeholder="예: 2026-08-13"
-                        value={qrValidUntil}
-                        onChangeText={setQrValidUntil}
-                      />
-                    </View>
-                  </View>
-                </>
-              )}
-              <TouchableOpacity
-                style={[styles.manualChargeButton, paymentRequestMutation.isPending && styles.buttonDisabled]}
-                onPress={submitPaymentRequest}
-                disabled={paymentRequestMutation.isPending}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.manualChargeButtonText}>QR 결제 만들기</Text>
-              </TouchableOpacity>
-              {paymentRequest && (
-                <View style={styles.generatedQrBox}>
-                  <View style={styles.generatedQrGrid}>
-                    {Array.from({ length: 16 }, (_, index) => (
-                      <View key={index} style={index % 3 === 0 ? styles.generatedQrCellDark : styles.generatedQrCell} />
-                    ))}
-                  </View>
-                  <View style={styles.generatedQrInfo}>
-                    <Text style={styles.generatedQrLabel}>손님에게 보여줄 결제 코드</Text>
-                    <Text style={styles.generatedQrCode}>{paymentRequest.code}</Text>
-                  </View>
-                </View>
-              )}
-            </View>
+              <Text style={styles.createPaymentAction}>QR 만들기</Text>
+            </TouchableOpacity>
 
             {/* 검색 + 필터 */}
             <View style={styles.searchRow}>
@@ -471,9 +254,7 @@ export function BusinessDashboardScreen() {
                 : 'EscrowFinish로 수령 가능한 월차만 정산됩니다'}
             </Text>
             <Text style={styles.sectionTitle}>
-              {isFiltered
-                ? `검색 결과 (${filteredEscrows.length}건)`
-                : `에스크로 (${(dashboard?.escrows ?? []).length}건)`}
+              {sectionLabel} ({filteredEscrows.length}건)
             </Text>
           </>
         }
@@ -486,28 +267,37 @@ export function BusinessDashboardScreen() {
           const progressPct = totalEntries > 0 ? (releasedCount / totalEntries) * 100 : 0;
           return (
             <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.cardAvatar}>
-                  <Text style={styles.cardAvatarText}>
-                    {(item.consumer?.name ?? '소')[0]}
+              <TouchableOpacity
+                onPress={() => navigation.navigate('BusinessEscrowDetail', { id: item.id })}
+                activeOpacity={0.86}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardAvatar}>
+                    <Text style={styles.cardAvatarText}>
+                      {(item.consumer?.name ?? '소')[0]}
+                    </Text>
+                  </View>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardTitle}>{item.consumer?.name ?? '소비자'}</Text>
+                    <Text style={styles.cardSub}>
+                      {formatKrwFromRlusd(item.monthlyAmount)}/{isPrepaid ? '회' : '월'} · {pendingEntries.length}건 대기
+                    </Text>
+                    <Text style={styles.cardSubRlusd}>{formatRlusd(item.monthlyAmount)}</Text>
+                  </View>
+                  <View style={styles.cardAmountBlock}>
+                    <Text style={styles.cardAmount}>{formatKrwFromRlusd(item.totalAmount)}</Text>
+                    <Text style={styles.cardAmountSub}>{formatRlusd(item.totalAmount)}</Text>
+                  </View>
+                </View>
+                <View style={styles.progressBarBg}>
+                  <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
+                </View>
+                {!isPrepaid && nextEntry && (
+                  <Text style={styles.autoSettlementHint}>
+                    조건 충족 월차는 사업자 조작 없이 자동 수령됩니다.
                   </Text>
-                </View>
-                <View style={styles.cardInfo}>
-                  <Text style={styles.cardTitle}>{item.consumer?.name ?? '소비자'}</Text>
-                  <Text style={styles.cardSub}>
-                    {formatKrwFromRlusd(item.monthlyAmount)}/{isPrepaid ? '회' : '월'} · {pendingEntries.length}건 대기
-                  </Text>
-                  <Text style={styles.cardSubRlusd}>{formatRlusd(item.monthlyAmount)}</Text>
-                </View>
-                <View style={styles.cardAmountBlock}>
-                  <Text style={styles.cardAmount}>{formatKrwFromRlusd(item.totalAmount)}</Text>
-                  <Text style={styles.cardAmountSub}>{formatRlusd(item.totalAmount)}</Text>
-                </View>
-              </View>
-              {/* 진행률 */}
-              <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
-              </View>
+                )}
+              </TouchableOpacity>
               {isPrepaid && (
                 <View style={styles.manualChargeBox}>
                   <Text style={styles.manualChargeTitle}>이용금액 직접 입력</Text>
@@ -550,11 +340,6 @@ export function BusinessDashboardScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
-              )}
-              {!isPrepaid && nextEntry && (
-                <Text style={styles.autoSettlementHint}>
-                  조건 충족 월차는 사업자 조작 없이 자동 수령됩니다.
-                </Text>
               )}
             </View>
           );
@@ -615,127 +400,36 @@ const styles = StyleSheet.create({
   },
   summarySub: { fontSize: font.size.xs, color: colors.gray400, marginTop: 2 },
   summaryLabel: { fontSize: font.size.xs, color: colors.gray500, marginTop: spacing.xs },
-  qrCard: {
+  createPaymentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.white,
     borderRadius: radius.lg,
     padding: spacing.lg,
     marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.primaryLight,
     ...shadow.sm,
   },
-  qrHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  createPaymentIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary,
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    justifyContent: 'center',
+    marginRight: spacing.md,
   },
-  qrEyebrow: {
-    fontSize: font.size.xs,
-    color: colors.primary,
+  createPaymentIconText: {
+    color: colors.white,
+    fontSize: 24,
     fontWeight: font.weight.bold,
-    marginBottom: 2,
+    lineHeight: 28,
   },
-  qrTitle: {
-    fontSize: font.size.lg,
-    fontWeight: font.weight.bold,
-    color: colors.gray900,
-  },
-  qrBadge: {
-    backgroundColor: colors.primaryLight,
-    color: colors.primary,
-    fontSize: font.size.xs,
-    fontWeight: font.weight.bold,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    overflow: 'hidden',
-  },
-  qrDesc: {
-    fontSize: font.size.sm,
-    color: colors.gray500,
-    lineHeight: 20,
-    marginBottom: spacing.md,
-  },
-  qrModeRow: {
-    flexDirection: 'row',
-    backgroundColor: colors.gray100,
-    borderRadius: radius.md,
-    padding: 4,
-    marginBottom: spacing.md,
-    gap: 4,
-  },
-  qrModeButton: {
-    flex: 1,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-  },
-  qrModeButtonActive: {
-    backgroundColor: colors.white,
-    ...shadow.sm,
-  },
-  qrModeText: {
-    fontSize: font.size.sm,
-    color: colors.gray500,
-    fontWeight: font.weight.semibold,
-  },
-  qrModeTextActive: { color: colors.primary },
-  qrInputRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  qrInputGroup: { flex: 1 },
-  qrMonthsGroup: { width: 88 },
-  qrInputLabel: {
-    fontSize: font.size.xs,
-    color: colors.gray600,
-    fontWeight: font.weight.semibold,
-    marginBottom: spacing.xs,
-  },
-  webDateInput: {
-    width: '100%',
-    boxSizing: 'border-box',
-    outlineStyle: 'none',
-  } as any,
-  generatedQrBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.gray50,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginTop: spacing.md,
-    gap: spacing.md,
-  },
-  generatedQrGrid: {
-    width: 64,
-    height: 64,
-    backgroundColor: colors.white,
-    borderRadius: radius.sm,
-    padding: 6,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 3,
-  },
-  generatedQrCell: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-    backgroundColor: colors.gray200,
-  },
-  generatedQrCellDark: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-    backgroundColor: colors.gray900,
-  },
-  generatedQrInfo: { flex: 1 },
-  generatedQrLabel: { fontSize: font.size.xs, color: colors.gray500, marginBottom: 2 },
-  generatedQrCode: {
-    fontSize: font.size.xl,
-    fontWeight: font.weight.bold,
-    color: colors.gray900,
-    fontFamily: font.mono,
-  },
+  createPaymentCopy: { flex: 1 },
+  createPaymentTitle: { fontSize: font.size.md, fontWeight: font.weight.bold, color: colors.gray900 },
+  createPaymentDesc: { fontSize: font.size.xs, color: colors.gray500, marginTop: 2, lineHeight: 18 },
+  createPaymentAction: { fontSize: font.size.sm, fontWeight: font.weight.bold, color: colors.primary },
   settlementHint: {
     fontSize: font.size.sm,
     color: colors.gray500,

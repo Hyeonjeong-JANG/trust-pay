@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BusinessHistoryScreen } from './BusinessHistoryScreen';
 
@@ -55,5 +55,35 @@ describe('BusinessHistoryScreen', () => {
     expect(await findByText('김민수 · 월정액 6개월')).toBeTruthy();
     expect(await findByText('₩810,000')).toBeTruthy();
     expect(await findByText('600.00 RLUSD')).toBeTruthy();
+  });
+
+  it('should open business escrow detail from a history item', async () => {
+    const { api } = require('../../api/client');
+    const navigation = { navigate: jest.fn() };
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 0,
+      totalPending: 600,
+      escrows: [
+        {
+          id: 'e-history-detail',
+          status: 'active',
+          escrowType: 'monthly',
+          totalAmount: 600,
+          monthlyAmount: 100,
+          months: 6,
+          consumer: { id: 'consumer-1', name: '김민수' },
+          createdAt: '2026-05-13T00:00:00Z',
+          entries: [
+            { id: 'en-1', month: 1, amount: '100', status: 'pending', finishAfter: 830607775 },
+          ],
+        },
+      ],
+    });
+
+    const { findByText } = renderWithProviders(<BusinessHistoryScreen route={{} as any} navigation={navigation as any} />);
+
+    fireEvent.press(await findByText('보호 결제 시작'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('BusinessEscrowDetail', { id: 'e-history-detail' });
   });
 });

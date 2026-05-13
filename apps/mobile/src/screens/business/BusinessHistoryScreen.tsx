@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -18,6 +19,7 @@ import type { BusinessTabProps } from '../../navigation/types';
 
 interface HistoryItem {
   id: string;
+  escrowId: string;
   type: 'started' | 'received' | 'cancelled';
   date: Date;
   amount: number;
@@ -36,7 +38,7 @@ function getEscrowDetail(escrow: EscrowRecord): string {
   return `월정액 ${escrow.months}개월`;
 }
 
-export function BusinessHistoryScreen(_props: BusinessTabProps<'BusinessHistory'>) {
+export function BusinessHistoryScreen({ navigation }: BusinessTabProps<'BusinessHistory'>) {
   const userId = useAuthStore((s) => s.userId);
 
   const { data: dashboard, isLoading, isError, error, refetch, isRefetching } = useQuery({
@@ -54,6 +56,7 @@ export function BusinessHistoryScreen(_props: BusinessTabProps<'BusinessHistory'
       const consumerName = escrow.consumer?.name ?? '소비자';
       items.push({
         id: `${escrow.id}:started`,
+        escrowId: escrow.id,
         type: 'started',
         date: new Date(escrow.createdAt ?? Date.now()),
         amount: Number(escrow.totalAmount),
@@ -65,6 +68,7 @@ export function BusinessHistoryScreen(_props: BusinessTabProps<'BusinessHistory'
         if (entry.status === 'released') {
           items.push({
             id: entry.id,
+            escrowId: escrow.id,
             type: 'received',
             date: new Date((entry as any).updatedAt ?? (entry as any).createdAt ?? Date.now()),
             amount: Number(entry.amount),
@@ -74,6 +78,7 @@ export function BusinessHistoryScreen(_props: BusinessTabProps<'BusinessHistory'
         } else if (entry.status === 'refunded') {
           items.push({
             id: entry.id,
+            escrowId: escrow.id,
             type: 'cancelled',
             date: new Date((entry as any).updatedAt ?? (entry as any).createdAt ?? Date.now()),
             amount: Number(entry.amount),
@@ -113,7 +118,11 @@ export function BusinessHistoryScreen(_props: BusinessTabProps<'BusinessHistory'
         renderItem={({ item }) => {
           const config = TYPE_CONFIG[item.type];
           return (
-            <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => navigation.navigate('BusinessEscrowDetail', { id: item.escrowId })}
+              activeOpacity={0.86}
+            >
               <View style={[styles.iconCircle, { backgroundColor: config.bg }]}>
                 <Text style={styles.iconText}>{config.icon}</Text>
               </View>
@@ -127,7 +136,7 @@ export function BusinessHistoryScreen(_props: BusinessTabProps<'BusinessHistory'
                 <Text style={[styles.cardAmount, { color: config.color }]}>{item.type === 'received' ? '+' : item.type === 'cancelled' ? '-' : ''}{formatKrwFromRlusd(item.amount)}</Text>
                 <Text style={styles.cardCurrency}>{formatRlusd(item.amount)}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           );
         }}
         ListHeaderComponent={

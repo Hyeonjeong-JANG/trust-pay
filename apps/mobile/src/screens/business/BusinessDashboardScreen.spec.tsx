@@ -51,9 +51,11 @@ describe('BusinessDashboardScreen', () => {
     });
 
     try {
-      const { findByText } = renderWithProviders(<BusinessDashboardScreen />);
+      const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
-      expect(await findByText('결제 QR 만들기')).toBeTruthy();
+      expect(await findByText('진행중 에스크로 (0건)')).toBeTruthy();
+      expect(queryByText('QR 결제 만들기')).toBeNull();
+      expect(queryByText('결제 금액')).toBeNull();
       expect(api.getBusinessDashboard).toHaveBeenCalledTimes(1);
 
       await act(async () => {
@@ -86,7 +88,7 @@ describe('BusinessDashboardScreen', () => {
       ],
     });
 
-    const { findAllByText, findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen />);
+    const { findAllByText, findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
     expect(await findByText(/EscrowFinish로 수령 가능한 월차/)).toBeTruthy();
     expect((await findAllByText('100.00 RLUSD')).length).toBeGreaterThan(0);
@@ -96,101 +98,73 @@ describe('BusinessDashboardScreen', () => {
     });
   });
 
-  it('should create a monthly merchant QR from only amount and month count', async () => {
+  it('should open business escrow detail from an escrow card', async () => {
     const { api } = require('../../api/client');
-    api.createPaymentRequest.mockResolvedValue({
-      id: 'request-1',
-      code: 'TP-123456',
-      businessId: 'business-1',
-      businessName: '파워짐',
-      paymentAmount: 600,
-      totalAmount: 600,
-      monthlyAmount: 100,
-      months: 6,
-      paymentModel: 'monthly',
-      escrowType: 'monthly',
-      status: 'pending',
-      createdAt: '2026-05-13T00:00:00Z',
-    });
+    const navigation = { navigate: jest.fn() };
     api.getBusinessDashboard.mockResolvedValue({
       totalReceived: 0,
-      totalPending: 0,
-      escrows: [],
+      totalPending: 600,
+      escrows: [
+        {
+          id: 'e-detail',
+          status: 'active',
+          escrowType: 'monthly',
+          totalAmount: 600,
+          monthlyAmount: 100,
+          months: 6,
+          consumer: { id: 'consumer-1', name: '김민수' },
+          entries: [
+            { id: 'en-1', month: 1, amount: '100', status: 'pending', finishAfter: 830607775 },
+          ],
+        },
+      ],
     });
 
-    const { findByPlaceholderText, findByText, queryByText, queryByPlaceholderText } = renderWithProviders(<BusinessDashboardScreen />);
+    const { findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={navigation as any} />);
 
-    expect(await findByText('결제 QR 만들기')).toBeTruthy();
-    expect(await findByText('결제 금액')).toBeTruthy();
-    fireEvent.changeText(await findByPlaceholderText('예: 810,000'), '810000');
-    expect(queryByText('실제 충전 금액')).toBeNull();
-    expect(queryByText('매월 정산액')).toBeNull();
-    expect(queryByPlaceholderText('예: 135,000')).toBeNull();
-    fireEvent.changeText(await findByPlaceholderText('예: 6'), '6');
-    fireEvent.press(await findByText('QR 결제 만들기'));
+    fireEvent.press(await findByText('김민수'));
 
-    await waitFor(() => {
-      expect(api.createPaymentRequest).toHaveBeenCalledWith({
-        businessId: 'business-1',
-        paymentAmount: 600,
-        totalAmount: 600,
-        monthlyAmount: 100,
-        months: 6,
-        paymentModel: 'monthly',
-        escrowType: 'monthly',
-      });
-    });
-    expect(await findByText('TP-123456')).toBeTruthy();
+    expect(navigation.navigate).toHaveBeenCalledWith('BusinessEscrowDetail', { id: 'e-detail' });
   });
 
-  it('should create a period voucher QR with paid amount, charged amount, and validity dates', async () => {
+  it('should default to the active escrow filter when a merchant opens the dashboard', async () => {
     const { api } = require('../../api/client');
-    api.createPaymentRequest.mockResolvedValue({
-      id: 'request-voucher',
-      code: 'TP-654321',
-      businessId: 'business-1',
-      businessName: '파워짐',
-      paymentAmount: 66.666667,
-      totalAmount: 74.074074,
-      paymentModel: 'voucher',
-      escrowType: 'prepaid',
-      unitPrice: 7.407407,
-      validityMonths: 3,
-      validFrom: '2026-05-13',
-      validUntil: '2026-08-13',
-      status: 'pending',
-      createdAt: '2026-05-13T00:00:00Z',
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 600,
+      totalPending: 600,
+      escrows: [
+        {
+          id: 'e-active',
+          status: 'active',
+          escrowType: 'monthly',
+          totalAmount: 600,
+          monthlyAmount: 100,
+          months: 6,
+          consumer: { id: 'consumer-active', name: '김민수' },
+          entries: [
+            { id: 'en-active', month: 1, amount: '100', status: 'pending', finishAfter: 830607775 },
+          ],
+        },
+        {
+          id: 'e-completed',
+          status: 'completed',
+          escrowType: 'monthly',
+          totalAmount: 600,
+          monthlyAmount: 100,
+          months: 6,
+          consumer: { id: 'consumer-completed', name: '완료 고객' },
+          entries: [
+            { id: 'en-completed', month: 1, amount: '100', status: 'released', finishAfter: 830607775 },
+          ],
+        },
+      ],
     });
-    api.getBusinessDashboard.mockResolvedValue({ totalReceived: 0, totalPending: 0, escrows: [] });
 
-    const { findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
+    const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
-    fireEvent.press(await findByText('기간 금액권'));
-    expect(await findByText('실제 충전 금액')).toBeTruthy();
-    fireEvent.changeText(await findByPlaceholderText('예: 90,000'), '90000');
-    fireEvent.changeText(await findByPlaceholderText('예: 100,000'), '100000');
-    expect((await findByPlaceholderText('예: 2026-05-13')).props.type).toBe('date');
-    expect((await findByPlaceholderText('예: 2026-08-13')).props.type).toBe('date');
-    expect((await findByPlaceholderText('예: 2026-05-13')).props.inputMode).toBe('none');
-    expect((await findByPlaceholderText('예: 2026-08-13')).props.inputMode).toBe('none');
-    fireEvent.changeText(await findByPlaceholderText('예: 2026-05-13'), '20260513');
-    fireEvent.changeText(await findByPlaceholderText('예: 2026-08-13'), '20260813');
-    fireEvent.press(await findByText('QR 결제 만들기'));
-
-    await waitFor(() => {
-      expect(api.createPaymentRequest).toHaveBeenCalledWith({
-        businessId: 'business-1',
-        paymentAmount: 66.666667,
-        totalAmount: 74.074074,
-        paymentModel: 'voucher',
-        escrowType: 'prepaid',
-        unitPrice: 7.407407,
-        validityMonths: 3,
-        validFrom: '2026-05-13',
-        validUntil: '2026-08-13',
-      });
-    });
-    expect(await findByText('TP-654321')).toBeTruthy();
+    expect(await findByText('진행중 에스크로 (1건)')).toBeTruthy();
+    expect(await findByText('김민수')).toBeTruthy();
+    expect(queryByText('완료 고객')).toBeNull();
   });
 
   it('should show prepaid settlement as per-use receipt', async () => {
@@ -226,7 +200,7 @@ describe('BusinessDashboardScreen', () => {
       ],
     });
 
-    const { findAllByText, findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
+    const { findAllByText, findByPlaceholderText, findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
     expect(await findByText(/이미 보호 원장에 잠긴 이용권에서 이용분 차감 요청을 보냅니다/)).toBeTruthy();
     expect((await findAllByText('이용금액 직접 입력')).length).toBeGreaterThan(0);

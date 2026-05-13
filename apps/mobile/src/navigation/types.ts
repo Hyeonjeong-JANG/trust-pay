@@ -14,8 +14,8 @@ export type ConsumerTabParamList = {
 // Business bottom tabs
 export type BusinessTabParamList = {
   Dashboard: undefined;
+  BusinessCreatePayment: undefined;
   BusinessHistory: undefined;
-  BusinessProfile: undefined;
 };
 
 // Root stack (wraps everything)
@@ -27,6 +27,8 @@ export type RootStackParamList = {
   ScanPayment: undefined;
   Payment: { businessId: string; businessName: string; businessCategory?: string; paymentRequest?: PaymentRequest };
   EscrowDetail: { id: string };
+  BusinessEscrowDetail: { id: string };
+  BusinessProfile: undefined;
   BusinessDetail: { businessId: string };
   BusinessTabs: NavigatorScreenParams<BusinessTabParamList>;
   Notifications: undefined;

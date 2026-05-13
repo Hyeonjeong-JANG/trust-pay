@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { TouchableOpacity, Text } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
@@ -24,6 +25,8 @@ import { PaymentScreen } from './src/screens/consumer/PaymentScreen';
 import { ScanPaymentScreen } from './src/screens/consumer/ScanPaymentScreen';
 import { EscrowDetailScreen } from './src/screens/consumer/EscrowDetailScreen';
 import { BusinessDashboardScreen } from './src/screens/business/BusinessDashboardScreen';
+import { BusinessCreatePaymentScreen } from './src/screens/business/BusinessCreatePaymentScreen';
+import { BusinessEscrowDetailScreen } from './src/screens/business/BusinessEscrowDetailScreen';
 import { BusinessHistoryScreen } from './src/screens/business/BusinessHistoryScreen';
 import { BusinessProfileScreen } from './src/screens/business/BusinessProfileScreen';
 import { colors, font } from './src/theme';
@@ -73,6 +76,19 @@ function ConsumerHeaderRight() {
   );
 }
 
+function BusinessHeaderRight() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  return (
+    <TouchableOpacity
+      onPress={() => navigation.navigate('BusinessProfile')}
+      style={{ marginRight: 8, minHeight: 40, justifyContent: 'center' }}
+      activeOpacity={0.7}
+    >
+      <Text style={{ color: colors.primary, fontSize: font.size.md, fontWeight: font.weight.medium }}>프로필</Text>
+    </TouchableOpacity>
+  );
+}
+
 function ConsumerTabs() {
   return (
     <ConsumerTab.Navigator screenOptions={{ ...tabScreenOptions, headerRight: () => <ConsumerHeaderRight /> }}>
@@ -91,16 +107,16 @@ function ConsumerTabs() {
 function BusinessTabs() {
   const name = useAuthStore((s) => s.name);
   return (
-    <BusinessTab.Navigator screenOptions={{ ...tabScreenOptions, headerRight: () => <LogoutButton /> }}>
+    <BusinessTab.Navigator screenOptions={{ ...tabScreenOptions, headerRight: () => <BusinessHeaderRight /> }}>
       <BusinessTab.Screen name="Dashboard" component={BusinessDashboardScreen}
         options={{ title: `${name ?? '사업자'} 대시보드`, tabBarLabel: '대시보드',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🏪</Text> }} />
+      <BusinessTab.Screen name="BusinessCreatePayment" component={BusinessCreatePaymentScreen}
+        options={{ title: 'QR 만들기', tabBarLabel: '결제',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>💳</Text> }} />
       <BusinessTab.Screen name="BusinessHistory" component={BusinessHistoryScreen}
         options={{ title: '거래 내역', tabBarLabel: '내역',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📜</Text> }} />
-      <BusinessTab.Screen name="BusinessProfile" component={BusinessProfileScreen}
-        options={{ title: '프로필', tabBarLabel: '프로필',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>👤</Text> }} />
     </BusinessTab.Navigator>
   );
 }
@@ -124,6 +140,8 @@ function AppNavigator() {
     return (
       <Stack.Navigator screenOptions={stackScreenOptions}>
         <Stack.Screen name="BusinessTabs" component={BusinessTabs} options={{ headerShown: false }} />
+        <Stack.Screen name="BusinessEscrowDetail" component={BusinessEscrowDetailScreen} options={{ title: '결제 상세' }} />
+        <Stack.Screen name="BusinessProfile" component={BusinessProfileScreen} options={{ title: '프로필' }} />
       </Stack.Navigator>
     );
   }
