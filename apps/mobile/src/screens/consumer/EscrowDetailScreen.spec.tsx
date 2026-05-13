@@ -256,7 +256,7 @@ describe('EscrowDetailScreen', () => {
     });
     api.approveChargeRequest.mockResolvedValue({ id: 'charge-1', status: 'settled' });
 
-    const { findByText } = renderWithProviders(
+    const { findByPlaceholderText, findByText } = renderWithProviders(
       <EscrowDetailScreen route={{ params: { id: 'e-prepaid' } } as any} navigation={{} as any} />,
     );
 
@@ -265,6 +265,10 @@ describe('EscrowDetailScreen', () => {
     expect(await findByText('50.00 RLUSD')).toBeTruthy();
     expect(await findByText(/승인하면 보호 금액권 잔액에서 차감됩니다/)).toBeTruthy();
     fireEvent.press(await findByText('승인하고 정산'));
+    expect(api.approveChargeRequest).not.toHaveBeenCalled();
+    expect(await findByText('결제 승인 인증')).toBeTruthy();
+    fireEvent.changeText(await findByPlaceholderText('간편비밀번호 6자리'), '123456');
+    fireEvent.press(await findByText('간편비밀번호로 승인'));
 
     await waitFor(() => {
       expect(api.approveChargeRequest).toHaveBeenCalledWith('charge-1');

@@ -277,7 +277,7 @@ describe('ConsumerDashboardScreen', () => {
       },
     ]);
 
-    const { findByText, invalidateQueries } = renderWithProviders(
+    const { findByPlaceholderText, findByText, invalidateQueries } = renderWithProviders(
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
@@ -287,6 +287,10 @@ describe('ConsumerDashboardScreen', () => {
     expect(await findByText('50.00 RLUSD')).toBeTruthy();
     expect(await findByText(/보호 금액권 잔액에서 해당 이용금액만 정산됩니다/)).toBeTruthy();
     fireEvent.press(await findByText('승인하고 정산'));
+    expect(api.approveChargeRequest).not.toHaveBeenCalled();
+    expect(await findByText('결제 승인 인증')).toBeTruthy();
+    fireEvent.changeText(await findByPlaceholderText('간편비밀번호 6자리'), '123456');
+    fireEvent.press(await findByText('간편비밀번호로 승인'));
 
     await waitFor(() => {
       expect(api.approveChargeRequest).toHaveBeenCalledWith('charge-1');

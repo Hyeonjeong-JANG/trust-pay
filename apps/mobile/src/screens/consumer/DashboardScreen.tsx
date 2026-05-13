@@ -12,6 +12,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
+import { ApprovalAuthModal } from '../../components/ApprovalAuthModal';
 import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
 import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
@@ -70,6 +71,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
+  const [chargeApprovalToAuthenticate, setChargeApprovalToAuthenticate] = useState<PendingChargeApproval | null>(null);
 
   const { data: escrows, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['consumerEscrows', userId],
@@ -220,7 +222,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
                 <View style={styles.approvalActions}>
                   <TouchableOpacity
                     style={[styles.approvalPrimaryButton, approvalActionPending && styles.buttonDisabled]}
-                    onPress={() => approveChargeMutation.mutate({ requestId: pendingChargeApproval.id, escrowId: pendingChargeApproval.escrowId })}
+                    onPress={() => setChargeApprovalToAuthenticate(pendingChargeApproval)}
                     disabled={approvalActionPending}
                     activeOpacity={0.85}
                   >
@@ -373,6 +375,19 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
       >
         <Text style={styles.fabText}>QR 스캔 결제</Text>
       </TouchableOpacity>
+      <ApprovalAuthModal
+        visible={!!chargeApprovalToAuthenticate}
+        title="결제 승인 인증"
+        description="이용금액 차감을 승인하려면 본인 인증이 필요합니다."
+        onCancel={() => setChargeApprovalToAuthenticate(null)}
+        onAuthenticated={() => {
+          const request = chargeApprovalToAuthenticate;
+          if (!request) return;
+
+          setChargeApprovalToAuthenticate(null);
+          approveChargeMutation.mutate({ requestId: request.id, escrowId: request.escrowId });
+        }}
+      />
     </View>
   );
 }

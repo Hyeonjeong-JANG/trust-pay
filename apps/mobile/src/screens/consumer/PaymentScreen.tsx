@@ -14,6 +14,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
+import { ApprovalAuthModal } from '../../components/ApprovalAuthModal';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { formatKrw, formatKrwFromRlusd, formatRlusd, getWholeUnitCount, krwToRlusd, parseKrwInput, rlusdToKrw, roundRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
@@ -46,6 +47,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
   const [validityMonths, setValidityMonths] = useState(defaultEscrowType === 'prepaid' ? '3' : '');
   const [selectedProduct, setSelectedProduct] = useState<BusinessProduct | null>(null);
   const [products, setProducts] = useState<BusinessProduct[]>([]);
+  const [approvalAuthVisible, setApprovalAuthVisible] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -316,7 +318,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
 
         <Pressable
           style={[styles.button, (mutation.isPending || !canSubmit) && styles.buttonDisabled]}
-          onPress={() => mutation.mutate()}
+          onPress={() => setApprovalAuthVisible(true)}
           disabled={mutation.isPending || !canSubmit}
         >
           {mutation.isPending ? (
@@ -329,6 +331,16 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           )}
         </Pressable>
       </ScrollView>
+      <ApprovalAuthModal
+        visible={approvalAuthVisible}
+        title="결제 승인 인증"
+        description="계좌 승인 결제를 요청하려면 본인 인증이 필요합니다."
+        onCancel={() => setApprovalAuthVisible(false)}
+        onAuthenticated={() => {
+          setApprovalAuthVisible(false);
+          mutation.mutate();
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

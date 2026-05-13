@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
+import { ApprovalAuthModal } from '../../components/ApprovalAuthModal';
 import { ErrorView } from '../../components/ErrorView';
 import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
@@ -85,6 +86,7 @@ function sumEntries(entries: EscrowEntry[], status: string): number {
 export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   const { id } = route.params;
   const queryClient = useQueryClient();
+  const [chargeRequestToAuthenticate, setChargeRequestToAuthenticate] = useState<ChargeRequest | null>(null);
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['escrow', id],
@@ -272,7 +274,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                     <View style={styles.chargeRequestActions}>
                       <TouchableOpacity
                         style={[styles.approveButton, approveChargeMutation.isPending && styles.buttonDisabled]}
-                        onPress={() => approveChargeMutation.mutate(request.id)}
+                        onPress={() => setChargeRequestToAuthenticate(request)}
                         disabled={approveChargeMutation.isPending || rejectChargeMutation.isPending}
                         activeOpacity={0.8}
                       >
@@ -386,6 +388,19 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
           ) : null
         }
         contentContainerStyle={styles.listContent}
+      />
+      <ApprovalAuthModal
+        visible={!!chargeRequestToAuthenticate}
+        title="결제 승인 인증"
+        description="이용금액 차감을 승인하려면 본인 인증이 필요합니다."
+        onCancel={() => setChargeRequestToAuthenticate(null)}
+        onAuthenticated={() => {
+          const request = chargeRequestToAuthenticate;
+          if (!request) return;
+
+          setChargeRequestToAuthenticate(null);
+          approveChargeMutation.mutate(request.id);
+        }}
       />
     </View>
   );
