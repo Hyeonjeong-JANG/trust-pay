@@ -131,7 +131,7 @@ function AppNavigator() {
     <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="ConsumerTabs" component={ConsumerTabs} options={{ headerShown: false }} />
       <Stack.Screen name="BusinessSelect" component={BusinessSelectScreen} options={{ title: '사업자 선택' }} />
-      <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: '에스크로 생성' }} />
+      <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: '보호 결제' }} />
       <Stack.Screen name="EscrowDetail" component={EscrowDetailScreen} options={{ title: '에스크로 상세' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: '알림' }} />
     </Stack.Navigator>

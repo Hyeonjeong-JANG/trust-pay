@@ -117,7 +117,7 @@ Explorer link: [입력 필요: Testnet explorer account URL]
 
 프로토타입 설명:
 
-Demo Mode에서는 소비자 로그인, 대시보드, 월별 에스크로 상세, 새 에스크로 생성, 사업자 월별 정산, 환불 보호 시나리오를 3분 내외로 시연합니다. 실제 XRPL 사용 근거는 Testnet Mode 스크립트에서 RLUSD Trust Line, EscrowCreate, EscrowFinish, EscrowCancel 흐름으로 별도 검증합니다. Demo Mode의 synthetic tx hash와 Testnet 실제 tx hash는 영상과 제출 문서에서 구분합니다.
+Demo Mode에서는 소비자 로그인, 계좌 승인 보호 결제 대시보드, 월별 에스크로 상세, 보호 결제 시작, 사업자 월별 정산, 환불 보호 시나리오를 3분 내외로 시연합니다. 실제 XRPL 사용 근거는 Testnet Mode 스크립트에서 RLUSD Trust Line, EscrowCreate, EscrowFinish, EscrowCancel 흐름으로 별도 검증합니다. Demo Mode의 synthetic tx hash와 Testnet 실제 tx hash는 영상과 제출 문서에서 구분합니다.
 
 ## 6. 사업화 현재 진행단계
 
@@ -127,7 +127,7 @@ Demo Mode에서는 소비자 로그인, 대시보드, 월별 에스크로 상세
 
 진행 현황:
 
-TrustPay는 현재 MVP를 보유한 상태입니다. NestJS API, Prisma/SQLite 데이터베이스, React Native Expo 모바일 앱, xrpl.js 기반 XRPL 클라이언트가 구현되어 있으며, Demo Mode에서 소비자 결제부터 사업자 정산과 환불 보호까지 전체 흐름을 시연할 수 있습니다. API E2E 테스트, 모바일 테스트, XRPL Testnet 검증 스크립트, 제출용 README와 데모 문서도 준비되어 있습니다. 상용화 전에는 비커스토디얼 또는 HSM/MPC 기반 지갑 구조, 사업자 신원 검증, 실제 결제/정산 운영 정책, 법적 환불 프로세스 연동을 추가로 검토할 예정입니다.
+TrustPay는 현재 MVP를 보유한 상태입니다. NestJS API, Prisma/SQLite 데이터베이스, React Native Expo 모바일 앱, xrpl.js 기반 XRPL 클라이언트가 구현되어 있으며, Demo Mode에서 소비자 계좌 승인 보호 결제부터 사업자 정산과 환불 보호까지 전체 흐름을 시연할 수 있습니다. API E2E 테스트, 모바일 테스트, XRPL Testnet 검증 스크립트, 제출용 README와 데모 문서도 준비되어 있습니다. 상용화 전에는 비커스토디얼 또는 HSM/MPC 기반 지갑 구조, 오픈뱅킹/계좌 결제 PG 연동, 사업자 신원 검증, 실제 결제/정산 운영 정책, 법적 환불 프로세스 연동을 추가로 검토할 예정입니다.
 
 ## 7. 제출 서명란
 

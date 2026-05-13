@@ -5,7 +5,6 @@ import {
   FlatList,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
   TextInput,
   ScrollView,
   RefreshControl,
@@ -47,6 +46,7 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
 
 export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>) {
   const userId = useAuthStore((s) => s.userId);
+  const name = useAuthStore((s) => s.name);
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -56,13 +56,6 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
     queryFn: () => api.getConsumerEscrows(userId!),
     enabled: !!userId,
     retry: 2,
-  });
-
-  const { data: balanceData, isLoading: balanceLoading, isError: balanceError, refetch: refetchBalance } = useQuery({
-    queryKey: ['balance', userId],
-    queryFn: () => api.getBalance(userId!, 'consumer'),
-    enabled: !!userId,
-    retry: 1,
   });
 
   const approveChargeMutation = useMutation({
@@ -140,10 +133,10 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
         ? '아래 + 버튼을 눌러 XRPL Token Escrow로 월별 릴리즈되는 선불 보호를 시작하세요'
         : '다른 상태 필터를 선택해 내 선불 보호를 확인해보세요';
 
+  const displayName = name?.trim() || '고객';
   const onRefresh = useCallback(() => {
     refetch();
-    refetchBalance();
-  }, [refetch, refetchBalance]);
+  }, [refetch]);
   const approvalActionPending = approveChargeMutation.isPending || rejectChargeMutation.isPending;
 
   if (isLoading) {
@@ -176,46 +169,32 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
         }
         ListHeaderComponent={
           <>
-            {/* 원장 상태 카드 */}
-            {balanceLoading ? (
-              <View style={styles.balanceCard}>
-                <ActivityIndicator size="small" color="rgba(255,255,255,0.8)" />
+            <View style={styles.homeHeader}>
+              <Text style={styles.greeting}>{displayName}님, 안녕하세요</Text>
+              <Text style={styles.greetingSub}>오늘의 선불 보호를 확인해보세요</Text>
+            </View>
+
+            <View style={styles.balanceCard}>
+              <View style={styles.balanceTopRow}>
+                <Text style={styles.balanceLabel}>계좌 승인 결제</Text>
+                <Text style={styles.balanceBadge}>준비됨</Text>
               </View>
-            ) : balanceError ? (
-              <View style={[styles.balanceCard, styles.balanceCardError]}>
-                <Text style={styles.balanceLabel}>보호 결제 원장 상태</Text>
-                <Text style={styles.balanceValue}>조회 실패</Text>
-              </View>
-            ) : balanceData ? (
-              <View style={styles.balanceCard}>
-                <Text style={styles.balanceLabel}>보호 결제 원장 상태</Text>
-                <Text style={styles.balanceValue}>
-                  기술 검증용 잔액 {Number(balanceData.balance).toLocaleString()} RLUSD
-                </Text>
-                <Text style={styles.balanceDesc}>
-                  카드·계좌 결제가 TrustPay를 거쳐야 보호됩니다
-                </Text>
-                <Text style={styles.balanceDesc}>
-                  현금이나 가게 단말기 직접 결제는 보호 대상이 아닙니다
-                </Text>
-                <Text style={styles.balanceAddr}>
-                  원장 주소 {balanceData.xrplAddress.slice(0, 8)}...{balanceData.xrplAddress.slice(-6)}
-                </Text>
-              </View>
-            ) : null}
+              <Text style={styles.balanceValue}>승인하면 보호 시작</Text>
+              <Text style={styles.balanceDesc}>선불금은 이용 전까지 잠겨 있어요</Text>
+            </View>
 
             {pendingChargeApproval && (
               <View style={styles.approvalCard}>
                 <View style={styles.approvalHeader}>
                   <Text style={styles.approvalEyebrow}>푸시 승인 대기</Text>
-                  <Text style={styles.approvalBadge}>현장 결제</Text>
+                  <Text style={styles.approvalBadge}>이용분 승인 요청</Text>
                 </View>
                 <Text style={styles.approvalTitle}>
                   {pendingChargeApproval.businessName}에서 {pendingChargeApproval.menuName} {formatKrwFromRlusd(pendingChargeApproval.amount)} 차감 요청
                 </Text>
                 <Text style={styles.approvalSub}>{formatRlusd(pendingChargeApproval.amount)}</Text>
                 <Text style={styles.approvalDesc}>
-                  지금 매장에서 승인하면 연결된 Token Escrow 단위만 정산됩니다.
+                  지금 승인하면 이미 보호 원장에 잠긴 이용권의 Token Escrow 단위만 정산됩니다.
                 </Text>
                 <View style={styles.approvalActions}>
                   <TouchableOpacity
@@ -378,35 +357,55 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   listContent: { padding: spacing.lg, paddingBottom: 100 },
+  homeHeader: {
+    marginBottom: spacing.md,
+  },
+  greeting: {
+    fontSize: font.size.xxl,
+    fontWeight: font.weight.bold,
+    color: colors.gray900,
+    letterSpacing: -0.6,
+  },
+  greetingSub: {
+    fontSize: font.size.sm,
+    color: colors.gray500,
+    marginTop: spacing.xs,
+  },
   balanceCard: {
     backgroundColor: colors.primary,
-    padding: spacing.xl,
+    padding: spacing.lg,
     borderRadius: radius.lg,
     marginBottom: spacing.lg,
-    alignItems: 'center',
     ...shadow.md,
   },
-  balanceCardError: { backgroundColor: colors.gray400 },
+  balanceTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
   balanceLabel: { fontSize: font.size.sm, color: 'rgba(255,255,255,0.75)' },
+  balanceBadge: {
+    fontSize: font.size.xs,
+    color: colors.primary,
+    fontWeight: font.weight.bold,
+    backgroundColor: colors.white,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    overflow: 'hidden',
+  },
   balanceValue: {
     fontSize: font.size.lg,
     fontWeight: font.weight.bold,
     color: colors.white,
-    marginVertical: spacing.xs,
     letterSpacing: -0.5,
-    textAlign: 'center',
   },
   balanceDesc: {
     fontSize: font.size.xs,
     color: 'rgba(255,255,255,0.76)',
     lineHeight: 18,
-    textAlign: 'center',
-  },
-  balanceAddr: {
-    fontSize: font.size.xs,
-    color: 'rgba(255,255,255,0.5)',
-    fontFamily: font.mono,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   approvalCard: {
     backgroundColor: colors.white,

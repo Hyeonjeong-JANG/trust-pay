@@ -12,7 +12,7 @@ LoginScreen (전화번호/이메일 인증)
     |-- Role: Consumer --> ConsumerDashboard
     |                          |
     |                          +-- BusinessListScreen (사업자 선택)
-    |                          |       +-- PaymentScreen (에스크로 생성)
+    |                          |       +-- PaymentScreen (계좌 승인 보호 결제)
     |                          +-- EscrowDetailScreen (상세/환불)
     |
     +-- Role: Business --> BusinessDashboard
@@ -47,7 +47,7 @@ LoginScreen (전화번호/이메일 인증)
 ### 2.3 BusinessListScreen
 
 - **진입**: ConsumerDashboard에서 "새 결제" 탭 시
-- **목적**: 에스크로를 생성할 사업자 선택
+- **목적**: 계좌 승인 보호 결제를 시작할 사업자 선택
 - **데이터**: `GET /business` -> 활성 사업자 리스트
 - **상호작용**:
   1. 사업자 카드 탭 -> PaymentScreen으로 이동 (선택된 businessId 전달)
@@ -56,12 +56,12 @@ LoginScreen (전화번호/이메일 인증)
 ### 2.4 PaymentScreen
 
 - **진입**: BusinessListScreen에서 사업자 선택 후
-- **목적**: 새 에스크로 생성 (총액 + 기간 입력)
+- **목적**: 계좌 승인 보호 결제 시작 (총액 원화 + 기간 입력)
 - **상호작용**:
-  1. Total Amount (RLUSD) 입력
+  1. Total Amount (KRW) 입력
   2. Duration (months) 입력
-  3. Monthly release 자동 계산 표시 (예: 600 RLUSD / 6개월 = 100 RLUSD/월)
-  4. Create Escrow 버튼 -> API 호출
+  3. Monthly release 자동 계산 표시 (예: 810,000원 / 6개월 = 월 135,000원, 100 RLUSD)
+  4. 계좌 승인 결제 요청 버튼 -> API 호출
   5. 성공 시 Alert + ConsumerDashboard로 복귀
   6. 실패 시 Error Alert
 

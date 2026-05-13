@@ -31,7 +31,7 @@ interface HistoryItem {
 const RIPPLE_EPOCH = 946684800;
 
 const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; bg: string }> = {
-  created: { icon: '📝', label: '에스크로 생성', color: colors.primary, bg: colors.primaryLight },
+  created: { icon: '📝', label: '보호 결제 시작', color: colors.primary, bg: colors.primaryLight },
   released: { icon: '✅', label: '릴리즈 완료', color: colors.success, bg: colors.successLight },
   refunded: { icon: '↩️', label: '환불됨', color: colors.gray500, bg: colors.gray100 },
 };
@@ -53,7 +53,7 @@ export function HistoryScreen(_props: ConsumerTabProps<'History'>) {
     for (const escrow of escrows as EscrowWithBusiness[]) {
       const bizName = escrow.business?.name ?? '사업자';
 
-      // 에스크로 생성 이벤트
+      // 보호 결제 시작 이벤트
       items.push({
         id: `${escrow.id}-created`,
         type: 'created',
@@ -85,23 +85,6 @@ export function HistoryScreen(_props: ConsumerTabProps<'History'>) {
 
   const onRefresh = useCallback(() => { refetch(); }, [refetch]);
 
-  if (isLoading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.listContent}>
-          <SkeletonBox width={120} height={13} style={{ marginBottom: spacing.sm }} />
-          <HistoryCardSkeleton />
-          <HistoryCardSkeleton />
-          <HistoryCardSkeleton />
-        </View>
-      </View>
-    );
-  }
-
-  if (isError) {
-    return <ErrorView error={error} onRetry={() => refetch()} />;
-  }
-
   // 날짜별 그룹핑
   const grouped = useMemo(() => {
     const groups: { title: string; data: HistoryItem[] }[] = [];
@@ -126,6 +109,23 @@ export function HistoryScreen(_props: ConsumerTabProps<'History'>) {
     }
     return result;
   }, [grouped]);
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.listContent}>
+          <SkeletonBox width={120} height={13} style={{ marginBottom: spacing.sm }} />
+          <HistoryCardSkeleton />
+          <HistoryCardSkeleton />
+          <HistoryCardSkeleton />
+        </View>
+      </View>
+    );
+  }
+
+  if (isError) {
+    return <ErrorView error={error} onRetry={() => refetch()} />;
+  }
 
   return (
     <View style={styles.container}>
@@ -166,7 +166,7 @@ export function HistoryScreen(_props: ConsumerTabProps<'History'>) {
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📜</Text>
             <Text style={styles.emptyTitle}>거래 내역이 없습니다</Text>
-            <Text style={styles.emptyDesc}>에스크로 활동이 여기에 기록됩니다</Text>
+            <Text style={styles.emptyDesc}>보호 결제 활동이 여기에 기록됩니다</Text>
           </View>
         }
         contentContainerStyle={styles.listContent}

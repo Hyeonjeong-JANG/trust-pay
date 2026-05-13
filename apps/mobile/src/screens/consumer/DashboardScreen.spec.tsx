@@ -64,7 +64,7 @@ describe('ConsumerDashboardScreen', () => {
     queryClients.length = 0;
   });
 
-  it('should explain protected checkout instead of presenting RLUSD as a top-up balance', async () => {
+  it('should greet the signed-in consumer and keep the protected payment card concise', async () => {
     const { api } = require('../../api/client');
     api.getConsumerEscrows.mockResolvedValue([]);
 
@@ -72,10 +72,15 @@ describe('ConsumerDashboardScreen', () => {
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
-    expect(await findByText('보호 결제 원장 상태')).toBeTruthy();
-    expect(await findByText('기술 검증용 잔액 10,000 RLUSD')).toBeTruthy();
-    expect(await findByText(/카드·계좌 결제가 TrustPay를 거쳐야 보호됩니다/)).toBeTruthy();
-    expect(await findByText(/현금이나 가게 단말기 직접 결제는 보호 대상이 아닙니다/)).toBeTruthy();
+    expect(await findByText('테스트님, 안녕하세요')).toBeTruthy();
+    expect(await findByText('계좌 승인 결제')).toBeTruthy();
+    expect(await findByText('승인하면 보호 시작')).toBeTruthy();
+    expect(await findByText('선불금은 이용 전까지 잠겨 있어요')).toBeTruthy();
+    expect(queryByText('연결 계좌 승인 가능')).toBeNull();
+    expect(queryByText(/앱푸시 승인 후 결제 금액/)).toBeNull();
+    expect(queryByText(/카드는 보조 옵션/)).toBeNull();
+    expect(queryByText(/보호 원장 10,000 RLUSD/)).toBeNull();
+    expect(queryByText(/기술 검증용 잔액/)).toBeNull();
     expect(queryByText('XRPL Testnet RLUSD 잔액')).toBeNull();
   });
 
@@ -257,8 +262,10 @@ describe('ConsumerDashboardScreen', () => {
     );
 
     expect(await findByText('푸시 승인 대기')).toBeTruthy();
+    expect(await findByText('이용분 승인 요청')).toBeTruthy();
     expect(await findByText('헤어살롱 루나에서 클리닉 ₩67,500 차감 요청')).toBeTruthy();
     expect(await findByText('50.00 RLUSD')).toBeTruthy();
+    expect(await findByText(/이미 보호 원장에 잠긴 이용권의 Token Escrow 단위만 정산됩니다/)).toBeTruthy();
     fireEvent.press(await findByText('승인하고 정산'));
 
     await waitFor(() => {

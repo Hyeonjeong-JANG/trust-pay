@@ -98,12 +98,12 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
       queryClient.invalidateQueries({ queryKey: ['balance'] });
-      showSuccessToast('에스크로 생성 완료', 'XRPL에 에스크로가 생성되었습니다!');
+      showSuccessToast('보호 결제 시작 완료', '계좌 승인 후 XRPL 보호 원장에 잠깁니다.');
       navigation.navigate('ConsumerTabs', { screen: 'Home' });
     },
     onError: (err: Error) => {
       const apiErr = err as import('../../api/client').ApiError;
-      showErrorToast('에스크로 생성 실패', apiErr.userMessage ?? err.message);
+      showErrorToast('보호 결제 시작 실패', apiErr.userMessage ?? err.message);
     },
   });
 
@@ -139,15 +139,15 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
         </View>
 
         <View style={styles.protectionCard}>
-          <Text style={styles.protectionEyebrow}>TrustPay 보호 결제로 결제</Text>
-          <Text style={styles.protectionTitle}>처음부터 TrustPay를 거쳐야 선불금이 보호됩니다</Text>
+          <Text style={styles.protectionEyebrow}>TrustPay 계좌 승인으로 결제</Text>
+          <Text style={styles.protectionTitle}>카카오페이처럼 앱에서 승인하면 선불금이 보호됩니다</Text>
           <View style={styles.protectionRow}>
-            <Text style={styles.protectionBadge}>보호됨</Text>
-            <Text style={styles.protectionText}>카드·계좌 결제가 TrustPay를 거쳐야 선불금이 XRPL 원장에 잠깁니다</Text>
+            <Text style={styles.protectionBadge}>메인</Text>
+            <Text style={styles.protectionText}>연결 계좌에서 앱 승인 후 선불금이 XRPL 보호 원장에 잠깁니다</Text>
           </View>
           <View style={styles.protectionRow}>
-            <Text style={[styles.protectionBadge, styles.protectionBadgeMuted]}>제외</Text>
-            <Text style={styles.protectionText}>현금이나 가게 단말기 직접 결제는 이미 업장으로 입금되어 보호할 수 없습니다</Text>
+            <Text style={[styles.protectionBadge, styles.protectionBadgeMuted]}>보조</Text>
+            <Text style={styles.protectionText}>카드는 보조 옵션이며 현금이나 가게 단말기 직접 결제는 보호 대상이 아닙니다</Text>
           </View>
         </View>
 
@@ -299,10 +299,10 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           {mutation.isPending ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator color="#fff" size="small" />
-              <Text style={styles.buttonText}> XRPL에 생성 중...</Text>
+              <Text style={styles.buttonText}> 보호 결제 준비 중...</Text>
             </View>
           ) : (
-            <Text style={styles.buttonText}>에스크로 생성</Text>
+            <Text style={styles.buttonText}>계좌 승인 결제 요청</Text>
           )}
         </Pressable>
       </ScrollView>

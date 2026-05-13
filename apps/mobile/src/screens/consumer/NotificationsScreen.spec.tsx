@@ -91,8 +91,9 @@ describe('NotificationsScreen', () => {
 
     const { findByText } = renderWithProviders(<NotificationsScreen />);
 
-    expect(await findByText('에스크로 생성')).toBeTruthy();
+    expect(await findByText('보호 결제 시작')).toBeTruthy();
     expect(await findByText('릴리즈 완료')).toBeTruthy();
+    expect(await findByText(/계좌 승인 결제 후 파워짐 헬스장 보호 원장에 600 RLUSD가 잠겼습니다/)).toBeTruthy();
     expect(await findByText(/EscrowFinish로 100 RLUSD가 릴리즈되었습니다/)).toBeTruthy();
   });
 });

@@ -59,7 +59,7 @@ describe('PaymentScreen', () => {
     expect(getByText(/총액은 6개의 Token Escrow로 나뉘어 잠기고/)).toBeTruthy();
   });
 
-  it('should explain that only TrustPay protected checkout is covered', () => {
+  it('should explain account-approved TrustPay checkout as the main protected payment path', () => {
     const { getByText } = renderWithProviders(
       <PaymentScreen
         navigation={{ navigate: jest.fn() } as any}
@@ -67,9 +67,9 @@ describe('PaymentScreen', () => {
       />,
     );
 
-    expect(getByText('TrustPay 보호 결제로 결제')).toBeTruthy();
-    expect(getByText(/카드·계좌 결제가 TrustPay를 거쳐야 선불금이 XRPL 원장에 잠깁니다/)).toBeTruthy();
-    expect(getByText(/현금이나 가게 단말기 직접 결제는 이미 업장으로 입금되어 보호할 수 없습니다/)).toBeTruthy();
+    expect(getByText('TrustPay 계좌 승인으로 결제')).toBeTruthy();
+    expect(getByText(/연결 계좌에서 앱 승인 후 선불금이 XRPL 보호 원장에 잠깁니다/)).toBeTruthy();
+    expect(getByText(/카드는 보조 옵션이며 현금이나 가게 단말기 직접 결제는 보호 대상이 아닙니다/)).toBeTruthy();
   });
 
   it('should convert KRW input to decimal RLUSD before creating an escrow', async () => {
@@ -83,7 +83,7 @@ describe('PaymentScreen', () => {
 
     fireEvent.changeText(getByPlaceholderText('예: 810,000'), '1000');
     fireEvent.changeText(getByPlaceholderText('예: 6'), '1');
-    fireEvent.press(getByText('에스크로 생성'));
+    fireEvent.press(getByText('계좌 승인 결제 요청'));
 
     await waitFor(() => expect(api.createEscrow).toHaveBeenCalled());
     const payload = api.createEscrow.mock.calls[0][0];
@@ -103,7 +103,7 @@ describe('PaymentScreen', () => {
     fireEvent.changeText(getByPlaceholderText('예: 202,500'), '30000');
     fireEvent.changeText(getByPlaceholderText('예: 6,750'), '1000');
     fireEvent.changeText(getByPlaceholderText('예: 3'), '3');
-    fireEvent.press(getByText('에스크로 생성'));
+    fireEvent.press(getByText('계좌 승인 결제 요청'));
 
     await waitFor(() => expect(api.createEscrow).toHaveBeenCalled());
     const payload = api.createEscrow.mock.calls[0][0];
@@ -192,7 +192,7 @@ describe('PaymentScreen', () => {
     fireEvent.press(await findByText('헤어살롱 루나 선불권'));
     expect(await findByText('커트 ₩40,500')).toBeTruthy();
     expect(await findByText('클리닉 ₩67,500')).toBeTruthy();
-    fireEvent.press(getByText('에스크로 생성'));
+    fireEvent.press(getByText('계좌 승인 결제 요청'));
 
     await waitFor(() => {
       expect(api.createEscrow).toHaveBeenCalledWith({

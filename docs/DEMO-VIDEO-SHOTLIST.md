@@ -45,11 +45,11 @@ pnpm demo:mobile
 | 시간 | 화면 | 핵심 메시지 |
 |:---|:---|:---|
 | 0:00-0:25 | 온보딩 | 선불 결제 후 폐업 시 미이용분 환불이 어렵다는 문제 제기 |
-| 0:25-0:45 | 온보딩/XRPL 설명 | TrustPay는 RLUSD 선불금을 월별 Token Escrow로 나눠 잠급니다. |
-| 0:45-1:30 | 소비자 로그인/대시보드 | 소비자는 active, completed, cancelled 에스크로 상태를 한눈에 확인합니다. |
+| 0:25-0:45 | 온보딩/XRPL 설명 | TrustPay는 계좌 앱 승인 결제 후 선불금을 RLUSD Token Escrow로 나눠 잠급니다. |
+| 0:45-1:30 | 소비자 로그인/대시보드 | 소비자는 계좌 승인 보호 결제 상태와 active, completed, cancelled 보호 상태를 한눈에 확인합니다. |
 | 1:30-2:15 | 에스크로 상세 | 600 RLUSD가 6개월로 분할되고 3개월 released, 3개월 pending 상태임을 보여줍니다. |
-| 2:15-3:00 | 새 에스크로 생성 | 300 RLUSD, 3개월 결제가 월별 100 RLUSD 에스크로로 나뉘는 구조를 보여줍니다. |
-| 3:00-3:40 | 사업자 대시보드 | 사업자는 서비스 제공 월에 대해서만 `EscrowFinish` 정산을 실행합니다. |
+| 2:15-3:00 | 보호 결제 시작 | 405,000원 계좌 승인 결제가 300 RLUSD, 3개월 보호 원장으로 나뉘는 구조를 보여줍니다. |
+| 3:00-3:40 | 사업자 대시보드 | 사업자는 이미 잠긴 보호 원장에서 고객 이용분 승인 요청을 보내고, 서비스 제공 월/이용분에 대해서만 `EscrowFinish` 정산을 실행합니다. |
 | 3:40-4:15 | 환불 보호 | 폐업/중단 시 released 월은 유지하고 pending 월만 환불 대상으로 분리합니다. |
 | 4:15-4:45 | XRPL 요약 | RLUSD, Trust Line, XLS-85 Token EscrowCreate/Finish/Cancel을 사용했다고 정리합니다. |
 
@@ -60,9 +60,9 @@ pnpm demo:mobile
 | 1 | 온보딩 첫 화면 | 앱 시작 | 헬스장/학원 선불 결제 피해 문제 | 문제 문구가 화면에 보임 |
 | 2 | 온보딩 XRPL 설명 | 다음 화면 이동 | 전액 선지급 대신 RLUSD를 월별 Token Escrow에 예치 | RLUSD, Token Escrow 문구 |
 | 3 | LoginScreen | Consumer 선택, `010-2000-0001` 입력 | 소비자 김민수로 로그인 | Consumer 역할과 전화번호 |
-| 4 | Consumer Dashboard | active 카드 확인 | 내 선불금의 released/pending/refunded 상태 확인 | active/completed/cancelled 카드 |
+| 4 | Consumer Dashboard | active 카드 확인 | 계좌 승인 결제 가능 상태와 내 선불금의 released/pending/refunded 상태 확인 | 계좌 승인 보호 결제, active/completed/cancelled 카드 |
 | 5 | Escrow Detail | 파워짐 active 상세 열기 | 600 RLUSD, 6개월, 3 released + 3 pending | 월별 상태와 tx hash |
-| 6 | Payment Flow | 정상어학원 선택, `300`, `3` 입력 | 하나의 결제가 3개 월별 escrow로 분할 | 월별 100 RLUSD 설명 |
+| 6 | Payment Flow | 정상어학원 선택, `405,000`, `3` 입력 | 계좌 승인 결제 요청 후 하나의 결제가 3개 월별 escrow로 분할 | 계좌 승인 결제 요청, 월별 100 RLUSD 설명 |
 | 7 | Business Login | 로그아웃 후 Business `010-1000-0002` 로그인 | 사업자는 제공한 월만 정산 | 사업자 역할과 파워짐 계정 |
 | 8 | Business Dashboard | Release 버튼 또는 정산 영역 표시 | `EscrowFinish`가 사업자 월별 정산에 대응 | 수령액, 미정산액, Release |
 | 9 | Refund Scenario | cancelled escrow 상태 표시 | 미이용 pending 월은 `EscrowCancel` 환불 대상으로 분리 | refunded/released 상태 |
@@ -73,9 +73,9 @@ pnpm demo:mobile
 ```text
 TrustPay는 헬스장, 학원처럼 선불 결제가 많은 업종에서 사업자 폐업 시 소비자가 미이용분을 돌려받기 어려운 문제를 해결하는 XRPL 기반 프로토타입입니다.
 
-소비자의 선불금은 RLUSD로 표현되고, XRPL의 XLS-85 Token Escrow에 월별로 분할 예치됩니다. 사업자는 서비스를 제공한 월에 대해서만 EscrowFinish로 정산받고, 아직 이용하지 않은 pending 월은 소비자 보호 상태로 남습니다.
+소비자는 카카오페이처럼 연결 계좌에서 앱 승인으로 결제합니다. TrustPay는 승인된 원화 선불금을 RLUSD 기준 보호 원장으로 표현하고, XRPL의 XLS-85 Token Escrow에 월별로 분할 예치합니다. 사업자는 서비스를 제공한 월에 대해서만 EscrowFinish로 정산받고, 아직 이용하지 않은 pending 월은 소비자 보호 상태로 남습니다.
 
-이 데모에서는 소비자 김민수가 600 RLUSD, 6개월 이용권 중 3개월은 released, 3개월은 pending 상태로 보호되는 것을 확인합니다. 새 결제 생성 시에도 300 RLUSD, 3개월 결제가 월별 100 RLUSD 에스크로로 나뉩니다.
+이 데모에서는 소비자 김민수가 600 RLUSD, 6개월 이용권 중 3개월은 released, 3개월은 pending 상태로 보호되는 것을 확인합니다. 새 보호 결제 시작 시에도 405,000원 계좌 승인 결제가 300 RLUSD, 3개월 보호 원장으로 나뉩니다.
 
 사업자 화면에서는 파워짐 헬스장이 제공한 월에 대해서만 정산받는 흐름을 보여줍니다. 만약 서비스가 중단되면 이미 이용한 released 월은 유지하고, 미이용 pending 월만 EscrowCancel 환불 대상으로 분리할 수 있습니다.
 

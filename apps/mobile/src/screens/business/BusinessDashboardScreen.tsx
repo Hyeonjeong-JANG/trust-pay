@@ -71,7 +71,7 @@ export function BusinessDashboardScreen() {
       api.createChargeRequest(escrowId, { menuItemId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
-      showSuccessToast('차감 요청 전송', '소비자 승인 대기 상태로 등록되었습니다.');
+      showSuccessToast('이용분 승인 요청 전송', '소비자 승인 대기 상태로 등록되었습니다.');
     },
     onError: (err: Error) => {
       const apiErr = err as ApiError;
@@ -135,17 +135,17 @@ export function BusinessDashboardScreen() {
               </View>
             ) : balanceError ? (
               <View style={[styles.balanceCard, styles.balanceCardError]}>
-                <Text style={styles.balanceLabel}>RLUSD 잔액</Text>
+                <Text style={styles.balanceLabel}>TrustPay 정산 원장</Text>
                 <Text style={styles.balanceValue}>조회 실패</Text>
               </View>
             ) : balanceData ? (
               <View style={styles.balanceCard}>
-                <Text style={styles.balanceLabel}>XRPL Testnet RLUSD 잔액</Text>
+                <Text style={styles.balanceLabel}>TrustPay 정산 원장</Text>
                 <Text style={styles.balanceValue}>
-                  {Number(balanceData.balance).toLocaleString()} RLUSD
+                  수령 가능 {Number(balanceData.balance).toLocaleString()} RLUSD
                 </Text>
                 <Text style={styles.balanceAddr}>
-                  {balanceData.xrplAddress.slice(0, 8)}...{balanceData.xrplAddress.slice(-6)}
+                  원장 주소 {balanceData.xrplAddress.slice(0, 8)}...{balanceData.xrplAddress.slice(-6)}
                 </Text>
               </View>
             ) : null}
@@ -202,7 +202,7 @@ export function BusinessDashboardScreen() {
 
             <Text style={styles.settlementHint}>
               {filteredEscrows.some((e) => e.escrowType === 'prepaid')
-                ? '이용권은 메뉴별 차감 요청을 보내고 소비자 승인 후 이용 금액을 정산합니다. 월정액은 수령 가능한 월차만 정산됩니다'
+                ? '이미 보호 원장에 잠긴 이용권에서 이용분 차감 요청을 보냅니다. 소비자 승인 후 Token Escrow 단위로 정산됩니다'
                 : 'EscrowFinish로 수령 가능한 월차만 정산됩니다'}
             </Text>
             <Text style={styles.sectionTitle}>
@@ -245,7 +245,7 @@ export function BusinessDashboardScreen() {
               </View>
               {isPrepaid && !!item.product?.menuItems?.length && (
                 <View style={styles.menuRequestList}>
-                  <Text style={styles.menuRequestTitle}>메뉴 차감 요청</Text>
+                  <Text style={styles.menuRequestTitle}>고객 이용분 승인 요청</Text>
                   {item.product.menuItems.map((menu: ProductMenuItem) => (
                     <TouchableOpacity
                       key={menu.id}
@@ -255,7 +255,7 @@ export function BusinessDashboardScreen() {
                       activeOpacity={0.8}
                     >
                       <Text style={styles.menuRequestButtonText}>
-                        {menu.name} 차감 요청 ({formatKrwFromRlusd(menu.amount)})
+                        {menu.name} 이용분 승인 요청 ({formatKrwFromRlusd(menu.amount)})
                       </Text>
                       <Text style={styles.menuRequestButtonSub}>{formatRlusd(menu.amount)}</Text>
                     </TouchableOpacity>

@@ -96,13 +96,16 @@ describe('BusinessDashboardScreen', () => {
 
     const { findAllByText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
 
-    expect(await findByText(/소비자 승인 후 이용 금액을 정산합니다/)).toBeTruthy();
+    expect(await findByText(/이미 보호 원장에 잠긴 이용권에서 이용분 차감 요청을 보냅니다/)).toBeTruthy();
+    expect(await findByText('고객 이용분 승인 요청')).toBeTruthy();
     expect(await findByText(/₩6,750\/회/)).toBeTruthy();
     expect((await findAllByText('5.00 RLUSD')).length).toBeGreaterThan(0);
-    fireEvent.press(await findByText('아메리카노 차감 요청 (₩6,750)'));
+    fireEvent.press(await findByText('아메리카노 이용분 승인 요청 (₩6,750)'));
 
     await waitFor(() => {
       expect(api.createChargeRequest).toHaveBeenCalledWith('e-prepaid', { menuItemId: 'menu-americano' });
+      const { showSuccessToast } = require('../../utils/toast');
+      expect(showSuccessToast).toHaveBeenCalledWith('이용분 승인 요청 전송', '소비자 승인 대기 상태로 등록되었습니다.');
     });
   });
 });

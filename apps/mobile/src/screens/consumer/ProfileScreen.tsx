@@ -57,17 +57,17 @@ export function ProfileScreen(_props: ConsumerTabProps<'Profile'>) {
         </View>
       </View>
 
-      {/* XRPL 지갑 정보 */}
+      {/* XRPL 보호 원장 정보 */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>XRPL 지갑</Text>
-        <Text style={styles.sectionDesc}>데모 지갑으로 RLUSD 잔액과 Testnet 주소를 확인합니다</Text>
+        <Text style={styles.sectionTitle}>XRPL 보호 원장</Text>
+        <Text style={styles.sectionDesc}>보호 원장 증빙용 RLUSD와 Testnet 주소를 확인합니다</Text>
         <View style={styles.card}>
           {isLoading ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : balanceData ? (
             <>
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>잔액</Text>
+                <Text style={styles.infoLabel}>증빙 잔액</Text>
                 <Text style={styles.infoValue}>
                   {Number(balanceData.balance).toLocaleString()} RLUSD
                 </Text>
@@ -88,7 +88,7 @@ export function ProfileScreen(_props: ConsumerTabProps<'Profile'>) {
               </TouchableOpacity>
             </>
           ) : (
-            <Text style={styles.errorText}>지갑 정보를 불러올 수 없습니다</Text>
+            <Text style={styles.errorText}>보호 원장 정보를 불러올 수 없습니다</Text>
           )}
         </View>
       </View>

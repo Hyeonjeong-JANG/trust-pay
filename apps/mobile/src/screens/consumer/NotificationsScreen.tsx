@@ -60,8 +60,8 @@ export function NotificationsScreen() {
       items.push({
         id: `${escrow.id}-created`,
         icon: '📝',
-        title: '에스크로 생성',
-        description: `${bizName}에 ${escrow.totalAmount.toLocaleString()} RLUSD XLS-85 Token Escrow가 생성되었습니다.`,
+        title: '보호 결제 시작',
+        description: `계좌 승인 결제 후 ${bizName} 보호 원장에 ${escrow.totalAmount.toLocaleString()} RLUSD가 잠겼습니다.`,
         timestamp: createdTs,
         isUnread: createdTs > lastViewed,
       });

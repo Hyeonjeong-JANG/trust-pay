@@ -18,7 +18,7 @@ const ERROR_MESSAGES: Record<ApiErrorCode, string> = {
   NETWORK: '네트워크에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.',
   TIMEOUT: '서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.',
   XRPL_TIMEOUT: 'XRPL 블록체인 응답 지연 중입니다. 잠시 후 다시 시도해주세요.',
-  INSUFFICIENT_BALANCE: 'RLUSD 잔액이 부족합니다. 충전 후 다시 시도해주세요.',
+  INSUFFICIENT_BALANCE: '보호 결제에 사용할 원장 잔액이 부족합니다. 계좌 승인 상태를 확인해주세요.',
   UNAUTHORIZED: '인증이 필요합니다. 다시 로그인해주세요.',
   VALIDATION: '입력값을 확인해주세요.',
   NOT_FOUND: '요청한 정보를 찾을 수 없습니다.',
