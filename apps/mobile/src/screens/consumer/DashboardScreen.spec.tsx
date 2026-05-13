@@ -68,7 +68,7 @@ describe('ConsumerDashboardScreen', () => {
     const { api } = require('../../api/client');
     api.getConsumerEscrows.mockResolvedValue([]);
 
-    const { findByText, queryByText } = renderWithProviders(
+    const { findAllByText, findByText, queryByText } = renderWithProviders(
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
@@ -204,25 +204,33 @@ describe('ConsumerDashboardScreen', () => {
           { id: 'charge-2', menuName: '브런치', amount: 17, status: 'settled' },
         ],
       },
+      {
+        id: 'e-prepaid-second',
+        totalAmount: 300,
+        monthlyAmount: 10,
+        months: 30,
+        escrowType: 'prepaid',
+        status: 'active',
+        business: { name: '헤어살롱 루나' },
+        entries: [{ id: 'p-1', amount: '10', status: 'pending' }],
+        chargeRequests: [],
+      },
     ]);
 
-    const { findByText, queryByText } = renderWithProviders(
+    const { findAllByText, findByText, queryByText } = renderWithProviders(
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
     expect(await findByText('강남 블루보틀')).toBeTruthy();
-    expect(await findByText('이용권 차감')).toBeTruthy();
+    expect((await findAllByText('이용권 차감')).length).toBeGreaterThan(0);
     expect(await findByText('₩202,500')).toBeTruthy();
-    expect(await findByText('사용 금액')).toBeTruthy();
-    expect(await findByText('남은 잔액')).toBeTruthy();
-    expect(await findByText('₩49,950')).toBeTruthy();
-    expect(await findByText('₩152,550')).toBeTruthy();
-    expect(await findByText('37.00 RLUSD')).toBeTruthy();
-    expect(await findByText('113.00 RLUSD')).toBeTruthy();
+    expect(await findByText('사용 ₩49,950 · 잔액 ₩152,550')).toBeTruthy();
+    expect(await findAllByText('승인된 실제 사용금액 기준으로 잔액이 줄어듭니다')).toHaveLength(1);
     expect(queryByText(/회 사용됨/)).toBeNull();
     expect(queryByText(/대기 보호금/)).toBeNull();
     expect(queryByText(/남은 금액/)).toBeNull();
-    expect(queryByText(/사용 ₩49,950 · 잔액 ₩152,550/)).toBeNull();
+    expect(queryByText('사용 금액')).toBeNull();
+    expect(queryByText('남은 잔액')).toBeNull();
   });
 
   it('should surface pending charge approvals on escrow cards', async () => {

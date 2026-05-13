@@ -136,6 +136,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
 
   const hasSearchQuery = searchQuery.trim() !== '';
   const isFiltered = hasSearchQuery || statusFilter !== 'all';
+  const hasPrepaidInFiltered = filteredEscrows.some((escrow) => escrow.escrowType === 'prepaid');
   const emptyTitle = hasSearchQuery
     ? '검색 결과가 없습니다'
     : statusFilter === 'active'
@@ -289,6 +290,9 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
                 <Text style={styles.resultCount}>{filteredEscrows.length}건</Text>
               )}
             </View>
+            {hasPrepaidInFiltered && (
+              <Text style={styles.sectionHint}>승인된 실제 사용금액 기준으로 잔액이 줄어듭니다</Text>
+            )}
           </>
         }
         renderItem={({ item }: { item: EscrowWithBusiness }) => {
@@ -326,25 +330,11 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
               </View>
               <Text style={styles.amount}>{formatKrwFromRlusd(item.totalAmount)}</Text>
               <Text style={styles.amountSub}>{formatRlusd(item.totalAmount)}</Text>
-              {isPrepaid && prepaidAmounts && (
-                <View style={styles.prepaidStats}>
-                  <View style={styles.prepaidStatCard}>
-                    <Text style={styles.prepaidStatLabel}>사용 금액</Text>
-                    <Text style={styles.prepaidStatValue}>{formatKrwFromRlusd(prepaidAmounts.usedAmount)}</Text>
-                    <Text style={styles.prepaidStatSub}>{formatRlusd(prepaidAmounts.usedAmount)}</Text>
-                  </View>
-                  <View style={[styles.prepaidStatCard, styles.prepaidStatCardPrimary]}>
-                    <Text style={[styles.prepaidStatLabel, styles.prepaidStatLabelPrimary]}>남은 잔액</Text>
-                    <Text style={[styles.prepaidStatValue, styles.prepaidStatValuePrimary]}>{formatKrwFromRlusd(prepaidAmounts.remainingAmount)}</Text>
-                    <Text style={[styles.prepaidStatSub, styles.prepaidStatSubPrimary]}>{formatRlusd(prepaidAmounts.remainingAmount)}</Text>
-                  </View>
-                </View>
-              )}
               <View style={styles.progressBarBg}>
                 <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
               </View>
               {isPrepaid ? (
-                <Text style={styles.progress}>승인된 실제 사용금액 기준으로 잔액이 줄어듭니다</Text>
+                <Text style={styles.progress}>사용 {formatKrwFromRlusd(prepaidAmounts?.usedAmount ?? 0)} · 잔액 {formatKrwFromRlusd(prepaidAmounts?.remainingAmount ?? 0)}</Text>
               ) : (
                 <Text style={styles.progress}>{released}/{item.months}개월 릴리즈됨</Text>
               )}
@@ -568,7 +558,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
     marginTop: spacing.sm,
   },
   sectionTitle: {
@@ -580,6 +569,13 @@ const styles = StyleSheet.create({
     fontSize: font.size.sm,
     color: colors.gray400,
     fontWeight: font.weight.medium,
+  },
+  sectionHint: {
+    fontSize: font.size.xs,
+    color: colors.gray500,
+    lineHeight: 17,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
   card: {
     backgroundColor: colors.white,
@@ -621,47 +617,6 @@ const styles = StyleSheet.create({
     fontSize: font.size.xs,
     color: colors.gray400,
     marginTop: 1,
-  },
-  prepaidStats: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  prepaidStatCard: {
-    flex: 1,
-    backgroundColor: colors.gray50,
-    borderRadius: radius.sm,
-    padding: spacing.md,
-  },
-  prepaidStatCardPrimary: {
-    backgroundColor: colors.primaryLight,
-  },
-  prepaidStatLabel: {
-    fontSize: font.size.xs,
-    color: colors.gray500,
-    fontWeight: font.weight.semibold,
-    marginBottom: 4,
-  },
-  prepaidStatLabelPrimary: {
-    color: colors.primary,
-  },
-  prepaidStatValue: {
-    fontSize: font.size.md,
-    color: colors.gray900,
-    fontWeight: font.weight.bold,
-    letterSpacing: -0.2,
-  },
-  prepaidStatValuePrimary: {
-    color: colors.primary,
-  },
-  prepaidStatSub: {
-    fontSize: font.size.xs,
-    color: colors.gray400,
-    marginTop: 2,
-  },
-  prepaidStatSubPrimary: {
-    color: colors.primary,
-    opacity: 0.72,
   },
   progressBarBg: {
     height: 4,
