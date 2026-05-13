@@ -1,5 +1,7 @@
 export type EscrowStatus = 'active' | 'completed' | 'cancelled';
 export type EscrowEntryStatus = 'pending' | 'released' | 'refunded';
+export type EscrowType = 'monthly' | 'prepaid';
+export type ChargeRequestStatus = 'pending_approval' | 'settled' | 'rejected' | 'expired';
 export type UserRole = 'consumer' | 'business';
 
 export interface Business {
@@ -32,19 +34,67 @@ export interface EscrowEntry {
   txHash?: string | null;
 }
 
+export interface ProductMenuItem {
+  id: string;
+  productId: string;
+  name: string;
+  amount: number;
+  isActive?: boolean;
+}
+
+export interface BusinessProduct {
+  id: string;
+  businessId: string;
+  name: string;
+  description?: string | null;
+  escrowType: EscrowType;
+  totalAmount: number;
+  monthlyAmount: number;
+  months?: number | null;
+  unitPrice?: number | null;
+  validityMonths?: number | null;
+  isActive?: boolean;
+  menuItems?: ProductMenuItem[];
+}
+
+export interface ChargeRequest {
+  id: string;
+  escrowId: string;
+  consumerId: string;
+  businessId: string;
+  productId?: string | null;
+  menuItemId?: string | null;
+  menuName: string;
+  amount: number;
+  status: ChargeRequestStatus;
+  entryIds: string;
+  requestedAt: Date | string;
+  approvedAt?: Date | string | null;
+  settledAt?: Date | string | null;
+  rejectedAt?: Date | string | null;
+  txHash?: string | null;
+  menuItem?: ProductMenuItem | null;
+}
+
 export interface EscrowRecord {
   id: string;
   consumerId: string;
   businessId: string;
+  productId?: string | null;
   consumerAddress: string;
   businessAddress: string;
   totalAmount: number;
   monthlyAmount: number;
   months: number;
+  escrowType?: EscrowType;
+  unitPrice?: number | null;
+  validityMonths?: number | null;
   currency: string;
   issuer: string;
   status: EscrowStatus;
   entries: EscrowEntry[];
+  product?: BusinessProduct | null;
+  chargeRequests?: ChargeRequest[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -52,12 +102,20 @@ export interface EscrowRecord {
 export interface CreateEscrowRequest {
   consumerId: string;
   businessId: string;
+  productId?: string;
   totalAmount: number;
-  months: number;
+  months?: number;
+  escrowType?: EscrowType;
+  unitPrice?: number;
+  validityMonths?: number;
 }
 
 export interface FinishEscrowRequest {
   entryMonth: number;
+}
+
+export interface CreateChargeRequest {
+  menuItemId: string;
 }
 
 export interface CancelEscrowRequest {
@@ -86,12 +144,14 @@ export interface LoginResponse {
   role: UserRole;
   name: string;
   token: string;
+  isNewUser?: boolean;
 }
 
 export interface RequestCodeResponse {
   delivery: 'demo' | 'sms' | 'email';
   code?: string;
   expiresInSeconds: number;
+  isNewUser?: boolean;
 }
 
 export interface BusinessDashboard {

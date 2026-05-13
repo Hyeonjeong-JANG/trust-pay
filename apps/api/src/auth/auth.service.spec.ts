@@ -70,6 +70,7 @@ describe('AuthService', () => {
           delivery: 'demo',
           code: '123456',
           expiresInSeconds: 300,
+          isNewUser: true,
         });
       } finally {
         process.env.NODE_ENV = originalNodeEnv;
@@ -102,6 +103,12 @@ describe('AuthService', () => {
     });
 
     it('should return the fixed demo OTP for phone login requests', async () => {
+      prisma.consumer.findFirst.mockResolvedValue({
+        id: 'existing-1',
+        name: '기존소비자',
+        phone: '010-1234-5678',
+      });
+
       const result = await service.requestCode({
         phone: '010-1234-5678',
         role: 'consumer',
@@ -111,6 +118,53 @@ describe('AuthService', () => {
         delivery: 'demo',
         code: '123456',
         expiresInSeconds: 300,
+        isNewUser: false,
+      });
+    });
+
+    it('should mark a consumer OTP request as new when no account matches', async () => {
+      prisma.consumer.findFirst.mockResolvedValue(null);
+
+      const result = await service.requestCode({
+        phone: '010-9999-0000',
+        role: 'consumer',
+      });
+
+      expect(result).toEqual({
+        delivery: 'demo',
+        code: '123456',
+        expiresInSeconds: 300,
+        isNewUser: true,
+      });
+    });
+
+    it('should treat hyphenated and digit-only phone numbers as the same consumer', async () => {
+      prisma.consumer.findFirst.mockResolvedValue({
+        id: 'minsu-1',
+        name: '김민수',
+        phone: '010-2000-0001',
+      });
+
+      await service.requestCode({ phone: '01020000001', role: 'consumer' });
+      const result = await service.verifyCode({
+        phone: '01020000001',
+        role: 'consumer',
+        code: '123456',
+      });
+
+      expect(prisma.consumer.findFirst).toHaveBeenCalledWith({
+        where: {
+          OR: expect.arrayContaining([
+            { phone: '01020000001' },
+            { phone: '010-2000-0001' },
+          ]),
+        },
+      });
+      expect(prisma.consumer.create).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        userId: 'minsu-1',
+        role: 'consumer',
+        name: '김민수',
       });
     });
 
@@ -129,6 +183,7 @@ describe('AuthService', () => {
         phone: '010-1234-5678',
       });
       await service.requestCode({ phone: '010-1234-5678', role: 'consumer' });
+      prisma.consumer.findFirst.mockClear();
 
       for (let attempt = 0; attempt < 5; attempt++) {
         await expect(
@@ -161,6 +216,7 @@ describe('AuthService', () => {
         role: 'consumer',
         name: '기존소비자',
         token: expect.any(String),
+        isNewUser: false,
       });
       expect(result.token.split('.')).toHaveLength(2);
     });
@@ -187,7 +243,7 @@ describe('AuthService', () => {
       expect(xrplService.setTrustLine).toHaveBeenCalled();
       expect(prisma.consumer.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          phone: '010-1234-5678',
+          phone: '01012345678',
           name: '테스트',
           xrplAddress: 'rTestAddr123',
           xrplSecret: 'encrypted:sTestSecret123',
@@ -197,6 +253,7 @@ describe('AuthService', () => {
         userId: 'consumer-1',
         role: 'consumer',
         name: '테스트',
+        isNewUser: true,
       });
     });
 
@@ -218,6 +275,7 @@ describe('AuthService', () => {
         userId: 'existing-1',
         role: 'consumer',
         name: '기존소비자',
+        isNewUser: false,
       });
     });
 

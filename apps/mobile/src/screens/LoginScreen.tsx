@@ -17,9 +17,20 @@ import { useAuthStore } from '../store/auth';
 import { colors, spacing, radius, font, shadow } from '../theme';
 
 type UserRole = 'consumer' | 'business';
-type LoginMethod = 'phone' | 'email';
 
 const isWeb = Platform.OS === 'web';
+
+function normalizePhone(identifier: string) {
+  return identifier.replace(/\D/g, '');
+}
+
+function authPayloadFromIdentifier(identifier: string, role: UserRole) {
+  const value = identifier.trim();
+  return {
+    ...(value.includes('@') ? { email: value } : { phone: normalizePhone(value) }),
+    role,
+  };
+}
 
 function PrimaryActionButton({
   label,
@@ -81,27 +92,23 @@ function PrimaryActionButton({
 export function LoginScreen() {
   const setAuth = useAuthStore((s) => s.setAuth);
   const [role, setRole] = useState<UserRole>('consumer');
-  const [method, setMethod] = useState<LoginMethod>('phone');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
+  const [isNewConsumer, setIsNewConsumer] = useState(false);
 
-  const authPayload = () => ({
-    ...(method === 'phone' ? { phone } : { email }),
-    role,
-    ...(name ? { name } : {}),
-  });
+  const authPayload = () => authPayloadFromIdentifier(identifier, role);
 
   const resetCode = () => {
     setCode('');
     setCodeSent(false);
+    setIsNewConsumer(false);
   };
 
   const requestCodeMutation = useMutation({
     mutationFn: () => api.requestCode(authPayload()),
     onSuccess: (data) => {
+      setIsNewConsumer(role === 'consumer' && data.isNewUser === true);
       setCodeSent(true);
     },
     onError: (err: Error) => {
@@ -123,13 +130,15 @@ export function LoginScreen() {
     },
   });
 
-  const isMobilePhoneValid = /^01[016789]-?\d{3,4}-?\d{4}$/.test(phone);
-  const isLandlinePhoneValid = /^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(phone);
+  const trimmedIdentifier = identifier.trim();
+  const isEmailIdentifier = trimmedIdentifier.includes('@');
+  const isMobilePhoneValid = /^01[016789]-?\d{3,4}-?\d{4}$/.test(trimmedIdentifier);
+  const isLandlinePhoneValid = /^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(trimmedIdentifier);
   const isPhoneValid = role === 'business'
     ? isMobilePhoneValid || isLandlinePhoneValid
     : isMobilePhoneValid;
-  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const canSubmit = method === 'phone' ? isPhoneValid : isEmailValid;
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedIdentifier);
+  const canSubmit = isEmailIdentifier ? isEmailValid : isPhoneValid;
   const canVerify = canSubmit && /^\d{6}$/.test(code);
   const isPending = requestCodeMutation.isPending || verifyCodeMutation.isPending;
 
@@ -181,76 +190,22 @@ export function LoginScreen() {
             ))}
           </View>
 
-          {/* 로그인 방식 선택 */}
-          <View style={styles.methodRow}>
-            {(['phone', 'email'] as LoginMethod[]).map((m) => (
-              <TouchableOpacity
-                key={m}
-                style={[styles.methodButton, method === m && styles.methodActive]}
-                onPress={() => {
-                  setMethod(m);
-                  resetCode();
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.methodText, method === m && styles.methodTextActive]}>
-                  {m === 'phone' ? '전화번호' : '이메일'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
           {/* 입력 필드 */}
-          {method === 'phone' ? (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>전화번호</Text>
-              <TextInput
-                style={[styles.input, phone && !isPhoneValid && styles.inputError]}
-                value={phone}
-                onChangeText={(value) => {
-                  setPhone(value);
-                  resetCode();
-                }}
-                placeholder="010-1234-5678"
-                placeholderTextColor={colors.gray400}
-                keyboardType="phone-pad"
-                autoComplete="tel"
-              />
-            </View>
-          ) : (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>이메일</Text>
-              <TextInput
-                style={[styles.input, email && !isEmailValid && styles.inputError]}
-                value={email}
-                onChangeText={(value) => {
-                  setEmail(value);
-                  resetCode();
-                }}
-                placeholder="user@example.com"
-                placeholderTextColor={colors.gray400}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-              />
-            </View>
-          )}
-
-          {role === 'consumer' && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>이름 (선택)</Text>
-              <TextInput
-                style={styles.input}
-                value={name}
-                onChangeText={(value) => {
-                  setName(value);
-                  resetCode();
-                }}
-                placeholder="이름을 입력하세요"
-                placeholderTextColor={colors.gray400}
-              />
-            </View>
-          )}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>전화번호 또는 이메일</Text>
+            <TextInput
+              style={[styles.input, identifier && !canSubmit && styles.inputError]}
+              value={identifier}
+              onChangeText={(value) => {
+                setIdentifier(value);
+                resetCode();
+              }}
+              placeholder="전화번호 또는 이메일"
+              placeholderTextColor={colors.gray400}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
 
           {codeSent && (
             <View style={styles.inputGroup}>
@@ -267,8 +222,17 @@ export function LoginScreen() {
             </View>
           )}
 
+          {codeSent && isNewConsumer && (
+            <View style={styles.signupNotice}>
+              <Text style={styles.signupNoticeTitle}>처음 이용하는 번호예요</Text>
+              <Text style={styles.signupNoticeText}>
+                인증하면 새 TrustPay 소비자 계정이 만들어집니다. 번호를 다시 확인해 주세요.
+              </Text>
+            </View>
+          )}
+
           <PrimaryActionButton
-            label={codeSent ? '로그인' : '인증코드 받기'}
+            label={codeSent ? (isNewConsumer ? '가입하고 시작' : '로그인') : '인증코드 받기'}
             loadingLabel={requestCodeMutation.isPending ? '인증코드 요청 중...' : '로그인 중...'}
             onPress={handleSubmit}
             disabled={(codeSent ? !canVerify : !canSubmit) || isPending}
@@ -362,27 +326,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: font.weight.semibold,
   },
-  methodRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: isWeb ? spacing.lg : spacing.xl,
-  },
-  methodButton: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.full,
-    backgroundColor: colors.gray100,
-  },
-  methodActive: { backgroundColor: colors.primary },
-  methodText: {
-    fontSize: font.size.sm,
-    color: colors.gray500,
-    fontWeight: font.weight.medium,
-  },
-  methodTextActive: {
-    color: colors.white,
-    fontWeight: font.weight.semibold,
-  },
   inputGroup: { marginBottom: isWeb ? spacing.md : spacing.lg },
   label: {
     fontSize: font.size.sm,
@@ -403,6 +346,23 @@ const styles = StyleSheet.create({
   inputError: {
     borderColor: colors.danger,
     backgroundColor: colors.dangerLight,
+  },
+  signupNotice: {
+    backgroundColor: colors.warningLight,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  signupNoticeTitle: {
+    fontSize: font.size.sm,
+    fontWeight: font.weight.bold,
+    color: colors.warning,
+    marginBottom: spacing.xs,
+  },
+  signupNoticeText: {
+    fontSize: font.size.sm,
+    color: colors.gray700,
+    lineHeight: 20,
   },
   button: {
     backgroundColor: colors.primary,

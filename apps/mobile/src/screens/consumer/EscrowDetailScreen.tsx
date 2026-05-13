@@ -16,7 +16,7 @@ import type { ApiError } from '../../api/client';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { ErrorView } from '../../components/ErrorView';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { EscrowEntry } from '@prepaid-shield/shared-types';
+import type { ChargeRequest, EscrowEntry } from '@prepaid-shield/shared-types';
 import type { ScreenProps } from '../../navigation/types';
 import type { EscrowRecord } from '@prepaid-shield/shared-types';
 type EscrowWithRelations = EscrowRecord & { business?: { name: string }; consumer?: { name: string } };
@@ -25,6 +25,10 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   pending: { bg: colors.entry.pendingBg, text: colors.entry.pending },
   released: { bg: colors.entry.releasedBg, text: colors.entry.released },
   refunded: { bg: colors.entry.refundedBg, text: colors.entry.refunded },
+  pending_approval: { bg: colors.entry.pendingBg, text: colors.entry.pending },
+  settled: { bg: colors.entry.releasedBg, text: colors.entry.released },
+  rejected: { bg: colors.entry.refundedBg, text: colors.entry.refunded },
+  expired: { bg: colors.entry.refundedBg, text: colors.entry.refunded },
   active: { bg: colors.escrow.activeBg, text: colors.escrow.active },
   completed: { bg: colors.escrow.completedBg, text: colors.escrow.completed },
   cancelled: { bg: colors.escrow.cancelledBg, text: colors.escrow.cancelled },
@@ -34,6 +38,10 @@ const STATUS_KO: Record<string, string> = {
   pending: '대기',
   released: '릴리즈됨',
   refunded: '환불됨',
+  pending_approval: '승인 대기',
+  settled: '정산됨',
+  rejected: '거절됨',
+  expired: '만료됨',
   active: '진행중',
   completed: '완료',
   cancelled: '취소됨',
@@ -42,6 +50,28 @@ const STATUS_KO: Record<string, string> = {
 function rippleTimeToDate(rippleTime: number): string {
   const RIPPLE_EPOCH = 946684800;
   return new Date((rippleTime + RIPPLE_EPOCH) * 1000).toLocaleDateString('ko-KR');
+}
+
+function isoToDate(value?: Date | string | null): string | null {
+  if (!value) return null;
+  return new Date(value).toLocaleDateString('ko-KR');
+}
+
+function getPrepaidUsageRange(entries: EscrowEntry[]): string | null {
+  const starts = entries.map((entry) => entry.finishAfter).filter((value) => Number.isFinite(value));
+  const ends = entries.map((entry) => entry.cancelAfter).filter((value) => Number.isFinite(value));
+  if (starts.length === 0 || ends.length === 0) return null;
+  return `${rippleTimeToDate(Math.min(...starts))} ~ ${rippleTimeToDate(Math.max(...ends))}`;
+}
+
+function isChargeRequest(item: EscrowEntry | ChargeRequest): item is ChargeRequest {
+  return 'menuName' in item;
+}
+
+function sumEntries(entries: EscrowEntry[], status: string): number {
+  return entries
+    .filter((entry) => entry.status === status)
+    .reduce((sum, entry) => sum + Number(entry.amount), 0);
 }
 
 export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
@@ -66,6 +96,33 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
     onError: (err: Error) => {
       const apiErr = err as ApiError;
       showErrorToast('취소 실패', apiErr.userMessage ?? err.message);
+    },
+  });
+
+  const approveChargeMutation = useMutation({
+    mutationFn: (requestId: string) => api.approveChargeRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['escrow', id] });
+      queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
+      queryClient.invalidateQueries({ queryKey: ['balance'] });
+      showSuccessToast('차감 승인 완료', '소비자 승인 후 XRPL 정산이 실행되었습니다.');
+    },
+    onError: (err: Error) => {
+      const apiErr = err as ApiError;
+      showErrorToast('차감 승인 실패', apiErr.userMessage ?? err.message);
+    },
+  });
+
+  const rejectChargeMutation = useMutation({
+    mutationFn: (requestId: string) => api.rejectChargeRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['escrow', id] });
+      queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
+      showSuccessToast('차감 요청 거절', '사업자에게 거절 상태로 표시됩니다.');
+    },
+    onError: (err: Error) => {
+      const apiErr = err as ApiError;
+      showErrorToast('차감 거절 실패', apiErr.userMessage ?? err.message);
     },
   });
 
@@ -95,13 +152,36 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   const released = escrow.entries.filter((e: EscrowEntry) => e.status === 'released').length;
   const pending = escrow.entries.filter((e: EscrowEntry) => e.status === 'pending').length;
   const refunded = escrow.entries.filter((e: EscrowEntry) => e.status === 'refunded').length;
-  const progressPct = escrow.months > 0 ? (released / escrow.months) * 100 : 0;
+  const isPrepaid = escrow.escrowType === 'prepaid';
+  const pendingChargeRequests = escrow.chargeRequests?.filter((request) => request.status === 'pending_approval') ?? [];
+  const chargeHistory = escrow.chargeRequests?.filter((request) => request.status !== 'pending_approval') ?? [];
+  const totalEntries = escrow.entries.length || escrow.months;
+  const progressPct = totalEntries > 0 ? (released / totalEntries) * 100 : 0;
   const escrowStyle = STATUS_STYLE[escrow.status] ?? STATUS_STYLE.cancelled;
+  const usageRange = isPrepaid ? getPrepaidUsageRange(escrow.entries) : null;
+  const releasedAmount = sumEntries(escrow.entries, 'released');
+  const refundedAmount = sumEntries(escrow.entries, 'refunded');
+  const settledChargeCount = chargeHistory.filter((request) => request.status === 'settled').length;
+  const progressText = isPrepaid
+    ? escrow.status === 'cancelled'
+      ? `사용 ${releasedAmount.toLocaleString()} RLUSD · 환불 ${refundedAmount.toLocaleString()} RLUSD`
+      : `사용 완료 ${released}/${totalEntries}단위 · 잔여 ${pending}단위 · 차감 ${settledChargeCount}건`
+    : `${released}개월 정산 완료 · ${pending}개월 예정${refunded > 0 ? ` · ${refunded}개월 환불` : ''}`;
+  const sectionTitle = isPrepaid
+    ? chargeHistory.length > 0
+      ? '차감 내역'
+      : escrow.status === 'cancelled'
+        ? 'XRPL 원장 상세'
+        : '원장 보호 단위'
+    : '월별 내역';
+  const listData: Array<EscrowEntry | ChargeRequest> = isPrepaid && chargeHistory.length > 0
+    ? chargeHistory
+    : escrow.entries;
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={escrow.entries}
+        data={listData}
         keyExtractor={(item) => item.id}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />
@@ -127,17 +207,23 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 </View>
                 <View style={styles.amountDivider} />
                 <View style={styles.amountItem}>
-                  <Text style={styles.amountLabel}>월별</Text>
-                  <Text style={styles.amountValue}>{escrow.monthlyAmount.toLocaleString()}</Text>
+                  <Text style={styles.amountLabel}>{isPrepaid ? '보호단위' : '월별'}</Text>
+                  <Text style={styles.amountValue}>{(isPrepaid ? escrow.unitPrice ?? escrow.monthlyAmount : escrow.monthlyAmount).toLocaleString()}</Text>
                   <Text style={styles.amountUnit}>RLUSD</Text>
                 </View>
                 <View style={styles.amountDivider} />
                 <View style={styles.amountItem}>
-                  <Text style={styles.amountLabel}>기간</Text>
-                  <Text style={styles.amountValue}>{escrow.months}</Text>
-                  <Text style={styles.amountUnit}>개월</Text>
+                  <Text style={styles.amountLabel}>{isPrepaid ? '단위 수' : '기간'}</Text>
+                  <Text style={styles.amountValue}>{isPrepaid ? totalEntries : escrow.months}</Text>
+                  <Text style={styles.amountUnit}>{isPrepaid ? '개' : '개월'}</Text>
                 </View>
               </View>
+
+              {usageRange && (
+                <View style={styles.usageRangeBox}>
+                  <Text style={styles.usageRangeValue}>사용기한 {usageRange}</Text>
+                </View>
+              )}
 
               {/* 진행률 */}
               <View style={styles.progressSection}>
@@ -145,14 +231,97 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                   <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
                 </View>
                 <Text style={styles.progressText}>
-                  릴리즈 완료 {released}건 · 대기/환불 가능 {pending + refunded}건
+                  {progressText}
                 </Text>
               </View>
             </View>
-            <Text style={styles.sectionTitle}>월별 내역</Text>
+            {isPrepaid && escrow.status === 'cancelled' && (
+              <View style={styles.refundSummaryCard}>
+                <Text style={styles.refundSummaryTitle}>취소/환불 요약</Text>
+                <View style={styles.refundSummaryRow}>
+                  <View style={styles.refundSummaryItem}>
+                    <Text style={styles.refundSummaryLabel}>사용분</Text>
+                    <Text style={styles.refundSummaryValue}>사용 {releasedAmount.toLocaleString()} RLUSD</Text>
+                  </View>
+                  <View style={styles.refundSummaryItem}>
+                    <Text style={styles.refundSummaryLabel}>환불분</Text>
+                    <Text style={styles.refundSummaryValue}>환불 {refundedAmount.toLocaleString()} RLUSD</Text>
+                  </View>
+                </View>
+                <Text style={styles.refundSummaryDesc}>환불 완료 {refunded}개 단위</Text>
+              </View>
+            )}
+            {pendingChargeRequests.length > 0 && (
+              <View style={styles.chargeRequestCard}>
+                <Text style={styles.chargeRequestTitle}>승인 대기 차감 요청</Text>
+                {pendingChargeRequests.map((request) => (
+                  <View key={request.id} style={styles.chargeRequestItem}>
+                    <Text style={styles.chargeRequestMenu}>
+                      {request.menuName} {request.amount.toLocaleString()} RLUSD
+                    </Text>
+                    <Text style={styles.chargeRequestDesc}>
+                      {escrow.business?.name ?? '사업자'}가 메뉴 이용 금액 차감을 요청했습니다. 승인하면 연결된 Token Escrow 단위가 정산됩니다.
+                    </Text>
+                    <View style={styles.chargeRequestActions}>
+                      <TouchableOpacity
+                        style={[styles.approveButton, approveChargeMutation.isPending && styles.buttonDisabled]}
+                        onPress={() => approveChargeMutation.mutate(request.id)}
+                        disabled={approveChargeMutation.isPending || rejectChargeMutation.isPending}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.approveButtonText}>승인하고 정산</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.rejectButton, rejectChargeMutation.isPending && styles.buttonDisabled]}
+                        onPress={() => rejectChargeMutation.mutate(request.id)}
+                        disabled={approveChargeMutation.isPending || rejectChargeMutation.isPending}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.rejectButtonText}>거절</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+            <Text style={styles.sectionTitle}>{sectionTitle}</Text>
           </>
         }
-        renderItem={({ item }: { item: EscrowEntry }) => {
+        renderItem={({ item }: { item: EscrowEntry | ChargeRequest }) => {
+          if (isChargeRequest(item)) {
+            const requestStyle = STATUS_STYLE[item.status] ?? STATUS_STYLE.refunded;
+            const approvedDate = isoToDate(item.approvedAt);
+            const settledDate = isoToDate(item.settledAt);
+            return (
+              <View style={styles.entryCard}>
+                <View style={styles.entryHeader}>
+                  <View style={styles.entryMonthCircle}>
+                    <Text style={styles.entryMonthText}>✓</Text>
+                  </View>
+                  <View style={styles.entryInfo}>
+                    <Text style={styles.entryMonth}>{item.menuName} {item.amount.toLocaleString()} RLUSD</Text>
+                    <Text style={styles.entryDate}>
+                      {approvedDate ? `승인: ${approvedDate}` : `요청: ${isoToDate(item.requestedAt) ?? '-'}`}
+                      {settledDate ? ` · 정산: ${settledDate}` : ''}
+                    </Text>
+                  </View>
+                  <View style={[styles.entryBadge, { backgroundColor: requestStyle.bg }]}>
+                    <Text style={[styles.entryBadgeText, { color: requestStyle.text }]}>
+                      {STATUS_KO[item.status] ?? item.status}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.entryBottom}>
+                  {item.txHash && (
+                    <Text style={styles.txHash} numberOfLines={1}>
+                      원장 증빙: {item.txHash}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            );
+          }
+
           const entryStyle = STATUS_STYLE[item.status] ?? STATUS_STYLE.refunded;
           return (
             <View style={styles.entryCard}>
@@ -161,9 +330,9 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                   <Text style={styles.entryMonthText}>{item.month}</Text>
                 </View>
                 <View style={styles.entryInfo}>
-                  <Text style={styles.entryMonth}>{item.month}월차</Text>
+                  <Text style={styles.entryMonth}>{isPrepaid ? `보호 단위 ${item.month}` : `${item.month}월차`}</Text>
                   <Text style={styles.entryDate}>
-                    finishAfter: {rippleTimeToDate(item.finishAfter)}
+                    {isPrepaid ? '만료' : '정산 가능일'}: {rippleTimeToDate(isPrepaid ? item.cancelAfter : item.finishAfter)}
                   </Text>
                 </View>
                 <View style={[styles.entryBadge, { backgroundColor: entryStyle.bg }]}>
@@ -176,7 +345,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 <Text style={styles.entryAmount}>{Number(item.amount).toLocaleString()} RLUSD</Text>
                 {item.txHash && (
                   <Text style={styles.txHash} numberOfLines={1}>
-                    TX Hash: {item.txHash}
+                    원장 증빙: {item.txHash}
                   </Text>
                 )}
               </View>
@@ -250,6 +419,17 @@ const styles = StyleSheet.create({
     color: colors.gray900,
   },
   amountUnit: { fontSize: font.size.xs, color: colors.gray400, marginTop: 1 },
+  usageRangeBox: {
+    backgroundColor: colors.gray50,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.lg,
+  },
+  usageRangeValue: {
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    color: colors.gray800,
+  },
   amountDivider: {
     width: 1,
     height: 36,
@@ -279,6 +459,93 @@ const styles = StyleSheet.create({
     color: colors.gray900,
     marginBottom: spacing.md,
   },
+  chargeRequestCard: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  chargeRequestTitle: {
+    fontSize: font.size.md,
+    fontWeight: font.weight.bold,
+    color: colors.primaryDark,
+    marginBottom: spacing.md,
+  },
+  chargeRequestItem: {
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  refundSummaryCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    ...shadow.sm,
+  },
+  refundSummaryTitle: {
+    fontSize: font.size.md,
+    fontWeight: font.weight.bold,
+    color: colors.gray900,
+    marginBottom: spacing.md,
+  },
+  refundSummaryRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  refundSummaryItem: {
+    flex: 1,
+    backgroundColor: colors.gray50,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  refundSummaryLabel: {
+    fontSize: font.size.xs,
+    color: colors.gray400,
+    marginBottom: spacing.xs,
+  },
+  refundSummaryValue: {
+    fontSize: font.size.md,
+    fontWeight: font.weight.bold,
+    color: colors.gray900,
+  },
+  refundSummaryDesc: {
+    fontSize: font.size.sm,
+    color: colors.gray500,
+    marginTop: spacing.md,
+  },
+  chargeRequestMenu: {
+    fontSize: font.size.md,
+    fontWeight: font.weight.bold,
+    color: colors.gray900,
+  },
+  chargeRequestDesc: {
+    fontSize: font.size.sm,
+    color: colors.gray500,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+  },
+  chargeRequestActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  approveButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  approveButtonText: { color: colors.white, fontSize: font.size.sm, fontWeight: font.weight.semibold },
+  rejectButton: {
+    backgroundColor: colors.gray100,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  rejectButtonText: { color: colors.gray700, fontSize: font.size.sm, fontWeight: font.weight.semibold },
   entryCard: {
     backgroundColor: colors.white,
     padding: spacing.lg,

@@ -29,6 +29,12 @@ export class BusinessController {
     return this.businessService.getBalance(id, req.user);
   }
 
+  @Get(':id/products')
+  @UseGuards(AuthGuard)
+  findProducts(@Param('id') id: string) {
+    return this.businessService.findProducts(id);
+  }
+
   @Get(':id')
   @UseGuards(AuthGuard)
   findById(@Param('id') id: string, @Req() req: { user: SessionUser }) {

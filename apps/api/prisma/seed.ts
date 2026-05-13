@@ -18,13 +18,43 @@ const BUSINESS_ACADEMY_ID = '00000000-0000-4000-a000-000000000050';
 const ESCROW_ACTIVE_ID = '00000000-0000-4000-a000-000000000100';
 const ESCROW_COMPLETED_ID = '00000000-0000-4000-a000-000000000200';
 const ESCROW_CANCELLED_ID = '00000000-0000-4000-a000-000000000300';
+const ESCROW_PREPAID_CAFE_ID = '00000000-0000-4000-a000-000000000400';
+const ESCROW_PREPAID_SALON_ID = '00000000-0000-4000-a000-000000000500';
+const PRODUCT_CAFE_PASS_ID = '00000000-0000-4000-a000-000000001010';
+const PRODUCT_GYM_MEMBERSHIP_ID = '00000000-0000-4000-a000-000000001020';
+const PRODUCT_SALON_PASS_ID = '00000000-0000-4000-a000-000000001030';
+const MENU_CAFE_AMERICANO_ID = '00000000-0000-4000-a000-000000002011';
+const MENU_CAFE_BRUNCH_ID = '00000000-0000-4000-a000-000000002012';
+const MENU_CAFE_DRIP_BAG_ID = '00000000-0000-4000-a000-000000002013';
+const MENU_CAFE_OFFICE_BOX_ID = '00000000-0000-4000-a000-000000002014';
+const MENU_SALON_CUT_ID = '00000000-0000-4000-a000-000000002031';
+const MENU_SALON_CLINIC_ID = '00000000-0000-4000-a000-000000002032';
+const MENU_SALON_COLOR_ID = '00000000-0000-4000-a000-000000002033';
+const CHARGE_CAFE_COMPLETED_AMERICANO_ID = '00000000-0000-4000-a000-000000003011';
+const CHARGE_CAFE_COMPLETED_BRUNCH_ID = '00000000-0000-4000-a000-000000003012';
+const CHARGE_CAFE_COMPLETED_DRIP_BAG_ID = '00000000-0000-4000-a000-000000003013';
+const CHARGE_CAFE_COMPLETED_OFFICE_BOX_1_ID = '00000000-0000-4000-a000-000000003014';
+const CHARGE_CAFE_COMPLETED_OFFICE_BOX_2_ID = '00000000-0000-4000-a000-000000003015';
+const CHARGE_CAFE_ACTIVE_AMERICANO_1_ID = '00000000-0000-4000-a000-000000003021';
+const CHARGE_CAFE_ACTIVE_BRUNCH_1_ID = '00000000-0000-4000-a000-000000003022';
+const CHARGE_CAFE_ACTIVE_AMERICANO_2_ID = '00000000-0000-4000-a000-000000003023';
+const CHARGE_CAFE_ACTIVE_BRUNCH_2_ID = '00000000-0000-4000-a000-000000003024';
+const CHARGE_SALON_SETTLED_ID = '00000000-0000-4000-a000-000000003001';
+const CHARGE_SALON_PENDING_ID = '00000000-0000-4000-a000-000000003002';
+
+function entryIds(escrowId: string, start: number, end: number): string[] {
+  return Array.from({ length: end - start + 1 }, (_, index) => `${escrowId}-entry-${start + index}`);
+}
 
 async function main() {
   console.log('Seeding database...');
 
   // Clean existing data
+  await prisma.chargeRequest.deleteMany();
   await prisma.escrowEntry.deleteMany();
   await prisma.escrow.deleteMany();
+  await prisma.productMenuItem.deleteMany();
+  await prisma.businessProduct.deleteMany();
   await prisma.consumer.deleteMany();
   await prisma.business.deleteMany();
 
@@ -122,17 +152,77 @@ async function main() {
     },
   });
 
+  const cafePass = await prisma.businessProduct.create({
+    data: {
+      id: PRODUCT_CAFE_PASS_ID,
+      businessId: cafe.id,
+      name: '커피 30잔 이용권',
+      description: '음료와 브런치 메뉴를 5 RLUSD 단위로 차감하는 카페 선불권',
+      escrowType: 'prepaid',
+      totalAmount: 150,
+      monthlyAmount: 5,
+      months: 30,
+      unitPrice: 5,
+      validityMonths: 3,
+      menuItems: {
+        create: [
+          { id: MENU_CAFE_AMERICANO_ID, name: '아메리카노', amount: 5 },
+          { id: MENU_CAFE_BRUNCH_ID, name: '브런치 세트', amount: 15 },
+          { id: MENU_CAFE_DRIP_BAG_ID, name: '드립백 세트', amount: 30 },
+          { id: MENU_CAFE_OFFICE_BOX_ID, name: '오피스 커피 박스', amount: 50 },
+        ],
+      },
+    },
+  });
+
+  const gymMembership = await prisma.businessProduct.create({
+    data: {
+      id: PRODUCT_GYM_MEMBERSHIP_ID,
+      businessId: gym.id,
+      name: '6개월 헬스 회원권',
+      description: '매월 100 RLUSD가 정산되는 월정액 회원권',
+      escrowType: 'monthly',
+      totalAmount: 600,
+      monthlyAmount: 100,
+      months: 6,
+    },
+  });
+
+  const salonPass = await prisma.businessProduct.create({
+    data: {
+      id: PRODUCT_SALON_PASS_ID,
+      businessId: salon.id,
+      name: '헤어살롱 루나 선불권',
+      description: '커트, 클리닉, 염색을 메뉴 금액만큼 소비자 승인 후 차감합니다',
+      escrowType: 'prepaid',
+      totalAmount: 300,
+      monthlyAmount: 10,
+      months: 30,
+      unitPrice: 10,
+      validityMonths: 6,
+      menuItems: {
+        create: [
+          { id: MENU_SALON_CUT_ID, name: '커트', amount: 30 },
+          { id: MENU_SALON_CLINIC_ID, name: '클리닉', amount: 50 },
+          { id: MENU_SALON_COLOR_ID, name: '염색', amount: 80 },
+        ],
+      },
+    },
+  });
+
   // ─── Escrow 1: 진행중 (파워짐 피트니스, 6개월 중 3개월 릴리즈) ───
   const escrow1 = await prisma.escrow.create({
     data: {
       id: ESCROW_ACTIVE_ID,
       consumerId: minsu.id,
       businessId: gym.id,
+      productId: gymMembership.id,
       consumerAddress: minsu.xrplAddress,
       businessAddress: gym.xrplAddress,
       totalAmount: 600,
       monthlyAmount: 100,
       months: 6,
+      escrowType: 'monthly',
       currency: 'RLUSD',
       issuer: 'rDemoIssuerRLUSD000000000001',
       status: 'active',
@@ -159,79 +249,319 @@ async function main() {
     });
   }
 
-  // ─── Escrow 2: 완료 (강남 블루보틀, 3개월 전부 릴리즈) ───
+  // ─── Escrow 2: 완료 (강남 블루보틀, 메뉴별 차감으로 전부 사용) ───
   const escrow2 = await prisma.escrow.create({
     data: {
       id: ESCROW_COMPLETED_ID,
       consumerId: minsu.id,
       businessId: cafe.id,
+      productId: cafePass.id,
       consumerAddress: minsu.xrplAddress,
       businessAddress: cafe.xrplAddress,
-      totalAmount: 450,
-      monthlyAmount: 150,
-      months: 3,
+      totalAmount: 150,
+      monthlyAmount: 5,
+      months: 30,
+      escrowType: 'prepaid',
+      unitPrice: 5,
+      validityMonths: 3,
       currency: 'RLUSD',
       issuer: 'rDemoIssuerRLUSD000000000001',
       status: 'completed',
     },
   });
 
-  for (let m = 1; m <= 3; m++) {
-    const finishDate = new Date('2025-10-01');
-    finishDate.setMonth(finishDate.getMonth() + m);
-    const cancelDate = new Date(finishDate);
-    cancelDate.setMonth(cancelDate.getMonth() + 1);
-
+  const cafeCompletedFinishAfter = isoToRippleTime(new Date('2026-05-01').toISOString());
+  const cafeCompletedCancelAfter = isoToRippleTime(new Date('2026-08-01').toISOString());
+  for (let m = 1; m <= 30; m++) {
     await prisma.escrowEntry.create({
       data: {
+        id: `${escrow2.id}-entry-${m}`,
         escrowId: escrow2.id,
         month: m,
         sequence: 2000 + m,
-        amount: '150',
-        finishAfter: isoToRippleTime(finishDate.toISOString()),
-        cancelAfter: isoToRippleTime(cancelDate.toISOString()),
+        amount: '5',
+        finishAfter: cafeCompletedFinishAfter,
+        cancelAfter: cafeCompletedCancelAfter,
         status: 'released',
-        txHash: `DEMO_TX_HASH_CAFE_MONTH_${m}_${Date.now()}`,
+        txHash: `DEMO_TX_HASH_CAFE_UNIT_COMPLETED_${m}_${Date.now()}`,
       },
     });
   }
 
-  // ─── Escrow 3: 취소됨 (헤어살롱 루나, 4개월 중 1개월 릴리즈 후 취소) ───
+  const cafeCompletedCharges = [
+    {
+      id: CHARGE_CAFE_COMPLETED_AMERICANO_ID,
+      menuItemId: MENU_CAFE_AMERICANO_ID,
+      menuName: '아메리카노',
+      amount: 5,
+      entries: entryIds(escrow2.id, 1, 1),
+      approvedAt: '2026-05-03T02:03:00Z',
+    },
+    {
+      id: CHARGE_CAFE_COMPLETED_BRUNCH_ID,
+      menuItemId: MENU_CAFE_BRUNCH_ID,
+      menuName: '브런치 세트',
+      amount: 15,
+      entries: entryIds(escrow2.id, 2, 4),
+      approvedAt: '2026-05-05T03:12:00Z',
+    },
+    {
+      id: CHARGE_CAFE_COMPLETED_DRIP_BAG_ID,
+      menuItemId: MENU_CAFE_DRIP_BAG_ID,
+      menuName: '드립백 세트',
+      amount: 30,
+      entries: entryIds(escrow2.id, 5, 10),
+      approvedAt: '2026-05-18T06:20:00Z',
+    },
+    {
+      id: CHARGE_CAFE_COMPLETED_OFFICE_BOX_1_ID,
+      menuItemId: MENU_CAFE_OFFICE_BOX_ID,
+      menuName: '오피스 커피 박스',
+      amount: 50,
+      entries: entryIds(escrow2.id, 11, 20),
+      approvedAt: '2026-06-03T05:40:00Z',
+    },
+    {
+      id: CHARGE_CAFE_COMPLETED_OFFICE_BOX_2_ID,
+      menuItemId: MENU_CAFE_OFFICE_BOX_ID,
+      menuName: '오피스 커피 박스',
+      amount: 50,
+      entries: entryIds(escrow2.id, 21, 30),
+      approvedAt: '2026-06-24T05:25:00Z',
+    },
+  ];
+  for (const charge of cafeCompletedCharges) {
+    await prisma.chargeRequest.create({
+      data: {
+        id: charge.id,
+        escrowId: escrow2.id,
+        consumerId: minsu.id,
+        businessId: cafe.id,
+        productId: cafePass.id,
+        menuItemId: charge.menuItemId,
+        menuName: charge.menuName,
+        amount: charge.amount,
+        status: 'settled',
+        entryIds: JSON.stringify(charge.entries),
+        approvedAt: new Date(charge.approvedAt),
+        settledAt: new Date(charge.approvedAt),
+        txHash: `DEMO_TX_HASH_CAFE_${charge.id.slice(-3)}_${Date.now()}`,
+      },
+    });
+  }
+
+  // ─── Escrow 3: 취소됨 (헤어살롱 루나, 4회권 중 1회 사용 후 취소) ───
   const escrow3 = await prisma.escrow.create({
     data: {
       id: ESCROW_CANCELLED_ID,
       consumerId: minsu.id,
       businessId: salon.id,
+      productId: salonPass.id,
       consumerAddress: minsu.xrplAddress,
       businessAddress: salon.xrplAddress,
       totalAmount: 400,
       monthlyAmount: 100,
       months: 4,
+      escrowType: 'prepaid',
+      unitPrice: 100,
+      validityMonths: 4,
       currency: 'RLUSD',
       issuer: 'rDemoIssuerRLUSD000000000001',
       status: 'cancelled',
     },
   });
 
+  const salonCancelledFinishAfter = isoToRippleTime(new Date('2026-05-01').toISOString());
+  const salonCancelledCancelAfter = isoToRippleTime(new Date('2026-09-01').toISOString());
   for (let m = 1; m <= 4; m++) {
-    const finishDate = new Date('2025-12-01');
-    finishDate.setMonth(finishDate.getMonth() + m);
-    const cancelDate = new Date(finishDate);
-    cancelDate.setMonth(cancelDate.getMonth() + 1);
-
     await prisma.escrowEntry.create({
       data: {
         escrowId: escrow3.id,
         month: m,
         sequence: 3000 + m,
         amount: '100',
-        finishAfter: isoToRippleTime(finishDate.toISOString()),
-        cancelAfter: isoToRippleTime(cancelDate.toISOString()),
+        finishAfter: salonCancelledFinishAfter,
+        cancelAfter: salonCancelledCancelAfter,
         status: m === 1 ? 'released' : 'refunded',
-        txHash: `DEMO_TX_HASH_SALON_MONTH_${m}_${Date.now()}`,
+        txHash: `DEMO_TX_HASH_SALON_PREPAID_CANCELLED_${m}_${Date.now()}`,
       },
     });
   }
+
+  // ─── Escrow 4: 이용권 (강남 블루보틀, 30회 중 8회 사용) ───
+  const prepaidCafe = await prisma.escrow.create({
+    data: {
+      id: ESCROW_PREPAID_CAFE_ID,
+      consumerId: seoyeon.id,
+      businessId: cafe.id,
+      productId: cafePass.id,
+      consumerAddress: seoyeon.xrplAddress,
+      businessAddress: cafe.xrplAddress,
+      totalAmount: 150,
+      monthlyAmount: 5,
+      months: 30,
+      escrowType: 'prepaid',
+      unitPrice: 5,
+      validityMonths: 3,
+      currency: 'RLUSD',
+      issuer: 'rDemoIssuerRLUSD000000000001',
+      status: 'active',
+    },
+  });
+
+  const cafeFinishAfter = isoToRippleTime(new Date('2026-05-01').toISOString());
+  const cafeCancelAfter = isoToRippleTime(new Date('2026-08-01').toISOString());
+  for (let m = 1; m <= 30; m++) {
+    await prisma.escrowEntry.create({
+      data: {
+        id: `${prepaidCafe.id}-entry-${m}`,
+        escrowId: prepaidCafe.id,
+        month: m,
+        sequence: 4000 + m,
+        amount: '5',
+        finishAfter: cafeFinishAfter,
+        cancelAfter: cafeCancelAfter,
+        status: m <= 8 ? 'released' : 'pending',
+        txHash: m <= 8 ? `DEMO_TX_HASH_CAFE_PREPAID_${m}_${Date.now()}` : null,
+      },
+    });
+  }
+
+  const cafeActiveCharges = [
+    {
+      id: CHARGE_CAFE_ACTIVE_AMERICANO_1_ID,
+      menuItemId: MENU_CAFE_AMERICANO_ID,
+      menuName: '아메리카노',
+      amount: 5,
+      entries: entryIds(prepaidCafe.id, 1, 1),
+      approvedAt: '2026-05-06T02:10:00Z',
+    },
+    {
+      id: CHARGE_CAFE_ACTIVE_BRUNCH_1_ID,
+      menuItemId: MENU_CAFE_BRUNCH_ID,
+      menuName: '브런치 세트',
+      amount: 15,
+      entries: entryIds(prepaidCafe.id, 2, 4),
+      approvedAt: '2026-05-09T03:25:00Z',
+    },
+    {
+      id: CHARGE_CAFE_ACTIVE_AMERICANO_2_ID,
+      menuItemId: MENU_CAFE_AMERICANO_ID,
+      menuName: '아메리카노',
+      amount: 5,
+      entries: entryIds(prepaidCafe.id, 5, 5),
+      approvedAt: '2026-05-15T01:50:00Z',
+    },
+    {
+      id: CHARGE_CAFE_ACTIVE_BRUNCH_2_ID,
+      menuItemId: MENU_CAFE_BRUNCH_ID,
+      menuName: '브런치 세트',
+      amount: 15,
+      entries: entryIds(prepaidCafe.id, 6, 8),
+      approvedAt: '2026-05-21T03:40:00Z',
+    },
+  ];
+  for (const charge of cafeActiveCharges) {
+    await prisma.chargeRequest.create({
+      data: {
+        id: charge.id,
+        escrowId: prepaidCafe.id,
+        consumerId: seoyeon.id,
+        businessId: cafe.id,
+        productId: cafePass.id,
+        menuItemId: charge.menuItemId,
+        menuName: charge.menuName,
+        amount: charge.amount,
+        status: 'settled',
+        entryIds: JSON.stringify(charge.entries),
+        approvedAt: new Date(charge.approvedAt),
+        settledAt: new Date(charge.approvedAt),
+        txHash: `DEMO_TX_HASH_CAFE_ACTIVE_${charge.id.slice(-3)}_${Date.now()}`,
+      },
+    });
+  }
+
+  // ─── Escrow 5: 이용권 (헤어살롱 루나, 10회 중 2회 사용) ───
+  const prepaidSalon = await prisma.escrow.create({
+    data: {
+      id: ESCROW_PREPAID_SALON_ID,
+      consumerId: minsu.id,
+      businessId: salon.id,
+      productId: salonPass.id,
+      consumerAddress: minsu.xrplAddress,
+      businessAddress: salon.xrplAddress,
+      totalAmount: 300,
+      monthlyAmount: 10,
+      months: 30,
+      escrowType: 'prepaid',
+      unitPrice: 10,
+      validityMonths: 6,
+      currency: 'RLUSD',
+      issuer: 'rDemoIssuerRLUSD000000000001',
+      status: 'active',
+    },
+  });
+
+  const salonFinishAfter = isoToRippleTime(new Date('2026-05-01').toISOString());
+  const salonCancelAfter = isoToRippleTime(new Date('2026-11-01').toISOString());
+  for (let m = 1; m <= 30; m++) {
+    await prisma.escrowEntry.create({
+      data: {
+        id: `${prepaidSalon.id}-entry-${m}`,
+        escrowId: prepaidSalon.id,
+        month: m,
+        sequence: 5000 + m,
+        amount: '10',
+        finishAfter: salonFinishAfter,
+        cancelAfter: salonCancelAfter,
+        status: m <= 3 ? 'released' : 'pending',
+        txHash: m <= 3 ? `DEMO_TX_HASH_SALON_CUT_${m}_${Date.now()}` : null,
+      },
+    });
+  }
+
+  await prisma.chargeRequest.create({
+    data: {
+      id: CHARGE_SALON_SETTLED_ID,
+      escrowId: prepaidSalon.id,
+      consumerId: minsu.id,
+      businessId: salon.id,
+      productId: salonPass.id,
+      menuItemId: MENU_SALON_CUT_ID,
+      menuName: '커트',
+      amount: 30,
+      status: 'settled',
+      entryIds: JSON.stringify([
+        `${prepaidSalon.id}-entry-1`,
+        `${prepaidSalon.id}-entry-2`,
+        `${prepaidSalon.id}-entry-3`,
+      ]),
+      approvedAt: new Date('2026-05-10T09:10:00Z'),
+      settledAt: new Date('2026-05-10T09:12:00Z'),
+      txHash: `DEMO_TX_HASH_SALON_CUT_${Date.now()}`,
+    },
+  });
+
+  await prisma.chargeRequest.create({
+    data: {
+      id: CHARGE_SALON_PENDING_ID,
+      escrowId: prepaidSalon.id,
+      consumerId: minsu.id,
+      businessId: salon.id,
+      productId: salonPass.id,
+      menuItemId: MENU_SALON_CLINIC_ID,
+      menuName: '클리닉',
+      amount: 50,
+      status: 'pending_approval',
+      entryIds: JSON.stringify([
+        `${prepaidSalon.id}-entry-4`,
+        `${prepaidSalon.id}-entry-5`,
+        `${prepaidSalon.id}-entry-6`,
+        `${prepaidSalon.id}-entry-7`,
+        `${prepaidSalon.id}-entry-8`,
+      ]),
+    },
+  });
 
   console.log('Seed complete!');
   console.log(`  Consumer: ${minsu.name} (${minsu.phone})`);
@@ -242,8 +572,10 @@ async function main() {
   console.log(`  Business: ${laundry.name} (${laundry.phone})`);
   console.log(`  Business: ${academy.name} (${academy.phone})`);
   console.log(`  Escrow (active): ${escrow1.id} — ${gym.name}, 6mo, 3/6 released`);
-  console.log(`  Escrow (completed): ${escrow2.id} — ${cafe.name}, 3mo, all released`);
-  console.log(`  Escrow (cancelled): ${escrow3.id} — ${salon.name}, 4mo, 1 released + 3 refunded`);
+  console.log(`  Escrow (prepaid completed): ${escrow2.id} — ${cafe.name}, menu charges, all released`);
+  console.log(`  Escrow (prepaid cancelled): ${escrow3.id} — ${salon.name}, 4 uses, 1 released + 3 refunded`);
+  console.log(`  Escrow (prepaid): ${prepaidCafe.id} — ${cafe.name}, 30 RLUSD units, 4 settled charges`);
+  console.log(`  Escrow (prepaid): ${prepaidSalon.id} — ${salon.name}, 300 RLUSD, 10 RLUSD units, 1 settled charge + 1 pending approval`);
 }
 
 main()

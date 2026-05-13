@@ -47,6 +47,7 @@ export function BusinessSelectScreen({ navigation }: ScreenProps<'BusinessSelect
               navigation.navigate('Payment', {
                 businessId: item.id,
                 businessName: item.name,
+                businessCategory: item.category,
               })
             }
             activeOpacity={0.7}

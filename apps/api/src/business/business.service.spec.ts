@@ -33,6 +33,7 @@ describe('BusinessService', () => {
         findUnique: jest.fn(),
         findMany: jest.fn(),
       },
+      businessProduct: { findMany: jest.fn() },
     };
 
     xrplService = {
@@ -174,6 +175,35 @@ describe('BusinessService', () => {
       });
       expect(result).toHaveLength(1);
       expect(result[0]).not.toHaveProperty('xrplSecret');
+    });
+  });
+
+  describe('findProducts', () => {
+    it('should return active products with active menu items for a business', async () => {
+      prisma.businessProduct.findMany.mockResolvedValue([
+        {
+          id: 'product-1',
+          businessId: 'biz-1',
+          name: '커피 30잔 이용권',
+          escrowType: 'prepaid',
+          totalAmount: 150,
+          monthlyAmount: 5,
+          months: 30,
+          unitPrice: 5,
+          validityMonths: 3,
+          menuItems: [{ id: 'menu-1', name: '아메리카노', amount: 5 }],
+        },
+      ]);
+
+      const result = await service.findProducts('biz-1');
+
+      expect(prisma.businessProduct.findMany).toHaveBeenCalledWith({
+        where: { businessId: 'biz-1', isActive: true },
+        include: { menuItems: { where: { isActive: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(result).toHaveLength(1);
+      expect(result[0].menuItems).toEqual([{ id: 'menu-1', name: '아메리카노', amount: 5 }]);
     });
   });
 });

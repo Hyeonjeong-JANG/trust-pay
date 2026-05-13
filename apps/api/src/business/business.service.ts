@@ -52,7 +52,12 @@ export class BusinessService {
       where: { id },
       include: {
         escrows: {
-          include: { entries: true, consumer: true },
+          include: {
+            entries: true,
+            consumer: true,
+            product: { include: { menuItems: true } },
+            chargeRequests: { include: { menuItem: true } },
+          },
         },
       },
     });
@@ -94,6 +99,14 @@ export class BusinessService {
   async findAll() {
     const businesses = await this.prisma.business.findMany({ where: { isActive: true } });
     return businesses.map(({ xrplSecret: _, ...b }) => b);
+  }
+
+  async findProducts(businessId: string) {
+    return this.prisma.businessProduct.findMany({
+      where: { businessId, isActive: true },
+      include: { menuItems: { where: { isActive: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   private assertBusinessOwner(id: string, user: SessionUser) {

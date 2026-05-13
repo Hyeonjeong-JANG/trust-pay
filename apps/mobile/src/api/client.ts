@@ -1,4 +1,4 @@
-import type { LoginResponse, RequestCodeResponse, EscrowRecord, BusinessDashboard, Business, BalanceResponse } from '@prepaid-shield/shared-types';
+import type { LoginResponse, RequestCodeResponse, EscrowRecord, BusinessDashboard, Business, BalanceResponse, EscrowType, BusinessProduct, ChargeRequest } from '@prepaid-shield/shared-types';
 import { useAuthStore } from '../store/auth';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
@@ -115,7 +115,7 @@ export const api = {
     request<BalanceResponse>(`/${role}/${id}/balance`),
 
   // Escrow
-  createEscrow: (data: { consumerId: string; businessId: string; totalAmount: number; months: number }) =>
+  createEscrow: (data: { consumerId: string; businessId: string; productId?: string; totalAmount: number; months?: number; escrowType?: EscrowType; unitPrice?: number; validityMonths?: number }) =>
     request<EscrowRecord>('/escrow', { method: 'POST', body: JSON.stringify(data) }),
 
   getEscrow: (id: string) => request<EscrowRecord>(`/escrow/${id}`),
@@ -132,8 +132,18 @@ export const api = {
   getConsumerEscrows: (consumerId: string) =>
     request<EscrowRecord[]>(`/escrow/consumer/${consumerId}`),
 
+  createChargeRequest: (escrowId: string, data: { menuItemId: string }) =>
+    request<ChargeRequest>(`/escrow/${escrowId}/charge-requests`, { method: 'POST', body: JSON.stringify(data) }),
+
+  approveChargeRequest: (requestId: string) =>
+    request<ChargeRequest>(`/escrow/charge-requests/${requestId}/approve`, { method: 'POST' }),
+
+  rejectChargeRequest: (requestId: string) =>
+    request<ChargeRequest>(`/escrow/charge-requests/${requestId}/reject`, { method: 'POST' }),
+
   // Business
   getBusinesses: () => request<Business[]>('/business'),
   getBusiness: (id: string) => request<Business>(`/business/${id}`),
+  getBusinessProducts: (id: string) => request<BusinessProduct[]>(`/business/${id}/products`),
   getBusinessDashboard: (id: string) => request<BusinessDashboard>(`/business/${id}/dashboard`),
 };

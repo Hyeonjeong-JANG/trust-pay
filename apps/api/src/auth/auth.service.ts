@@ -20,6 +20,35 @@ const DEMO_OTP = '123456';
 const OTP_TTL_SECONDS = 300;
 const MAX_OTP_ATTEMPTS = 5;
 
+function normalizePhone(phone?: string): string | undefined {
+  const normalized = phone?.replace(/\D/g, '');
+  return normalized || undefined;
+}
+
+function formatKoreanPhone(phone: string): string {
+  if (phone.length === 11 && phone.startsWith('01')) {
+    return `${phone.slice(0, 3)}-${phone.slice(3, 7)}-${phone.slice(7)}`;
+  }
+  if (phone.startsWith('02')) {
+    if (phone.length === 10) return `02-${phone.slice(2, 6)}-${phone.slice(6)}`;
+    if (phone.length === 9) return `02-${phone.slice(2, 5)}-${phone.slice(5)}`;
+  }
+  if (phone.length === 10) {
+    return `${phone.slice(0, 3)}-${phone.slice(3, 6)}-${phone.slice(6)}`;
+  }
+  return phone;
+}
+
+function phoneCandidates(phone: string): string[] {
+  const trimmed = phone.trim();
+  const normalized = normalizePhone(trimmed);
+  return Array.from(new Set([
+    trimmed,
+    normalized,
+    normalized ? formatKoreanPhone(normalized) : undefined,
+  ].filter((value): value is string => Boolean(value))));
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -52,11 +81,15 @@ export class AuthService {
       expiresAt: Date.now() + OTP_TTL_SECONDS * 1000,
       attempts: 0,
     });
+    const isNewUser = dto.role === 'consumer'
+      ? !(await this.findConsumer(dto))
+      : false;
 
     return {
       delivery: 'demo' as const,
       code,
       expiresInSeconds: OTP_TTL_SECONDS,
+      isNewUser,
     };
   }
 
@@ -90,7 +123,7 @@ export class AuthService {
   }
 
   private otpKey(dto: LoginDto) {
-    return `${dto.role}:${dto.phone ? `phone:${dto.phone}` : `email:${dto.email}`}`;
+    return `${dto.role}:${dto.phone ? `phone:${normalizePhone(dto.phone) ?? dto.phone}` : `email:${dto.email}`}`;
   }
 
   private isDemoOtpMode() {
@@ -111,12 +144,8 @@ export class AuthService {
   }
 
   private async loginConsumer(dto: LoginDto) {
-    // 기존 사용자 조회
-    const where = dto.phone
-      ? { phone: dto.phone }
-      : { email: dto.email! };
-
-    let consumer = await this.prisma.consumer.findFirst({ where });
+    let consumer = await this.findConsumer(dto);
+    const isNewUser = !consumer;
 
     if (!consumer) {
       // 자동 등록: 지갑 생성 + Trust Line
@@ -135,8 +164,8 @@ export class AuthService {
       consumer = await this.prisma.consumer.create({
         data: {
           name: dto.name || '소비자',
-          phone: dto.phone,
-          email: dto.email,
+          phone: dto.phone ? normalizePhone(dto.phone) : undefined,
+          email: dto.email?.trim(),
           xrplAddress,
           xrplSecret: this.crypto.encrypt(xrplSecret),
         },
@@ -149,15 +178,12 @@ export class AuthService {
       userId: consumer.id,
       role: 'consumer' as const,
       name: consumer.name,
+      isNewUser,
     };
   }
 
   private async loginBusiness(dto: LoginDto) {
-    const where = dto.phone
-      ? { phone: dto.phone }
-      : { email: dto.email! };
-
-    let business = await this.prisma.business.findFirst({ where });
+    let business = await this.findBusiness(dto);
 
     if (!business) {
       // 사업자는 로그인 시 자동 등록하지 않음 — 별도 등록 필요
@@ -169,5 +195,23 @@ export class AuthService {
       role: 'business' as const,
       name: business.name,
     };
+  }
+
+  private findConsumer(dto: LoginDto) {
+    if (dto.phone) {
+      return this.prisma.consumer.findFirst({
+        where: { OR: phoneCandidates(dto.phone).map((phone) => ({ phone })) },
+      });
+    }
+    return this.prisma.consumer.findFirst({ where: { email: dto.email!.trim() } });
+  }
+
+  private findBusiness(dto: LoginDto) {
+    if (dto.phone) {
+      return this.prisma.business.findFirst({
+        where: { OR: phoneCandidates(dto.phone).map((phone) => ({ phone })) },
+      });
+    }
+    return this.prisma.business.findFirst({ where: { email: dto.email!.trim() } });
   }
 }

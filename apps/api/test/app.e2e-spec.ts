@@ -159,6 +159,7 @@ describe('TrustPay E2E', () => {
         role: 'consumer',
         name: '테스트소비자',
         token: expect.any(String),
+        isNewUser: true,
       });
       consumerUserId = body.userId;
       consumerToken = body.token;

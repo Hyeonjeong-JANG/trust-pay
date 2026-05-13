@@ -8,49 +8,90 @@ datasource db {
 }
 
 model Business {
-  id          String   @id @default(uuid())
-  name        String
-  category    String
-  address     String
-  phone       String?
-  email       String?
-  xrplAddress String   @unique
-  xrplSecret  String
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  escrows     Escrow[] @relation("BusinessEscrows")
+  id             String            @id @default(uuid())
+  name           String
+  category       String
+  address        String
+  phone          String?
+  email          String?
+  xrplAddress    String            @unique
+  xrplSecret     String
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  escrows        Escrow[]          @relation("BusinessEscrows")
+  products       BusinessProduct[]
+  chargeRequests ChargeRequest[]   @relation("BusinessChargeRequests")
 }
 
 model Consumer {
-  id          String   @id @default(uuid())
-  name        String
-  phone       String?
-  email       String?
-  xrplAddress String   @unique
-  xrplSecret  String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  escrows     Escrow[] @relation("ConsumerEscrows")
+  id             String          @id @default(uuid())
+  name           String
+  phone          String?
+  email          String?
+  xrplAddress    String          @unique
+  xrplSecret     String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  escrows        Escrow[]        @relation("ConsumerEscrows")
+  chargeRequests ChargeRequest[] @relation("ConsumerChargeRequests")
+}
+
+model BusinessProduct {
+  id             String            @id @default(uuid())
+  businessId     String
+  name           String
+  description    String?
+  escrowType     String            @default("prepaid")
+  totalAmount    Float
+  monthlyAmount  Float
+  months         Int?
+  unitPrice      Float?
+  validityMonths Int?
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  business       Business          @relation(fields: [businessId], references: [id])
+  menuItems      ProductMenuItem[]
+  escrows        Escrow[]
+  chargeRequests ChargeRequest[]
+}
+
+model ProductMenuItem {
+  id             String          @id @default(uuid())
+  productId      String
+  name           String
+  amount         Float
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  product        BusinessProduct @relation(fields: [productId], references: [id])
+  chargeRequests ChargeRequest[]
 }
 
 model Escrow {
-  id              String        @id @default(uuid())
+  id              String           @id @default(uuid())
   consumerId      String
   businessId      String
+  productId       String?
   consumerAddress String
   businessAddress String
   totalAmount     Float
   monthlyAmount   Float
   months          Int
-  currency        String        @default("RLUSD")
+  escrowType      String           @default("monthly")
+  unitPrice       Float?
+  validityMonths  Int?
+  currency        String           @default("RLUSD")
   issuer          String
-  status          String        @default("active")
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  consumer        Consumer      @relation("ConsumerEscrows", fields: [consumerId], references: [id])
-  business        Business      @relation("BusinessEscrows", fields: [businessId], references: [id])
+  status          String           @default("active")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  consumer        Consumer         @relation("ConsumerEscrows", fields: [consumerId], references: [id])
+  business        Business         @relation("BusinessEscrows", fields: [businessId], references: [id])
+  product         BusinessProduct? @relation(fields: [productId], references: [id])
   entries         EscrowEntry[]
+  chargeRequests  ChargeRequest[]
 }
 
 model EscrowEntry {
@@ -66,4 +107,29 @@ model EscrowEntry {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   escrow      Escrow   @relation(fields: [escrowId], references: [id])
+}
+
+model ChargeRequest {
+  id          String           @id @default(uuid())
+  escrowId    String
+  consumerId  String
+  businessId  String
+  productId   String?
+  menuItemId  String?
+  menuName    String
+  amount      Float
+  status      String           @default("pending_approval")
+  entryIds    String
+  requestedAt DateTime         @default(now())
+  approvedAt  DateTime?
+  settledAt   DateTime?
+  rejectedAt  DateTime?
+  txHash      String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  escrow      Escrow           @relation(fields: [escrowId], references: [id])
+  consumer    Consumer         @relation("ConsumerChargeRequests", fields: [consumerId], references: [id])
+  business    Business         @relation("BusinessChargeRequests", fields: [businessId], references: [id])
+  product     BusinessProduct? @relation(fields: [productId], references: [id])
+  menuItem    ProductMenuItem? @relation(fields: [menuItemId], references: [id])
 }

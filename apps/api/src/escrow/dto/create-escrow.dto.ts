@@ -1,6 +1,10 @@
 export class CreateEscrowDto {
   consumerId!: string;
   businessId!: string;
+  productId?: string;
   totalAmount!: number;
-  months!: number;
+  months?: number;
+  escrowType?: 'monthly' | 'prepaid';
+  unitPrice?: number;
+  validityMonths?: number;
 }

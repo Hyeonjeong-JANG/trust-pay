@@ -116,6 +116,7 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
       role: 'consumer',
       name: '데모소비자',
       token: expect.any(String),
+      isNewUser: true,
     });
     consumerId = body.userId;
     consumerToken = body.token;

@@ -1,8 +1,15 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Client, Wallet, Payment, IssuedCurrencyAmount } from 'xrpl';
+import { Client, Wallet, Payment, IssuedCurrencyAmount, EscrowCreate } from 'xrpl';
 import { XrplEscrowClient, EscrowResult, CreateWalletResult, isoToRippleTime, monthsFromNow, currencyToHex } from '@prepaid-shield/xrpl-client';
 import { randomUUID } from 'crypto';
+
+export class PartialPrepaidEscrowCreationError extends Error {
+  constructor(message: string, readonly escrowResults: EscrowResult[]) {
+    super(message);
+    this.name = 'PartialPrepaidEscrowCreationError';
+  }
+}
 
 @Injectable()
 export class XrplService implements OnModuleDestroy {
@@ -131,6 +138,76 @@ export class XrplService implements OnModuleDestroy {
       issuer,
       demoMode: fastMode,
     });
+  }
+
+  async createPrepaidEscrows(
+    senderWallet: Wallet,
+    destinationAddress: string,
+    unitPrice: string,
+    entryCount: number,
+    validityMonths: number,
+  ): Promise<EscrowResult[]> {
+    const finishAfter = isoToRippleTime(new Date(Date.now() + 60_000).toISOString());
+    const cancelAfter = isoToRippleTime(monthsFromNow(validityMonths, this.isDemoMode).toISOString());
+
+    if (this.isDemoMode) {
+      const results: EscrowResult[] = [];
+      for (let entry = 1; entry <= entryCount; entry++) {
+        results.push({
+          month: entry,
+          sequence: this.demoSequence++,
+          amount: unitPrice,
+          finishAfter,
+          cancelAfter,
+          txHash: `DEMO_PREPAID_${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`,
+        });
+      }
+      this.logger.log(`[DEMO] Created ${entryCount} prepaid escrow entries`);
+      return results;
+    }
+
+    const client = await this.getClient();
+    const currency = this.configService.get<string>('rlusd.currency')!;
+    const issuer = this.configService.get<string>('rlusd.issuer')!;
+    const results: EscrowResult[] = [];
+
+    try {
+      for (let entry = 1; entry <= entryCount; entry++) {
+        const amount: IssuedCurrencyAmount = {
+          currency: currencyToHex(currency),
+          issuer,
+          value: unitPrice,
+        };
+
+        const tx: EscrowCreate = {
+          TransactionType: 'EscrowCreate',
+          Account: senderWallet.address,
+          Destination: destinationAddress,
+          Amount: amount,
+          FinishAfter: finishAfter,
+          CancelAfter: cancelAfter,
+        };
+
+        const response = await client.submitAndWait(tx, { wallet: senderWallet });
+        const sequence = (response.result.tx_json as Record<string, unknown>).Sequence as number;
+
+        results.push({
+          month: entry,
+          sequence,
+          amount: unitPrice,
+          finishAfter,
+          cancelAfter,
+          txHash: response.result.hash,
+        });
+      }
+    } catch (err) {
+      if (results.length > 0) {
+        throw new PartialPrepaidEscrowCreationError('XRPL prepaid escrow creation failed after partial submission', results);
+      }
+      throw err;
+    }
+
+    return results;
   }
 
   async finishEscrow(

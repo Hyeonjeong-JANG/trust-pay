@@ -23,7 +23,7 @@ export type RootStackParamList = {
   Login: undefined;
   ConsumerTabs: NavigatorScreenParams<ConsumerTabParamList>;
   BusinessSelect: undefined;
-  Payment: { businessId: string; businessName: string };
+  Payment: { businessId: string; businessName: string; businessCategory?: string };
   EscrowDetail: { id: string };
   BusinessDetail: { businessId: string };
   BusinessTabs: NavigatorScreenParams<BusinessTabParamList>;

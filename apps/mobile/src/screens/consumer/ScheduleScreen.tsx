@@ -26,6 +26,13 @@ interface ScheduleItem {
   isNext: boolean;
 }
 
+interface PrepaidSummary {
+  escrow: EscrowWithBusiness;
+  total: number;
+  remaining: number;
+  expiresAt: string;
+}
+
 const RIPPLE_EPOCH = 946684800;
 
 function rippleTimeToDate(rippleTime: number): Date {
@@ -65,6 +72,7 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
 
     for (const escrow of escrows as EscrowWithBusiness[]) {
       if (escrow.status !== 'active') continue;
+      if (escrow.escrowType === 'prepaid') continue;
       for (const entry of escrow.entries) {
         if (entry.status !== 'pending') continue;
         const d = rippleTimeToDate(entry.finishAfter);
@@ -89,6 +97,22 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
   }, [escrows]);
 
   const onRefresh = useCallback(() => { refetch(); }, [refetch]);
+
+  const prepaidSummaries = useMemo((): PrepaidSummary[] => {
+    if (!escrows) return [];
+    return (escrows as EscrowWithBusiness[])
+      .filter((escrow) => escrow.status === 'active' && escrow.escrowType === 'prepaid')
+      .map((escrow) => {
+        const pendingEntries = escrow.entries.filter((entry) => entry.status === 'pending');
+        const expiry = pendingEntries[0]?.cancelAfter ?? escrow.entries[0]?.cancelAfter;
+        return {
+          escrow,
+          total: escrow.entries.length || escrow.months,
+          remaining: pendingEntries.length,
+          expiresAt: expiry ? formatDate(rippleTimeToDate(expiry)) : '-',
+        };
+      });
+  }, [escrows]);
 
   if (isLoading) {
     return (
@@ -137,6 +161,16 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
                 대기 월차는 finishAfter 기준으로 표시됩니다
               </Text>
             </View>
+            {prepaidSummaries.length > 0 && (
+              <View style={styles.prepaidCard}>
+                <Text style={styles.prepaidTitle}>이용권 잔여</Text>
+                {prepaidSummaries.map((item) => (
+                  <Text key={item.escrow.id} style={styles.prepaidText}>
+                    {item.escrow.business?.name ?? '사업자'} - {item.remaining}/{item.total}회 남음, 만료: {item.expiresAt}
+                  </Text>
+                ))}
+              </View>
+            )}
             {scheduleItems.length > 0 && (
               <Text style={styles.sectionTitle}>릴리즈 일정</Text>
             )}
@@ -233,6 +267,24 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.semibold,
     color: colors.gray900,
     marginBottom: spacing.md,
+  },
+  prepaidCard: {
+    backgroundColor: colors.white,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    marginBottom: spacing.xl,
+    ...shadow.sm,
+  },
+  prepaidTitle: {
+    fontSize: font.size.md,
+    fontWeight: font.weight.semibold,
+    color: colors.gray900,
+    marginBottom: spacing.sm,
+  },
+  prepaidText: {
+    fontSize: font.size.sm,
+    color: colors.gray600,
+    lineHeight: 20,
   },
   timelineRow: { flexDirection: 'row', minHeight: 80 },
   timelineLeft: { width: 32, alignItems: 'center' },

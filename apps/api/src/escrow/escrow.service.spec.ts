@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { EscrowService } from './escrow.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto.service';
-import { XrplService } from '../xrpl/xrpl.service';
+import { PartialPrepaidEscrowCreationError, XrplService } from '../xrpl/xrpl.service';
 
 // Mock Wallet.fromSeed to avoid real XRPL seed validation
 jest.mock('xrpl', () => ({
@@ -44,6 +44,15 @@ const mockEscrowResults = [
   { month: 3, sequence: 102, amount: '50000', finishAfter: '2026-08-01T00:00:00Z', cancelAfter: '2026-09-01T00:00:00Z', txHash: 'TX3' },
 ];
 
+const mockPrepaidEscrowResults = Array.from({ length: 30 }, (_, index) => ({
+  month: index + 1,
+  sequence: 200 + index,
+  amount: '5',
+  finishAfter: 830000000,
+  cancelAfter: 837000000,
+  txHash: `PREPAID_TX_${index + 1}`,
+}));
+
 describe('EscrowService', () => {
   let service: EscrowService;
   let prisma: any;
@@ -54,6 +63,7 @@ describe('EscrowService', () => {
     prisma = {
       consumer: { findUnique: jest.fn() },
       business: { findUnique: jest.fn() },
+      productMenuItem: { findUnique: jest.fn() },
       escrow: {
         create: jest.fn(),
         findUnique: jest.fn(),
@@ -61,10 +71,16 @@ describe('EscrowService', () => {
         update: jest.fn(),
       },
       escrowEntry: { update: jest.fn() },
+      chargeRequest: {
+        create: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
     };
 
     xrplService = {
       createMonthlyEscrows: jest.fn().mockResolvedValue(mockEscrowResults),
+      createPrepaidEscrows: jest.fn().mockResolvedValue(mockPrepaidEscrowResults),
       finishEscrow: jest.fn().mockResolvedValue('FINISH_TX_HASH'),
       cancelEscrow: jest.fn().mockResolvedValue('CANCEL_TX_HASH'),
     };
@@ -134,6 +150,122 @@ describe('EscrowService', () => {
       expect(result.entries).toHaveLength(3);
     });
 
+    it('should create prepaid escrow entries by unit price', async () => {
+      prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+      prisma.escrow.create.mockResolvedValue({
+        id: 'escrow-prepaid-1',
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 150,
+        monthlyAmount: 5,
+        months: 30,
+        escrowType: 'prepaid',
+        unitPrice: 5,
+        validityMonths: 3,
+        entries: mockPrepaidEscrowResults.map((r, i) => ({ id: `prepaid-entry-${i}`, ...r, status: 'pending' })),
+      });
+
+      const result = await service.create({
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 150,
+        escrowType: 'prepaid',
+        unitPrice: 5,
+        validityMonths: 3,
+      }, consumerUser);
+
+      expect(xrplService.createPrepaidEscrows).toHaveBeenCalledWith(
+        expect.anything(),
+        'rBusinessAddr',
+        '5',
+        30,
+        3,
+      );
+      expect(xrplService.createMonthlyEscrows).not.toHaveBeenCalled();
+      expect(prisma.escrow.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          totalAmount: 150,
+          monthlyAmount: 5,
+          months: 30,
+          escrowType: 'prepaid',
+          unitPrice: 5,
+          validityMonths: 3,
+        }),
+        include: { entries: true },
+      });
+      expect(result.entries).toHaveLength(30);
+    });
+
+    it('should reject prepaid requests above the ledger entry cap before XRPL submission', async () => {
+      prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+
+      await expect(service.create({
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 255,
+        escrowType: 'prepaid',
+        unitPrice: 5,
+        validityMonths: 3,
+      }, consumerUser)).rejects.toThrow(BadRequestException);
+
+      expect(xrplService.createPrepaidEscrows).not.toHaveBeenCalled();
+      expect(prisma.escrow.create).not.toHaveBeenCalled();
+    });
+
+    it('should persist prepaid XRPL entries created before a partial submission failure', async () => {
+      const partialResults = mockPrepaidEscrowResults.slice(0, 2);
+      prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+      xrplService.createPrepaidEscrows.mockRejectedValue(
+        new PartialPrepaidEscrowCreationError('XRPL prepaid creation failed', partialResults),
+      );
+      prisma.escrow.create.mockResolvedValue({
+        id: 'escrow-prepaid-partial',
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 10,
+        monthlyAmount: 5,
+        months: 2,
+        escrowType: 'prepaid',
+        unitPrice: 5,
+        validityMonths: 3,
+        entries: partialResults.map((r, i) => ({ id: `partial-entry-${i}`, ...r, status: 'pending' })),
+      });
+
+      await expect(service.create({
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 150,
+        escrowType: 'prepaid',
+        unitPrice: 5,
+        validityMonths: 3,
+      }, consumerUser)).rejects.toThrow(PartialPrepaidEscrowCreationError);
+
+      expect(prisma.escrow.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          totalAmount: 10,
+          monthlyAmount: 5,
+          months: 2,
+          escrowType: 'prepaid',
+          unitPrice: 5,
+          validityMonths: 3,
+          entries: {
+            create: partialResults.map((r) => ({
+              month: r.month,
+              sequence: r.sequence,
+              amount: r.amount,
+              finishAfter: r.finishAfter,
+              cancelAfter: r.cancelAfter,
+              txHash: r.txHash,
+            })),
+          },
+        }),
+        include: { entries: true },
+      });
+    });
+
     it('should throw if consumer not found', async () => {
       prisma.consumer.findUnique.mockResolvedValue(null);
 
@@ -173,7 +305,13 @@ describe('EscrowService', () => {
       });
       expect(prisma.escrow.findUnique).toHaveBeenCalledWith({
         where: { id: 'escrow-1' },
-        include: { entries: true, business: true, consumer: true },
+        include: {
+          entries: true,
+          business: true,
+          consumer: true,
+          product: { include: { menuItems: true } },
+          chargeRequests: { include: { menuItem: true } },
+        },
       });
     });
 
@@ -253,6 +391,117 @@ describe('EscrowService', () => {
     });
   });
 
+  describe('charge requests', () => {
+    const menuItem = {
+      id: 'menu-cut',
+      productId: 'product-salon',
+      name: '커트',
+      amount: 30,
+      isActive: true,
+      product: { id: 'product-salon', businessId: 'business-1' },
+    };
+
+    const prepaidEscrow = {
+      id: 'escrow-prepaid-1',
+      consumerId: 'consumer-1',
+      businessId: 'business-1',
+      consumerAddress: 'rConsumerAddr',
+      businessAddress: 'rBusinessAddr',
+      escrowType: 'prepaid',
+      status: 'active',
+      productId: 'product-salon',
+      unitPrice: 10,
+      monthlyAmount: 10,
+      entries: [
+        { id: 'entry-1', month: 1, sequence: 201, amount: '10', status: 'pending' },
+        { id: 'entry-2', month: 2, sequence: 202, amount: '10', status: 'pending' },
+        { id: 'entry-3', month: 3, sequence: 203, amount: '10', status: 'pending' },
+        { id: 'entry-4', month: 4, sequence: 204, amount: '10', status: 'pending' },
+      ],
+      chargeRequests: [],
+    };
+
+    it('should create a pending charge request without finishing XRPL entries', async () => {
+      prisma.escrow.findUnique.mockResolvedValue(prepaidEscrow);
+      prisma.productMenuItem.findUnique.mockResolvedValue(menuItem);
+      prisma.chargeRequest.create.mockResolvedValue({
+        id: 'charge-1',
+        escrowId: 'escrow-prepaid-1',
+        menuItemId: 'menu-cut',
+        menuName: '커트',
+        amount: 30,
+        status: 'pending_approval',
+        entryIds: JSON.stringify(['entry-1', 'entry-2', 'entry-3']),
+      });
+
+      const result = await service.createChargeRequest(
+        'escrow-prepaid-1',
+        { menuItemId: 'menu-cut' },
+        businessUser,
+      );
+
+      expect(prisma.chargeRequest.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          escrowId: 'escrow-prepaid-1',
+          consumerId: 'consumer-1',
+          businessId: 'business-1',
+          productId: 'product-salon',
+          menuItemId: 'menu-cut',
+          menuName: '커트',
+          amount: 30,
+          status: 'pending_approval',
+          entryIds: JSON.stringify(['entry-1', 'entry-2', 'entry-3']),
+        }),
+        include: { menuItem: true, escrow: { include: { business: true, consumer: true } } },
+      });
+      expect(xrplService.finishEscrow).not.toHaveBeenCalled();
+      expect(result.status).toBe('pending_approval');
+    });
+
+    it('should finish reserved entries only after consumer approval', async () => {
+      prisma.chargeRequest.findUnique.mockResolvedValue({
+        id: 'charge-1',
+        escrowId: 'escrow-prepaid-1',
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        amount: 30,
+        status: 'pending_approval',
+        entryIds: JSON.stringify(['entry-1', 'entry-2', 'entry-3']),
+        escrow: prepaidEscrow,
+      });
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+      xrplService.finishEscrow
+        .mockResolvedValueOnce('FINISH_TX_1')
+        .mockResolvedValueOnce('FINISH_TX_2')
+        .mockResolvedValueOnce('FINISH_TX_3');
+      prisma.escrowEntry.update.mockResolvedValue({});
+      prisma.chargeRequest.update.mockResolvedValue({
+        id: 'charge-1',
+        status: 'settled',
+        txHash: 'FINISH_TX_1,FINISH_TX_2,FINISH_TX_3',
+      });
+
+      const result = await service.approveChargeRequest('charge-1', consumerUser);
+
+      expect(xrplService.finishEscrow).toHaveBeenCalledTimes(3);
+      expect(xrplService.finishEscrow).toHaveBeenNthCalledWith(1, expect.anything(), 'rConsumerAddr', 201);
+      expect(xrplService.finishEscrow).toHaveBeenNthCalledWith(2, expect.anything(), 'rConsumerAddr', 202);
+      expect(xrplService.finishEscrow).toHaveBeenNthCalledWith(3, expect.anything(), 'rConsumerAddr', 203);
+      expect(prisma.escrowEntry.update).toHaveBeenCalledTimes(3);
+      expect(prisma.chargeRequest.update).toHaveBeenCalledWith({
+        where: { id: 'charge-1' },
+        data: expect.objectContaining({
+          status: 'settled',
+          txHash: 'FINISH_TX_1,FINISH_TX_2,FINISH_TX_3',
+          approvedAt: expect.any(Date),
+          settledAt: expect.any(Date),
+        }),
+        include: { menuItem: true, escrow: { include: { business: true, consumer: true } } },
+      });
+      expect(result.status).toBe('settled');
+    });
+  });
+
   describe('cancelEscrow', () => {
     it('should cancel all pending entries and update escrow status', async () => {
       const escrow = {
@@ -325,7 +574,12 @@ describe('EscrowService', () => {
 
       expect(prisma.escrow.findMany).toHaveBeenCalledWith({
         where: { consumerId: 'consumer-1' },
-        include: { entries: true, business: true },
+        include: {
+          entries: true,
+          business: true,
+          product: { include: { menuItems: true } },
+          chargeRequests: { include: { menuItem: true } },
+        },
       });
       expect(result).toEqual(escrows);
     });

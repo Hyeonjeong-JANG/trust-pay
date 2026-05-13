@@ -53,38 +53,17 @@ describe('LoginScreen', () => {
     expect(getByText('사업자')).toBeTruthy();
   });
 
-  it('should render login method selector with 전화번호 and 이메일', () => {
-    const { getAllByText, getByText } = renderWithProviders(<LoginScreen />);
-    expect(getAllByText('전화번호').length).toBeGreaterThanOrEqual(1);
-    expect(getByText('이메일')).toBeTruthy();
-  });
-
-  it('should show phone input by default', () => {
+  it('should render one identifier input for phone or email', () => {
     const { getByPlaceholderText } = renderWithProviders(<LoginScreen />);
-    expect(getByPlaceholderText('010-1234-5678')).toBeTruthy();
+    expect(getByPlaceholderText('전화번호 또는 이메일')).toBeTruthy();
   });
 
-  it('should switch to email input when 이메일 method selected', () => {
-    const { getByText, getByPlaceholderText, queryByPlaceholderText } =
-      renderWithProviders(<LoginScreen />);
-
-    fireEvent.press(getByText('이메일'));
-
-    expect(getByPlaceholderText('user@example.com')).toBeTruthy();
-    expect(queryByPlaceholderText('010-1234-5678')).toBeNull();
-  });
-
-  it('should show name input for consumer role', () => {
-    const { getByText } = renderWithProviders(<LoginScreen />);
-    expect(getByText('이름 (선택)')).toBeTruthy();
-  });
-
-  it('should hide name input for business role', () => {
+  it('should not render login method selector or name input', () => {
     const { getByText, queryByText } = renderWithProviders(<LoginScreen />);
-
-    fireEvent.press(getByText('사업자'));
-
     expect(queryByText('이름 (선택)')).toBeNull();
+    expect(queryByText('이메일')).toBeNull();
+    expect(getByText('소비자')).toBeTruthy();
+    expect(getByText('사업자')).toBeTruthy();
   });
 
   it('should show consumer hint when consumer role selected', () => {
@@ -121,7 +100,17 @@ describe('LoginScreen', () => {
       <LoginScreen />,
     );
 
-    fireEvent.changeText(getByPlaceholderText('010-1234-5678'), '010-1234-5678');
+    fireEvent.changeText(getByPlaceholderText('전화번호 또는 이메일'), '010-1234-5678');
+
+    expect(getByText('인증코드 받기')).toBeTruthy();
+  });
+
+  it('should keep request code button available when valid email entered', () => {
+    const { getByText, getByPlaceholderText } = renderWithProviders(
+      <LoginScreen />,
+    );
+
+    fireEvent.changeText(getByPlaceholderText('전화번호 또는 이메일'), 'test@test.com');
 
     expect(getByText('인증코드 받기')).toBeTruthy();
   });
@@ -134,12 +123,12 @@ describe('LoginScreen', () => {
       <LoginScreen />,
     );
 
-    fireEvent.changeText(getByPlaceholderText('010-1234-5678'), '010-1234-5678');
+    fireEvent.changeText(getByPlaceholderText('전화번호 또는 이메일'), '010-1234-5678');
     fireEvent.press(getByText('인증코드 받기'));
 
     await waitFor(() => {
       expect(api.requestCode).toHaveBeenCalledWith({
-        phone: '010-1234-5678',
+        phone: '01012345678',
         role: 'consumer',
       });
     });
@@ -165,7 +154,7 @@ describe('LoginScreen', () => {
 
     const { getByText, getByPlaceholderText } = renderWithProviders(<LoginScreen />);
 
-    fireEvent.changeText(getByPlaceholderText('010-1234-5678'), '010-1234-5678');
+    fireEvent.changeText(getByPlaceholderText('전화번호 또는 이메일'), '010-1234-5678');
     fireEvent.press(getByText('인증코드 받기'));
 
     await waitFor(() => expect(getByText('로그인')).toBeTruthy());
@@ -174,7 +163,7 @@ describe('LoginScreen', () => {
 
     await waitFor(() => {
       expect(api.verifyCode).toHaveBeenCalledWith({
-        phone: '010-1234-5678',
+        phone: '01012345678',
         role: 'consumer',
         code: '123456',
       });
@@ -191,14 +180,34 @@ describe('LoginScreen', () => {
     );
 
     fireEvent.press(getByText('사업자'));
-    fireEvent.changeText(getByPlaceholderText('010-1234-5678'), '02-1234-5678');
+    fireEvent.changeText(getByPlaceholderText('전화번호 또는 이메일'), '02-1234-5678');
     fireEvent.press(getByText('인증코드 받기'));
 
     await waitFor(() => {
       expect(api.requestCode).toHaveBeenCalledWith({
-        phone: '02-1234-5678',
+        phone: '0212345678',
         role: 'business',
       });
+    });
+  });
+
+  it('should show a signup confirmation message for a new consumer phone number', async () => {
+    const { api } = require('../api/client');
+    api.requestCode.mockResolvedValue({ delivery: 'demo', code: '123456', expiresInSeconds: 300, isNewUser: true });
+
+    const { getByText, getByPlaceholderText, findByText } = renderWithProviders(
+      <LoginScreen />,
+    );
+
+    fireEvent.changeText(getByPlaceholderText('전화번호 또는 이메일'), '010-9999-0000');
+    fireEvent.press(getByText('인증코드 받기'));
+
+    expect(await findByText('처음 이용하는 번호예요')).toBeTruthy();
+    expect(await findByText('인증하면 새 TrustPay 소비자 계정이 만들어집니다. 번호를 다시 확인해 주세요.')).toBeTruthy();
+    expect(await findByText('가입하고 시작')).toBeTruthy();
+    expect(api.requestCode).toHaveBeenCalledWith({
+      phone: '01099990000',
+      role: 'consumer',
     });
   });
 
@@ -210,8 +219,7 @@ describe('LoginScreen', () => {
       <LoginScreen />,
     );
 
-    fireEvent.press(getByText('이메일'));
-    fireEvent.changeText(getByPlaceholderText('user@example.com'), 'test@test.com');
+    fireEvent.changeText(getByPlaceholderText('전화번호 또는 이메일'), 'test@test.com');
     fireEvent.press(getByText('인증코드 받기'));
 
     await waitFor(() => {

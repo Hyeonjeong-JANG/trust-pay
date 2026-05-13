@@ -45,7 +45,7 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
 export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>) {
   const userId = useAuthStore((s) => s.userId);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
 
   const { data: escrows, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['consumerEscrows', userId],
@@ -76,7 +76,24 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
     return result;
   }, [escrows, statusFilter, searchQuery]);
 
-  const isFiltered = searchQuery.trim() !== '' || statusFilter !== 'all';
+  const hasSearchQuery = searchQuery.trim() !== '';
+  const isFiltered = hasSearchQuery || statusFilter !== 'all';
+  const emptyTitle = hasSearchQuery
+    ? '검색 결과가 없습니다'
+    : statusFilter === 'active'
+      ? '진행중인 보호가 없습니다'
+      : statusFilter === 'completed'
+        ? '완료된 보호가 없습니다'
+        : statusFilter === 'cancelled'
+          ? '취소된 보호가 없습니다'
+          : '에스크로가 없습니다';
+  const emptyDesc = hasSearchQuery
+    ? '다른 검색어나 필터를 시도해보세요'
+    : statusFilter === 'active'
+      ? '완료·취소된 보호는 상단 필터에서 확인할 수 있습니다'
+      : statusFilter === 'all'
+        ? '아래 + 버튼을 눌러 XRPL Token Escrow로 월별 릴리즈되는 선불 보호를 시작하세요'
+        : '다른 상태 필터를 선택해 내 선불 보호를 확인해보세요';
 
   const onRefresh = useCallback(() => {
     refetch();
@@ -190,15 +207,18 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
           </>
         }
         renderItem={({ item }: { item: EscrowWithBusiness }) => {
+          const isPrepaid = item.escrowType === 'prepaid';
           const released = item.entries.filter((e: EscrowEntry) => e.status === 'released').length;
           const pendingEntries = item.entries.filter((e: EscrowEntry) => e.status === 'pending');
           const fallbackMonthly = item.months > 0 ? item.totalAmount / item.months : 0;
+          const totalEntries = item.entries.length || item.months;
           const pendingAmount = pendingEntries.reduce(
             (sum, entry) => sum + Number(entry.amount ?? fallbackMonthly),
             0,
           );
+          const pendingChargeCount = item.chargeRequests?.filter((request) => request.status === 'pending_approval').length ?? 0;
           const statusStyle = STATUS_STYLE[item.status] ?? STATUS_STYLE.cancelled;
-          const progressPct = item.months > 0 ? (released / item.months) * 100 : 0;
+          const progressPct = totalEntries > 0 ? (released / totalEntries) * 100 : 0;
           return (
             <TouchableOpacity
               style={styles.card}
@@ -206,7 +226,10 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
               activeOpacity={0.7}
             >
               <View style={styles.cardHeader}>
-                <Text style={styles.businessName}>{item.business?.name ?? '사업자'}</Text>
+                <View style={styles.cardTitleBlock}>
+                  <Text style={styles.businessName}>{item.business?.name ?? '사업자'}</Text>
+                  <Text style={styles.modelLabel}>{isPrepaid ? '이용권 차감' : '월정액 정산'}</Text>
+                </View>
                 <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
                   <Text style={[styles.badgeText, { color: statusStyle.text }]}>
                     {STATUS_KO[item.status] ?? item.status}
@@ -219,11 +242,18 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
                 <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
               </View>
               <Text style={styles.progress}>
-                {released}/{item.months}개월 릴리즈됨
+                {isPrepaid
+                  ? `${released}/${totalEntries}회 사용됨`
+                  : `${released}/${item.months}개월 릴리즈됨`}
               </Text>
               {pendingAmount > 0 && (
                 <Text style={styles.pendingProtect}>
                   대기 보호금 {pendingAmount.toLocaleString()} RLUSD
+                </Text>
+              )}
+              {pendingChargeCount > 0 && (
+                <Text style={styles.pendingApproval}>
+                  승인 대기 {pendingChargeCount}건
                 </Text>
               )}
             </TouchableOpacity>
@@ -235,12 +265,10 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
               <Text style={styles.emptyIconText}>{isFiltered ? '🔍' : '📋'}</Text>
             </View>
             <Text style={styles.emptyTitle}>
-              {isFiltered ? '검색 결과가 없습니다' : '에스크로가 없습니다'}
+              {emptyTitle}
             </Text>
             <Text style={styles.emptyDesc}>
-              {isFiltered
-                ? '다른 검색어나 필터를 시도해보세요'
-                : '아래 + 버튼을 눌러 XRPL Token Escrow로 월별 릴리즈되는 선불 보호를 시작하세요'}
+              {emptyDesc}
             </Text>
           </View>
         }
@@ -353,14 +381,20 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: spacing.sm,
   },
+  cardTitleBlock: { flex: 1, marginRight: spacing.md },
   businessName: {
     fontSize: font.size.lg,
     fontWeight: font.weight.semibold,
     color: colors.gray900,
-    flex: 1,
+  },
+  modelLabel: {
+    fontSize: font.size.xs,
+    color: colors.primary,
+    fontWeight: font.weight.semibold,
+    marginTop: 2,
   },
   badge: {
     paddingHorizontal: spacing.md,
@@ -393,6 +427,12 @@ const styles = StyleSheet.create({
   pendingProtect: {
     fontSize: font.size.sm,
     color: colors.primary,
+    fontWeight: font.weight.semibold,
+    marginTop: spacing.xs,
+  },
+  pendingApproval: {
+    fontSize: font.size.sm,
+    color: colors.danger,
     fontWeight: font.weight.semibold,
     marginTop: spacing.xs,
   },
