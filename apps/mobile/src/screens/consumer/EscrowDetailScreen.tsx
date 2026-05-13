@@ -15,6 +15,7 @@ import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { ErrorView } from '../../components/ErrorView';
+import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { ChargeRequest, EscrowEntry } from '@prepaid-shield/shared-types';
 import type { ScreenProps } from '../../navigation/types';
@@ -164,7 +165,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   const settledChargeCount = chargeHistory.filter((request) => request.status === 'settled').length;
   const progressText = isPrepaid
     ? escrow.status === 'cancelled'
-      ? `사용 ${releasedAmount.toLocaleString()} RLUSD · 환불 ${refundedAmount.toLocaleString()} RLUSD`
+      ? `사용 ${formatKrwFromRlusd(releasedAmount)} · 환불 ${formatKrwFromRlusd(refundedAmount)}`
       : `사용 완료 ${released}/${totalEntries}단위 · 잔여 ${pending}단위 · 차감 ${settledChargeCount}건`
     : `${released}개월 정산 완료 · ${pending}개월 예정${refunded > 0 ? ` · ${refunded}개월 환불` : ''}`;
   const sectionTitle = isPrepaid
@@ -202,14 +203,14 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
               <View style={styles.amountRow}>
                 <View style={styles.amountItem}>
                   <Text style={styles.amountLabel}>총액</Text>
-                  <Text style={styles.amountValue}>{escrow.totalAmount.toLocaleString()}</Text>
-                  <Text style={styles.amountUnit}>RLUSD</Text>
+                  <Text style={styles.amountValue}>{formatKrwFromRlusd(escrow.totalAmount)}</Text>
+                  <Text style={styles.amountUnit}>{formatRlusd(escrow.totalAmount)}</Text>
                 </View>
                 <View style={styles.amountDivider} />
                 <View style={styles.amountItem}>
                   <Text style={styles.amountLabel}>{isPrepaid ? '보호단위' : '월별'}</Text>
-                  <Text style={styles.amountValue}>{(isPrepaid ? escrow.unitPrice ?? escrow.monthlyAmount : escrow.monthlyAmount).toLocaleString()}</Text>
-                  <Text style={styles.amountUnit}>RLUSD</Text>
+                  <Text style={styles.amountValue}>{formatKrwFromRlusd(isPrepaid ? escrow.unitPrice ?? escrow.monthlyAmount : escrow.monthlyAmount)}</Text>
+                  <Text style={styles.amountUnit}>{formatRlusd(isPrepaid ? escrow.unitPrice ?? escrow.monthlyAmount : escrow.monthlyAmount)}</Text>
                 </View>
                 <View style={styles.amountDivider} />
                 <View style={styles.amountItem}>
@@ -241,11 +242,13 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 <View style={styles.refundSummaryRow}>
                   <View style={styles.refundSummaryItem}>
                     <Text style={styles.refundSummaryLabel}>사용분</Text>
-                    <Text style={styles.refundSummaryValue}>사용 {releasedAmount.toLocaleString()} RLUSD</Text>
+                    <Text style={styles.refundSummaryValue}>사용 {formatKrwFromRlusd(releasedAmount)}</Text>
+                    <Text style={styles.refundSummarySub}>{formatRlusd(releasedAmount)}</Text>
                   </View>
                   <View style={styles.refundSummaryItem}>
                     <Text style={styles.refundSummaryLabel}>환불분</Text>
-                    <Text style={styles.refundSummaryValue}>환불 {refundedAmount.toLocaleString()} RLUSD</Text>
+                    <Text style={styles.refundSummaryValue}>환불 {formatKrwFromRlusd(refundedAmount)}</Text>
+                    <Text style={styles.refundSummarySub}>{formatRlusd(refundedAmount)}</Text>
                   </View>
                 </View>
                 <Text style={styles.refundSummaryDesc}>환불 완료 {refunded}개 단위</Text>
@@ -257,8 +260,9 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 {pendingChargeRequests.map((request) => (
                   <View key={request.id} style={styles.chargeRequestItem}>
                     <Text style={styles.chargeRequestMenu}>
-                      {request.menuName} {request.amount.toLocaleString()} RLUSD
+                      {request.menuName} {formatKrwFromRlusd(request.amount)}
                     </Text>
+                    <Text style={styles.chargeRequestAmountSub}>{formatRlusd(request.amount)}</Text>
                     <Text style={styles.chargeRequestDesc}>
                       {escrow.business?.name ?? '사업자'}가 메뉴 이용 금액 차감을 요청했습니다. 승인하면 연결된 Token Escrow 단위가 정산됩니다.
                     </Text>
@@ -299,7 +303,8 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                     <Text style={styles.entryMonthText}>✓</Text>
                   </View>
                   <View style={styles.entryInfo}>
-                    <Text style={styles.entryMonth}>{item.menuName} {item.amount.toLocaleString()} RLUSD</Text>
+                    <Text style={styles.entryMonth}>{item.menuName} {formatKrwFromRlusd(item.amount)}</Text>
+                    <Text style={styles.entryRlusd}>{formatRlusd(item.amount)}</Text>
                     <Text style={styles.entryDate}>
                       {approvedDate ? `승인: ${approvedDate}` : `요청: ${isoToDate(item.requestedAt) ?? '-'}`}
                       {settledDate ? ` · 정산: ${settledDate}` : ''}
@@ -342,7 +347,8 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 </View>
               </View>
               <View style={styles.entryBottom}>
-                <Text style={styles.entryAmount}>{Number(item.amount).toLocaleString()} RLUSD</Text>
+                <Text style={styles.entryAmount}>{formatKrwFromRlusd(item.amount)}</Text>
+                <Text style={styles.entryRlusd}>{formatRlusd(item.amount)}</Text>
                 {item.txHash && (
                   <Text style={styles.txHash} numberOfLines={1}>
                     원장 증빙: {item.txHash}
@@ -509,6 +515,11 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.bold,
     color: colors.gray900,
   },
+  refundSummarySub: {
+    fontSize: font.size.xs,
+    color: colors.gray400,
+    marginTop: 2,
+  },
   refundSummaryDesc: {
     fontSize: font.size.sm,
     color: colors.gray500,
@@ -518,6 +529,11 @@ const styles = StyleSheet.create({
     fontSize: font.size.md,
     fontWeight: font.weight.bold,
     color: colors.gray900,
+  },
+  chargeRequestAmountSub: {
+    fontSize: font.size.xs,
+    color: colors.gray400,
+    marginTop: 2,
   },
   chargeRequestDesc: {
     fontSize: font.size.sm,
@@ -573,6 +589,7 @@ const styles = StyleSheet.create({
   },
   entryInfo: { flex: 1 },
   entryMonth: { fontSize: font.size.md, fontWeight: font.weight.semibold, color: colors.gray800 },
+  entryRlusd: { fontSize: font.size.xs, color: colors.gray400, marginTop: 1 },
   entryDate: { fontSize: font.size.xs, color: colors.gray400, marginTop: 1 },
   entryBadge: {
     paddingHorizontal: spacing.sm,

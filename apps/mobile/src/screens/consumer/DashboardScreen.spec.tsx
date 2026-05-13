@@ -130,7 +130,8 @@ describe('ConsumerDashboardScreen', () => {
     expect(await findByText('테스트카페')).toBeTruthy();
     expect(await findByText('월정액 정산')).toBeTruthy();
     expect(await findByText('1/3개월 릴리즈됨')).toBeTruthy();
-    expect(await findByText('대기 보호금 100,000 RLUSD')).toBeTruthy();
+    expect(await findByText('대기 보호금 ₩135,000,000')).toBeTruthy();
+    expect(await findByText('100,000.00 RLUSD')).toBeTruthy();
   });
 
   it('should render prepaid escrow progress by usage count', async () => {
@@ -157,8 +158,10 @@ describe('ConsumerDashboardScreen', () => {
 
     expect(await findByText('강남 블루보틀')).toBeTruthy();
     expect(await findByText('이용권 차감')).toBeTruthy();
+    expect(await findByText('₩202,500')).toBeTruthy();
     expect(await findByText('8/30회 사용됨')).toBeTruthy();
-    expect(await findByText('대기 보호금 110 RLUSD')).toBeTruthy();
+    expect(await findByText('대기 보호금 ₩148,500')).toBeTruthy();
+    expect(await findByText('110.00 RLUSD')).toBeTruthy();
   });
 
   it('should surface pending charge approvals on escrow cards', async () => {

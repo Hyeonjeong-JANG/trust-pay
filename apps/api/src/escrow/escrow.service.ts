@@ -10,6 +10,30 @@ import type { SessionUser } from '../common/session-token';
 
 const MAX_PREPAID_ESCROW_ENTRIES = 50;
 const RESERVED_CHARGE_STATUSES = new Set(['pending_approval']);
+const INTEGER_RATIO_EPSILON = 1e-4;
+const MAX_DECIMAL_ROUNDING_RATIO_EPSILON = 0.05;
+const DECIMAL_ROUNDING_HALF_UNIT = 0.5e-6;
+const RLUSD_DECIMAL_PLACES = 6;
+
+function getWholeRatio(total: number, unit: number): number | null {
+  if (!Number.isFinite(total) || !Number.isFinite(unit) || unit <= 0) return null;
+  const count = total / unit;
+  const rounded = Math.round(count);
+  const roundingTolerance = Math.min(
+    ((rounded + 1) * DECIMAL_ROUNDING_HALF_UNIT) / unit,
+    MAX_DECIMAL_ROUNDING_RATIO_EPSILON,
+  );
+  const tolerance = Math.max(INTEGER_RATIO_EPSILON, roundingTolerance);
+  return Math.abs(count - rounded) <= tolerance ? rounded : null;
+}
+
+function roundRlusdAmount(amount: number): number {
+  return Number(amount.toFixed(RLUSD_DECIMAL_PLACES));
+}
+
+function formatRlusdAmount(amount: number): string {
+  return String(roundRlusdAmount(amount));
+}
 
 function safeWalletFromSeed(secret: string): Wallet {
   try {
@@ -58,6 +82,7 @@ export class EscrowService {
 
     const escrowType = product?.escrowType ?? dto.escrowType ?? 'monthly';
     const totalAmount = product?.totalAmount ?? dto.totalAmount;
+    let recordTotalAmount = totalAmount;
     const requestedMonths = product?.months ?? dto.months;
     const requestedUnitPrice = product?.unitPrice ?? dto.unitPrice;
     const requestedValidityMonths = product?.validityMonths ?? dto.validityMonths;
@@ -82,7 +107,7 @@ export class EscrowService {
         productId: product?.id,
         consumerAddress: consumer.xrplAddress,
         businessAddress: business.xrplAddress,
-        totalAmount: overrides.totalAmount ?? totalAmount,
+        totalAmount: overrides.totalAmount ?? recordTotalAmount,
         monthlyAmount,
         months: overrides.entryMonths ?? entryMonths,
         escrowType,
@@ -107,8 +132,8 @@ export class EscrowService {
       if (!requestedUnitPrice || !requestedValidityMonths) {
         throw new BadRequestException('이용권 에스크로에는 1회 이용금액과 유효기간이 필요합니다');
       }
-      const entryCount = totalAmount / requestedUnitPrice;
-      if (!Number.isInteger(entryCount)) {
+      const entryCount = getWholeRatio(totalAmount, requestedUnitPrice);
+      if (entryCount === null) {
         throw new BadRequestException('총액은 1회 이용금액으로 나누어 떨어져야 합니다');
       }
       if (entryCount > MAX_PREPAID_ESCROW_ENTRIES) {
@@ -119,11 +144,12 @@ export class EscrowService {
       validityMonths = requestedValidityMonths;
       monthlyAmount = requestedUnitPrice;
       entryMonths = entryCount;
+      recordTotalAmount = roundRlusdAmount(requestedUnitPrice * entryCount);
       try {
         escrowResults = await this.xrplService.createPrepaidEscrows(
           senderWallet,
           business.xrplAddress,
-          String(requestedUnitPrice),
+          formatRlusdAmount(requestedUnitPrice),
           entryCount,
           requestedValidityMonths,
         );
@@ -131,7 +157,7 @@ export class EscrowService {
         if (err instanceof PartialPrepaidEscrowCreationError) {
           const createdCount = err.escrowResults.length;
           await createEscrowRecord(err.escrowResults, {
-            totalAmount: requestedUnitPrice * createdCount,
+            totalAmount: roundRlusdAmount(requestedUnitPrice * createdCount),
             entryMonths: createdCount,
           });
         }
@@ -146,7 +172,7 @@ export class EscrowService {
       escrowResults = await this.xrplService.createMonthlyEscrows(
         senderWallet,
         business.xrplAddress,
-        String(monthlyAmount),
+        formatRlusdAmount(monthlyAmount),
         requestedMonths,
       );
     }
@@ -248,8 +274,8 @@ export class EscrowService {
 
     const unitAmount = Number(escrow.unitPrice ?? escrow.monthlyAmount);
     const requestedAmount = Number(menuItem.amount);
-    const requiredEntryCount = requestedAmount / unitAmount;
-    if (!Number.isInteger(requiredEntryCount)) {
+    const requiredEntryCount = getWholeRatio(requestedAmount, unitAmount);
+    if (requiredEntryCount === null) {
       throw new BadRequestException(`메뉴 금액은 ${unitAmount} RLUSD 단위로 나누어 떨어져야 합니다`);
     }
 

@@ -54,10 +54,11 @@ describe('BusinessDashboardScreen', () => {
       ],
     });
 
-    const { findByText } = renderWithProviders(<BusinessDashboardScreen />);
+    const { findAllByText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
 
     expect(await findByText(/EscrowFinish로 수령 가능한 월차/)).toBeTruthy();
-    expect(await findByText('1월차 수령 가능 (100 RLUSD)')).toBeTruthy();
+    expect(await findByText('1월차 수령 가능 (₩135,000)')).toBeTruthy();
+    expect((await findAllByText('100.00 RLUSD')).length).toBeGreaterThan(0);
   });
 
   it('should show prepaid settlement as per-use receipt', async () => {
@@ -93,11 +94,12 @@ describe('BusinessDashboardScreen', () => {
       ],
     });
 
-    const { findByText } = renderWithProviders(<BusinessDashboardScreen />);
+    const { findAllByText, findByText } = renderWithProviders(<BusinessDashboardScreen />);
 
     expect(await findByText(/소비자 승인 후 이용 금액을 정산합니다/)).toBeTruthy();
-    expect(await findByText(/5 RLUSD\/회/)).toBeTruthy();
-    fireEvent.press(await findByText('아메리카노 차감 요청 (5 RLUSD)'));
+    expect(await findByText(/₩6,750\/회/)).toBeTruthy();
+    expect((await findAllByText('5.00 RLUSD')).length).toBeGreaterThan(0);
+    fireEvent.press(await findByText('아메리카노 차감 요청 (₩6,750)'));
 
     await waitFor(() => {
       expect(api.createChargeRequest).toHaveBeenCalledWith('e-prepaid', { menuItemId: 'menu-americano' });

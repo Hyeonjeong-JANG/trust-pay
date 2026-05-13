@@ -54,6 +54,8 @@ describe('EscrowDetailScreen', () => {
     );
 
     expect(await findByText('XRPL 원장 상태')).toBeTruthy();
+    expect(await findByText('₩810,000')).toBeTruthy();
+    expect(await findByText('600.00 RLUSD')).toBeTruthy();
     expect(await findByText('3개월 정산 완료 · 3개월 예정')).toBeTruthy();
     expect((await findAllByText(/정산 가능일:/)).length).toBeGreaterThan(0);
     expect(await findByText(/원장 증빙: ABC123/)).toBeTruthy();
@@ -133,14 +135,16 @@ describe('EscrowDetailScreen', () => {
       ],
     });
 
-    const { findByText, queryByText } = renderWithProviders(
+    const { findAllByText, findByText, queryByText } = renderWithProviders(
       <EscrowDetailScreen route={{ params: { id: 'e-cafe-completed' } } as any} navigation={{} as any} />,
     );
 
     expect(await findByText('차감 내역')).toBeTruthy();
     expect(await findByText('사용 완료 4/4단위 · 잔여 0단위 · 차감 2건')).toBeTruthy();
-    expect(await findByText('아메리카노 5 RLUSD')).toBeTruthy();
-    expect(await findByText('브런치 세트 15 RLUSD')).toBeTruthy();
+    expect(await findByText('아메리카노 ₩6,750')).toBeTruthy();
+    expect(await findByText('브런치 세트 ₩20,250')).toBeTruthy();
+    expect((await findAllByText('5.00 RLUSD')).length).toBeGreaterThan(0);
+    expect((await findAllByText('15.00 RLUSD')).length).toBeGreaterThan(0);
     expect(await findByText(/사용기한 2026\. 4\. 27\. ~ 2026\. 7\. 10\./)).toBeTruthy();
     expect(await findByText(/원장 증빙: TX_AMERICANO/)).toBeTruthy();
     expect(queryByText('1회차')).toBeNull();
@@ -172,8 +176,8 @@ describe('EscrowDetailScreen', () => {
     );
 
     expect(await findByText('취소/환불 요약')).toBeTruthy();
-    expect(await findByText('사용 100 RLUSD')).toBeTruthy();
-    expect(await findByText('환불 300 RLUSD')).toBeTruthy();
+    expect(await findByText('사용 ₩135,000')).toBeTruthy();
+    expect(await findByText('환불 ₩405,000')).toBeTruthy();
     expect(await findByText('환불 완료 3개 단위')).toBeTruthy();
     expect(await findByText('XRPL 원장 상세')).toBeTruthy();
     expect(await findByText(/원장 증빙: USED_UNIT/)).toBeTruthy();
@@ -213,7 +217,8 @@ describe('EscrowDetailScreen', () => {
     );
 
     expect(await findByText('승인 대기 차감 요청')).toBeTruthy();
-    expect(await findByText('클리닉 50 RLUSD')).toBeTruthy();
+    expect(await findByText('클리닉 ₩67,500')).toBeTruthy();
+    expect(await findByText('50.00 RLUSD')).toBeTruthy();
     fireEvent.press(await findByText('승인하고 정산'));
 
     await waitFor(() => {

@@ -18,6 +18,7 @@ import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, BusinessSummaryRowSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
+import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowRecord, EscrowEntry, ProductMenuItem } from '@prepaid-shield/shared-types';
 
@@ -154,16 +155,18 @@ export function BusinessDashboardScreen() {
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryIcon}>✅</Text>
                 <Text style={styles.summaryValue}>
-                  {dashboard?.totalReceived?.toLocaleString() ?? 0}
+                  {formatKrwFromRlusd(dashboard?.totalReceived ?? 0)}
                 </Text>
-                <Text style={styles.summaryLabel}>수령액 (RLUSD)</Text>
+                <Text style={styles.summarySub}>{formatRlusd(dashboard?.totalReceived ?? 0)}</Text>
+                <Text style={styles.summaryLabel}>수령액</Text>
               </View>
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryIcon}>⏳</Text>
                 <Text style={styles.summaryValue}>
-                  {dashboard?.totalPending?.toLocaleString() ?? 0}
+                  {formatKrwFromRlusd(dashboard?.totalPending ?? 0)}
                 </Text>
-                <Text style={styles.summaryLabel}>대기액 (RLUSD)</Text>
+                <Text style={styles.summarySub}>{formatRlusd(dashboard?.totalPending ?? 0)}</Text>
+                <Text style={styles.summaryLabel}>대기액</Text>
               </View>
             </View>
 
@@ -227,10 +230,14 @@ export function BusinessDashboardScreen() {
                 <View style={styles.cardInfo}>
                   <Text style={styles.cardTitle}>{item.consumer?.name ?? '소비자'}</Text>
                   <Text style={styles.cardSub}>
-                    {item.monthlyAmount.toLocaleString()} RLUSD/{isPrepaid ? '회' : '월'} · {pendingEntries.length}건 대기
+                    {formatKrwFromRlusd(item.monthlyAmount)}/{isPrepaid ? '회' : '월'} · {pendingEntries.length}건 대기
                   </Text>
+                  <Text style={styles.cardSubRlusd}>{formatRlusd(item.monthlyAmount)}</Text>
                 </View>
-                <Text style={styles.cardAmount}>{item.totalAmount.toLocaleString()}</Text>
+                <View style={styles.cardAmountBlock}>
+                  <Text style={styles.cardAmount}>{formatKrwFromRlusd(item.totalAmount)}</Text>
+                  <Text style={styles.cardAmountSub}>{formatRlusd(item.totalAmount)}</Text>
+                </View>
               </View>
               {/* 진행률 */}
               <View style={styles.progressBarBg}>
@@ -248,8 +255,9 @@ export function BusinessDashboardScreen() {
                       activeOpacity={0.8}
                     >
                       <Text style={styles.menuRequestButtonText}>
-                        {menu.name} 차감 요청 ({menu.amount.toLocaleString()} RLUSD)
+                        {menu.name} 차감 요청 ({formatKrwFromRlusd(menu.amount)})
                       </Text>
+                      <Text style={styles.menuRequestButtonSub}>{formatRlusd(menu.amount)}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -268,9 +276,10 @@ export function BusinessDashboardScreen() {
                 >
                   <Text style={styles.releaseButtonText}>
                     {isPrepaid
-                      ? `${nextEntry.month}회차 수령 (${Number(nextEntry.amount).toLocaleString()} RLUSD)`
-                      : `${nextEntry.month}월차 수령 가능 (${Number(nextEntry.amount).toLocaleString()} RLUSD)`}
+                      ? `${nextEntry.month}회차 수령 (${formatKrwFromRlusd(nextEntry.amount)})`
+                      : `${nextEntry.month}월차 수령 가능 (${formatKrwFromRlusd(nextEntry.amount)})`}
                   </Text>
+                  <Text style={styles.releaseButtonSub}>{formatRlusd(nextEntry.amount)}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -330,6 +339,7 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.bold,
     color: colors.gray900,
   },
+  summarySub: { fontSize: font.size.xs, color: colors.gray400, marginTop: 2 },
   summaryLabel: { fontSize: font.size.xs, color: colors.gray500, marginTop: spacing.xs },
   settlementHint: {
     fontSize: font.size.sm,
@@ -371,11 +381,14 @@ const styles = StyleSheet.create({
   cardInfo: { flex: 1 },
   cardTitle: { fontSize: font.size.md, fontWeight: font.weight.semibold, color: colors.gray900 },
   cardSub: { fontSize: font.size.sm, color: colors.gray400, marginTop: 2 },
+  cardSubRlusd: { fontSize: font.size.xs, color: colors.gray400, marginTop: 1 },
+  cardAmountBlock: { alignItems: 'flex-end', marginLeft: spacing.sm },
   cardAmount: {
     fontSize: font.size.md,
     fontWeight: font.weight.bold,
     color: colors.primary,
   },
+  cardAmountSub: { fontSize: font.size.xs, color: colors.gray400, marginTop: 1 },
   progressBarBg: {
     height: 4,
     backgroundColor: colors.gray200,
@@ -397,6 +410,7 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.5 },
   releaseButtonText: { color: colors.white, fontWeight: font.weight.semibold, fontSize: font.size.sm },
+  releaseButtonSub: { color: 'rgba(255,255,255,0.75)', fontSize: font.size.xs, marginTop: 2 },
   menuRequestList: {
     marginTop: spacing.md,
     gap: spacing.sm,
@@ -413,6 +427,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   menuRequestButtonText: { color: colors.white, fontWeight: font.weight.semibold, fontSize: font.size.sm },
+  menuRequestButtonSub: { color: 'rgba(255,255,255,0.75)', fontSize: font.size.xs, marginTop: 2 },
   emptyContainer: { alignItems: 'center', paddingTop: 60 },
   emptyIcon: { fontSize: 40, marginBottom: spacing.md },
   emptyTitle: {

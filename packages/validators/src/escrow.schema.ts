@@ -1,8 +1,23 @@
 import { z } from 'zod';
 
 export const MAX_PREPAID_ESCROW_ENTRIES = 50;
+const INTEGER_RATIO_EPSILON = 1e-4;
+const MAX_DECIMAL_ROUNDING_RATIO_EPSILON = 0.05;
+const DECIMAL_ROUNDING_HALF_UNIT = 0.5e-6;
 
 const phoneRegex = /^(01[016789]-?\d{3,4}-?\d{4}|0[2-6][1-5]?-?\d{3,4}-?\d{4})$/;
+
+function getWholeRatio(total: number, unit: number): number | null {
+  if (!Number.isFinite(total) || !Number.isFinite(unit) || unit <= 0) return null;
+  const count = total / unit;
+  const rounded = Math.round(count);
+  const roundingTolerance = Math.min(
+    ((rounded + 1) * DECIMAL_ROUNDING_HALF_UNIT) / unit,
+    MAX_DECIMAL_ROUNDING_RATIO_EPSILON,
+  );
+  const tolerance = Math.max(INTEGER_RATIO_EPSILON, roundingTolerance);
+  return Math.abs(count - rounded) <= tolerance ? rounded : null;
+}
 
 export const phoneSchema = z
   .string()
@@ -46,10 +61,11 @@ export const createEscrowSchema = z
       if (data.validityMonths === undefined) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['validityMonths'], message: 'Validity months is required for prepaid escrow' });
       }
-      if (data.unitPrice !== undefined && !Number.isInteger(data.totalAmount / data.unitPrice)) {
+      const entryCount = data.unitPrice !== undefined ? getWholeRatio(data.totalAmount, data.unitPrice) : null;
+      if (data.unitPrice !== undefined && entryCount === null) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['unitPrice'], message: 'Total amount must be divisible by unit price' });
       }
-      if (data.unitPrice !== undefined && data.totalAmount / data.unitPrice > MAX_PREPAID_ESCROW_ENTRIES) {
+      if (entryCount !== null && entryCount > MAX_PREPAID_ESCROW_ENTRIES) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['unitPrice'], message: `Prepaid escrow supports up to ${MAX_PREPAID_ESCROW_ENTRIES} entries` });
       }
     }

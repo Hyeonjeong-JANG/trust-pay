@@ -15,6 +15,7 @@ import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
+import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowEntry } from '@prepaid-shield/shared-types';
 import type { ConsumerTabProps } from '../../navigation/types';
@@ -236,7 +237,8 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
                   </Text>
                 </View>
               </View>
-              <Text style={styles.amount}>{item.totalAmount.toLocaleString()} RLUSD</Text>
+              <Text style={styles.amount}>{formatKrwFromRlusd(item.totalAmount)}</Text>
+              <Text style={styles.amountSub}>{formatRlusd(item.totalAmount)}</Text>
               {/* 진행률 바 */}
               <View style={styles.progressBarBg}>
                 <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
@@ -247,9 +249,12 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
                   : `${released}/${item.months}개월 릴리즈됨`}
               </Text>
               {pendingAmount > 0 && (
-                <Text style={styles.pendingProtect}>
-                  대기 보호금 {pendingAmount.toLocaleString()} RLUSD
-                </Text>
+                <>
+                  <Text style={styles.pendingProtect}>
+                    대기 보호금 {formatKrwFromRlusd(pendingAmount)}
+                  </Text>
+                  <Text style={styles.pendingProtectSub}>{formatRlusd(pendingAmount)}</Text>
+                </>
               )}
               {pendingChargeCount > 0 && (
                 <Text style={styles.pendingApproval}>
@@ -403,9 +408,14 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontSize: font.size.xs, fontWeight: font.weight.semibold },
   amount: {
-    fontSize: font.size.md,
-    color: colors.gray700,
-    fontWeight: font.weight.medium,
+    fontSize: font.size.lg,
+    color: colors.gray900,
+    fontWeight: font.weight.bold,
+  },
+  amountSub: {
+    fontSize: font.size.xs,
+    color: colors.gray400,
+    marginTop: 1,
   },
   progressBarBg: {
     height: 4,
@@ -429,6 +439,11 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: font.weight.semibold,
     marginTop: spacing.xs,
+  },
+  pendingProtectSub: {
+    fontSize: font.size.xs,
+    color: colors.gray400,
+    marginTop: 1,
   },
   pendingApproval: {
     fontSize: font.size.sm,

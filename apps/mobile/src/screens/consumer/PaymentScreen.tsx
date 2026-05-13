@@ -15,6 +15,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
+import { formatKrw, formatKrwFromRlusd, formatRlusd, getWholeUnitCount, krwToRlusd, parseKrwInput, rlusdToKrw, roundRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { ScreenProps } from '../../navigation/types';
 import type { BusinessProduct, EscrowType } from '@prepaid-shield/shared-types';
@@ -59,20 +60,25 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
     };
   }, [businessId]);
 
-  const amountValue = Number(amount);
+  const amountValue = parseKrwInput(amount);
   const monthsValue = Number(months);
-  const unitPriceValue = Number(unitPrice);
+  const unitPriceValue = parseKrwInput(unitPrice);
   const validityMonthsValue = Number(validityMonths);
   const effectiveEscrowType = selectedProduct?.escrowType ?? escrowType;
-  const effectiveAmount = selectedProduct?.totalAmount ?? amountValue;
+  const effectiveAmount = selectedProduct?.totalAmount ?? krwToRlusd(amountValue);
   const effectiveMonths = selectedProduct?.months ?? monthsValue;
-  const effectiveUnitPrice = selectedProduct?.unitPrice ?? unitPriceValue;
+  const effectiveUnitPrice = selectedProduct?.unitPrice ?? krwToRlusd(unitPriceValue);
   const effectiveValidityMonths = selectedProduct?.validityMonths ?? validityMonthsValue;
-  const prepaidEntryCount = effectiveAmount > 0 && effectiveUnitPrice && effectiveUnitPrice > 0 ? effectiveAmount / effectiveUnitPrice : 0;
-  const isPrepaidDivisible = Number.isInteger(prepaidEntryCount);
+  const effectiveAmountKrw = selectedProduct ? rlusdToKrw(selectedProduct.totalAmount) : amountValue;
+  const effectiveUnitPriceKrw = selectedProduct && effectiveUnitPrice ? rlusdToKrw(effectiveUnitPrice) : unitPriceValue;
+  const prepaidEntryCount = getWholeUnitCount(effectiveAmountKrw, effectiveUnitPriceKrw);
+  const isPrepaidDivisible = prepaidEntryCount !== null;
   const canSubmit = selectedProduct ? true : escrowType === 'monthly'
-    ? !!amount && !!months
-    : !!amount && !!unitPrice && !!validityMonths && isPrepaidDivisible;
+    ? amountValue > 0 && !!months
+    : amountValue > 0 && unitPriceValue > 0 && !!validityMonths && isPrepaidDivisible;
+  const payloadTotalAmount = effectiveEscrowType === 'prepaid' && effectiveUnitPrice && prepaidEntryCount
+    ? roundRlusd(effectiveUnitPrice * prepaidEntryCount)
+    : effectiveAmount;
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -80,7 +86,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
         consumerId: userId!,
         businessId,
         ...(selectedProduct ? { productId: selectedProduct.id } : {}),
-        totalAmount: effectiveAmount,
+        totalAmount: payloadTotalAmount,
         ...(effectiveEscrowType === 'monthly'
           ? { months: effectiveMonths }
           : {
@@ -101,10 +107,16 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
     },
   });
 
-  const monthlyAmount = effectiveAmount && effectiveMonths ? (effectiveAmount / effectiveMonths).toFixed(2) : '0';
-  const prepaidSummary = effectiveAmount && effectiveUnitPrice && isPrepaidDivisible
-    ? `${prepaidEntryCount}개 단위 x ${effectiveUnitPrice} RLUSD`
+  const monthlyAmount = effectiveAmount && effectiveMonths ? effectiveAmount / effectiveMonths : 0;
+  const monthlyAmountKrw = effectiveAmountKrw && effectiveMonths ? effectiveAmountKrw / effectiveMonths : 0;
+  const prepaidSummary = effectiveAmountKrw && effectiveUnitPriceKrw && isPrepaidDivisible
+    ? `${prepaidEntryCount}개 단위 x ${formatKrw(effectiveUnitPriceKrw)}`
     : '이용 횟수를 계산할 수 없습니다';
+  const infoSecondary = effectiveEscrowType === 'monthly'
+    ? formatRlusd(monthlyAmount)
+    : effectiveUnitPrice
+      ? formatRlusd(effectiveUnitPrice)
+      : formatRlusd(0);
 
   return (
     <KeyboardAvoidingView
@@ -139,18 +151,29 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
                 >
                   <View style={styles.productHeader}>
                     <Text style={styles.productName}>{product.name}</Text>
-                    <Text style={styles.productAmount}>{product.totalAmount.toLocaleString()} RLUSD</Text>
+                    <View style={styles.productAmountBlock}>
+                      <Text style={styles.productAmount}>{formatKrwFromRlusd(product.totalAmount)}</Text>
+                      <Text style={styles.productAmountSub}>{formatRlusd(product.totalAmount)}</Text>
+                    </View>
                   </View>
                   {!!product.description && <Text style={styles.productDesc}>{product.description}</Text>}
                   <Text style={styles.productMeta}>
                     {product.escrowType === 'monthly'
-                      ? `${product.months ?? 0}개월 · 월 ${product.monthlyAmount.toLocaleString()} RLUSD 정산`
-                      : `${product.validityMonths ?? 0}개월 · ${product.unitPrice?.toLocaleString() ?? product.monthlyAmount.toLocaleString()} RLUSD 단위 보호`}
+                      ? `${product.months ?? 0}개월 · 월 ${formatKrwFromRlusd(product.monthlyAmount)} 정산`
+                      : `${product.validityMonths ?? 0}개월 · ${formatKrwFromRlusd(product.unitPrice ?? product.monthlyAmount)} 단위 보호`}
+                  </Text>
+                  <Text style={styles.productMetaSub}>
+                    {product.escrowType === 'monthly'
+                      ? formatRlusd(product.monthlyAmount)
+                      : formatRlusd(product.unitPrice ?? product.monthlyAmount)}
                   </Text>
                   {!!product.menuItems?.length && (
                     <View style={styles.menuList}>
                       {product.menuItems.map((menu) => (
-                        <Text key={menu.id} style={styles.menuPill}>{menu.name} {menu.amount.toLocaleString()} RLUSD</Text>
+                        <View key={menu.id} style={styles.menuPill}>
+                          <Text style={styles.menuPillText}>{menu.name} {formatKrwFromRlusd(menu.amount)}</Text>
+                          <Text style={styles.menuPillSub}>{formatRlusd(menu.amount)}</Text>
+                        </View>
                       ))}
                     </View>
                   )}
@@ -179,15 +202,16 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>총 금액 (RLUSD)</Text>
+            <Text style={styles.label}>총 금액 (원)</Text>
             <TextInput
               style={styles.input}
               value={amount}
               onChangeText={setAmount}
               keyboardType="numeric"
-              placeholder={effectiveEscrowType === 'prepaid' ? '예: 150' : '예: 600'}
+              placeholder={effectiveEscrowType === 'prepaid' ? '예: 202,500' : '예: 810,000'}
               placeholderTextColor={colors.gray400}
             />
+            {!!amountValue && <Text style={styles.inputHint}>{formatRlusd(effectiveAmount)}</Text>}
           </View>
 
           {effectiveEscrowType === 'monthly' ? (
@@ -205,15 +229,16 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           ) : (
             <>
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>1회 이용금액 (RLUSD)</Text>
+                <Text style={styles.label}>1회 이용금액 (원)</Text>
                 <TextInput
                   style={styles.input}
                   value={unitPrice}
                   onChangeText={setUnitPrice}
                   keyboardType="numeric"
-                  placeholder="예: 5"
+                  placeholder="예: 6,750"
                   placeholderTextColor={colors.gray400}
                 />
+                {!!unitPriceValue && <Text style={styles.inputHint}>{formatRlusd(effectiveUnitPrice)}</Text>}
               </View>
 
               <View style={styles.inputGroup}>
@@ -233,12 +258,13 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
 
         <View style={styles.infoCard}>
           <Text style={styles.infoLabel}>{effectiveEscrowType === 'monthly' ? '월별 릴리즈 금액' : '보호 단위'}</Text>
-          <Text style={styles.infoValue}>{effectiveEscrowType === 'monthly' ? `${monthlyAmount} RLUSD` : prepaidSummary}</Text>
+          <Text style={styles.infoValue}>{effectiveEscrowType === 'monthly' ? `월 ${formatKrw(monthlyAmountKrw)}` : prepaidSummary}</Text>
+          <Text style={styles.infoSecondary}>{infoSecondary}</Text>
           <View style={styles.infoDivider} />
           {effectiveEscrowType === 'monthly' ? (
             <>
               <Text style={styles.infoDesc}>
-                총액은 {effectiveMonths || '0'}개의 Token Escrow로 나뉘어 잠기고, finishAfter 이후 매월 {monthlyAmount} RLUSD가 {businessName}에게 릴리즈됩니다
+                총액은 {effectiveMonths || '0'}개의 Token Escrow로 나뉘어 잠기고, finishAfter 이후 매월 {formatKrw(monthlyAmountKrw)}가 {businessName}에게 릴리즈됩니다
               </Text>
               <Text style={styles.infoHint}>취소 시 아직 대기 중인 월차는 소비자에게 환불됩니다</Text>
             </>
@@ -345,10 +371,16 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.bold,
     color: colors.gray900,
   },
+  productAmountBlock: { alignItems: 'flex-end' },
   productAmount: {
     fontSize: font.size.sm,
     fontWeight: font.weight.bold,
     color: colors.primary,
+  },
+  productAmountSub: {
+    fontSize: font.size.xs,
+    color: colors.gray400,
+    marginTop: 1,
   },
   productDesc: {
     fontSize: font.size.sm,
@@ -362,6 +394,11 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.semibold,
     marginTop: spacing.sm,
   },
+  productMetaSub: {
+    fontSize: font.size.xs,
+    color: colors.gray400,
+    marginTop: 2,
+  },
   menuList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -369,13 +406,20 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   menuPill: {
-    fontSize: font.size.xs,
-    color: colors.primary,
     backgroundColor: colors.white,
     borderRadius: radius.full,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    overflow: 'hidden',
+  },
+  menuPillText: {
+    fontSize: font.size.xs,
+    color: colors.primary,
+    fontWeight: font.weight.semibold,
+  },
+  menuPillSub: {
+    fontSize: 10,
+    color: colors.gray400,
+    marginTop: 1,
   },
   typeButton: {
     flex: 1,
@@ -408,6 +452,11 @@ const styles = StyleSheet.create({
     color: colors.gray800,
     backgroundColor: colors.gray50,
   },
+  inputHint: {
+    fontSize: font.size.xs,
+    color: colors.gray400,
+    marginTop: spacing.xs,
+  },
   infoCard: {
     backgroundColor: colors.primaryLight,
     padding: spacing.xl,
@@ -420,6 +469,11 @@ const styles = StyleSheet.create({
     fontSize: font.size.xxl,
     fontWeight: font.weight.bold,
     color: colors.primaryDark,
+    marginTop: spacing.xs,
+  },
+  infoSecondary: {
+    fontSize: font.size.sm,
+    color: colors.gray500,
     marginTop: spacing.xs,
   },
   infoDivider: {

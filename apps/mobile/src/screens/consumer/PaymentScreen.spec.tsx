@@ -51,14 +51,35 @@ describe('PaymentScreen', () => {
       />,
     );
 
-    fireEvent.changeText(getByPlaceholderText('예: 600'), '600');
+    fireEvent.changeText(getByPlaceholderText('예: 810,000'), '810000');
     fireEvent.changeText(getByPlaceholderText('예: 6'), '6');
 
+    expect(getByText('월 ₩135,000')).toBeTruthy();
     expect(getByText('100.00 RLUSD')).toBeTruthy();
     expect(getByText(/총액은 6개의 Token Escrow로 나뉘어 잠기고/)).toBeTruthy();
   });
 
-  it('should default cafe payments to prepaid vouchers', () => {
+  it('should convert KRW input to decimal RLUSD before creating an escrow', async () => {
+    const { api } = require('../../api/client');
+    const { getByPlaceholderText, getByText } = renderWithProviders(
+      <PaymentScreen
+        navigation={{ navigate: jest.fn() } as any}
+        route={{ params: { businessId: 'b-1', businessName: '파워짐 헬스장' } } as any}
+      />,
+    );
+
+    fireEvent.changeText(getByPlaceholderText('예: 810,000'), '1000');
+    fireEvent.changeText(getByPlaceholderText('예: 6'), '1');
+    fireEvent.press(getByText('에스크로 생성'));
+
+    await waitFor(() => expect(api.createEscrow).toHaveBeenCalled());
+    const payload = api.createEscrow.mock.calls[0][0];
+    expect(payload.totalAmount).toBeCloseTo(0.740741, 6);
+    expect(payload.months).toBe(1);
+  });
+
+  it('should normalize prepaid decimal RLUSD total from the KRW unit count', async () => {
+    const { api } = require('../../api/client');
     const { getByPlaceholderText, getByText } = renderWithProviders(
       <PaymentScreen
         navigation={{ navigate: jest.fn() } as any}
@@ -66,12 +87,32 @@ describe('PaymentScreen', () => {
       />,
     );
 
-    fireEvent.changeText(getByPlaceholderText('예: 150'), '150');
-    fireEvent.changeText(getByPlaceholderText('예: 5'), '5');
+    fireEvent.changeText(getByPlaceholderText('예: 202,500'), '30000');
+    fireEvent.changeText(getByPlaceholderText('예: 6,750'), '1000');
+    fireEvent.changeText(getByPlaceholderText('예: 3'), '3');
+    fireEvent.press(getByText('에스크로 생성'));
+
+    await waitFor(() => expect(api.createEscrow).toHaveBeenCalled());
+    const payload = api.createEscrow.mock.calls[0][0];
+    expect(payload.unitPrice).toBeCloseTo(0.740741, 6);
+    expect(payload.totalAmount).toBeCloseTo(22.22223, 6);
+  });
+
+  it('should default cafe payments to prepaid vouchers', () => {
+    const { getAllByText, getByPlaceholderText, getByText } = renderWithProviders(
+      <PaymentScreen
+        navigation={{ navigate: jest.fn() } as any}
+        route={{ params: { businessId: 'b-1', businessName: '강남 블루보틀', businessCategory: '카페' } } as any}
+      />,
+    );
+
+    fireEvent.changeText(getByPlaceholderText('예: 202,500'), '202500');
+    fireEvent.changeText(getByPlaceholderText('예: 6,750'), '6750');
     fireEvent.changeText(getByPlaceholderText('예: 3'), '3');
 
     expect(getByText('이용권')).toBeTruthy();
-    expect(getByText('30개 단위 x 5 RLUSD')).toBeTruthy();
+    expect(getByText('30개 단위 x ₩6,750')).toBeTruthy();
+    expect(getAllByText('5.00 RLUSD').length).toBeGreaterThan(0);
     expect(getByText(/유효기간: 3개월/)).toBeTruthy();
   });
 
@@ -85,7 +126,7 @@ describe('PaymentScreen', () => {
         />,
       );
 
-      expect(getByText('1회 이용금액 (RLUSD)')).toBeTruthy();
+      expect(getByText('1회 이용금액 (원)')).toBeTruthy();
       expect(getByText('유효기간 (개월)')).toBeTruthy();
       expect(getByText(/메뉴 금액만큼 여러 Token Escrow 단위/)).toBeTruthy();
     },
@@ -136,8 +177,8 @@ describe('PaymentScreen', () => {
     );
 
     fireEvent.press(await findByText('헤어살롱 루나 선불권'));
-    expect(await findByText('커트 30 RLUSD')).toBeTruthy();
-    expect(await findByText('클리닉 50 RLUSD')).toBeTruthy();
+    expect(await findByText('커트 ₩40,500')).toBeTruthy();
+    expect(await findByText('클리닉 ₩67,500')).toBeTruthy();
     fireEvent.press(getByText('에스크로 생성'));
 
     await waitFor(() => {

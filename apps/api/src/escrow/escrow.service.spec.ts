@@ -5,6 +5,7 @@ import { EscrowService } from './escrow.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto.service';
 import { PartialPrepaidEscrowCreationError, XrplService } from '../xrpl/xrpl.service';
+import { createEscrowSchema } from '@prepaid-shield/validators';
 
 // Mock Wallet.fromSeed to avoid real XRPL seed validation
 jest.mock('xrpl', () => ({
@@ -195,6 +196,204 @@ describe('EscrowService', () => {
         include: { entries: true },
       });
       expect(result.entries).toHaveLength(30);
+    });
+
+    it('should create prepaid escrows with decimal RLUSD amounts converted from KRW', async () => {
+      const decimalPrepaidResults = Array.from({ length: 10 }, (_, index) => ({
+        month: index + 1,
+        sequence: 300 + index,
+        amount: '0.740741',
+        finishAfter: 830000000,
+        cancelAfter: 837000000,
+        txHash: `DECIMAL_PREPAID_TX_${index + 1}`,
+      }));
+      prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+      xrplService.createPrepaidEscrows.mockResolvedValue(decimalPrepaidResults);
+      prisma.escrow.create.mockResolvedValue({
+        id: 'escrow-prepaid-decimal',
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 7.407407,
+        monthlyAmount: 0.740741,
+        months: 10,
+        escrowType: 'prepaid',
+        unitPrice: 0.740741,
+        validityMonths: 3,
+        entries: decimalPrepaidResults.map((r, i) => ({ id: `decimal-entry-${i}`, ...r, status: 'pending' })),
+      });
+
+      await service.create({
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 7.407407,
+        escrowType: 'prepaid',
+        unitPrice: 0.740741,
+        validityMonths: 3,
+      }, consumerUser);
+
+      expect(xrplService.createPrepaidEscrows).toHaveBeenCalledWith(
+        expect.anything(),
+        'rBusinessAddr',
+        '0.740741',
+        10,
+        3,
+      );
+      expect(prisma.escrow.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          totalAmount: 7.40741,
+          monthlyAmount: 0.740741,
+          months: 10,
+          escrowType: 'prepaid',
+          unitPrice: 0.740741,
+          validityMonths: 3,
+        }),
+        include: { entries: true },
+      });
+    });
+
+    it('should accept KRW-rounded prepaid totals that are valid whole unit counts', async () => {
+      const decimalPrepaidResults = Array.from({ length: 30 }, (_, index) => ({
+        month: index + 1,
+        sequence: 400 + index,
+        amount: '0.740741',
+        finishAfter: 830000000,
+        cancelAfter: 837000000,
+        txHash: `KRW_ROUNDED_PREPAID_TX_${index + 1}`,
+      }));
+      prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+      xrplService.createPrepaidEscrows.mockResolvedValue(decimalPrepaidResults);
+      prisma.escrow.create.mockResolvedValue({
+        id: 'escrow-prepaid-krw-rounded',
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 22.22223,
+        monthlyAmount: 0.740741,
+        months: 30,
+        escrowType: 'prepaid',
+        unitPrice: 0.740741,
+        validityMonths: 3,
+        entries: decimalPrepaidResults.map((r, i) => ({ id: `krw-rounded-entry-${i}`, ...r, status: 'pending' })),
+      });
+
+      await service.create({
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 22.222222,
+        escrowType: 'prepaid',
+        unitPrice: 0.740741,
+        validityMonths: 3,
+      }, consumerUser);
+
+      expect(xrplService.createPrepaidEscrows).toHaveBeenCalledWith(
+        expect.anything(),
+        'rBusinessAddr',
+        '0.740741',
+        30,
+        3,
+      );
+      expect(prisma.escrow.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          totalAmount: 22.22223,
+          monthlyAmount: 0.740741,
+          months: 30,
+          escrowType: 'prepaid',
+          unitPrice: 0.740741,
+        }),
+        include: { entries: true },
+      });
+    });
+
+    it('should accept small KRW-rounded prepaid unit amounts within decimal rounding tolerance', async () => {
+      const smallUnitResults = Array.from({ length: 49 }, (_, index) => ({
+        month: index + 1,
+        sequence: 450 + index,
+        amount: '0.000741',
+        finishAfter: 830000000,
+        cancelAfter: 837000000,
+        txHash: `SMALL_UNIT_TX_${index + 1}`,
+      }));
+      prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+      xrplService.createPrepaidEscrows.mockResolvedValue(smallUnitResults);
+      prisma.escrow.create.mockResolvedValue({
+        id: 'escrow-prepaid-small-unit',
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 0.036309,
+        monthlyAmount: 0.000741,
+        months: 49,
+        escrowType: 'prepaid',
+        unitPrice: 0.000741,
+        validityMonths: 3,
+        entries: smallUnitResults.map((r, i) => ({ id: `small-unit-entry-${i}`, ...r, status: 'pending' })),
+      });
+
+      await service.create({
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 0.036296,
+        escrowType: 'prepaid',
+        unitPrice: 0.000741,
+        validityMonths: 3,
+      }, consumerUser);
+
+      expect(xrplService.createPrepaidEscrows).toHaveBeenCalledWith(
+        expect.anything(),
+        'rBusinessAddr',
+        '0.000741',
+        49,
+        3,
+      );
+      expect(prisma.escrow.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          totalAmount: 0.036309,
+          monthlyAmount: 0.000741,
+          months: 49,
+          unitPrice: 0.000741,
+        }),
+        include: { entries: true },
+      });
+    });
+
+    it('should validate decimal RLUSD prepaid amounts converted from KRW', () => {
+      const result = createEscrowSchema.safeParse({
+        consumerId: '00000000-0000-4000-a000-000000000001',
+        businessId: '00000000-0000-4000-a000-000000000010',
+        totalAmount: 7.407407,
+        escrowType: 'prepaid',
+        unitPrice: 0.740741,
+        validityMonths: 3,
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should validate KRW-rounded prepaid totals that are valid whole unit counts', () => {
+      const result = createEscrowSchema.safeParse({
+        consumerId: '00000000-0000-4000-a000-000000000001',
+        businessId: '00000000-0000-4000-a000-000000000010',
+        totalAmount: 22.222222,
+        escrowType: 'prepaid',
+        unitPrice: 0.740741,
+        validityMonths: 3,
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should validate small KRW-rounded prepaid unit amounts within decimal rounding tolerance', () => {
+      const result = createEscrowSchema.safeParse({
+        consumerId: '00000000-0000-4000-a000-000000000001',
+        businessId: '00000000-0000-4000-a000-000000000010',
+        totalAmount: 0.036296,
+        escrowType: 'prepaid',
+        unitPrice: 0.000741,
+        validityMonths: 3,
+      });
+
+      expect(result.success).toBe(true);
     });
 
     it('should reject prepaid requests above the ledger entry cap before XRPL submission', async () => {
@@ -499,6 +698,94 @@ describe('EscrowService', () => {
         include: { menuItem: true, escrow: { include: { business: true, consumer: true } } },
       });
       expect(result.status).toBe('settled');
+    });
+
+    it('should reserve KRW-rounded decimal menu charges by whole prepaid units', async () => {
+      const decimalEntries = Array.from({ length: 30 }, (_, index) => ({
+        id: `decimal-entry-${index + 1}`,
+        month: index + 1,
+        sequence: 500 + index,
+        amount: '0.740741',
+        status: 'pending',
+      }));
+      const decimalEscrow = {
+        ...prepaidEscrow,
+        unitPrice: 0.740741,
+        monthlyAmount: 0.740741,
+        entries: decimalEntries,
+      };
+      prisma.escrow.findUnique.mockResolvedValue(decimalEscrow);
+      prisma.productMenuItem.findUnique.mockResolvedValue({
+        ...menuItem,
+        amount: 22.222222,
+      });
+      prisma.chargeRequest.create.mockResolvedValue({
+        id: 'charge-decimal',
+        escrowId: 'escrow-prepaid-1',
+        menuItemId: 'menu-cut',
+        menuName: '커트',
+        amount: 22.222222,
+        status: 'pending_approval',
+        entryIds: JSON.stringify(decimalEntries.map((entry) => entry.id)),
+      });
+
+      await service.createChargeRequest(
+        'escrow-prepaid-1',
+        { menuItemId: 'menu-cut' },
+        businessUser,
+      );
+
+      expect(prisma.chargeRequest.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          amount: 22.222222,
+          entryIds: JSON.stringify(decimalEntries.map((entry) => entry.id)),
+        }),
+        include: { menuItem: true, escrow: { include: { business: true, consumer: true } } },
+      });
+    });
+
+    it('should reserve small KRW-rounded decimal menu charges by whole prepaid units', async () => {
+      const smallUnitEntries = Array.from({ length: 48 }, (_, index) => ({
+        id: `small-menu-entry-${index + 1}`,
+        month: index + 1,
+        sequence: 600 + index,
+        amount: '0.007407',
+        status: 'pending',
+      }));
+      const smallUnitEscrow = {
+        ...prepaidEscrow,
+        unitPrice: 0.007407,
+        monthlyAmount: 0.007407,
+        entries: smallUnitEntries,
+      };
+      prisma.escrow.findUnique.mockResolvedValue(smallUnitEscrow);
+      prisma.productMenuItem.findUnique.mockResolvedValue({
+        ...menuItem,
+        amount: 0.355556,
+      });
+      prisma.chargeRequest.create.mockResolvedValue({
+        id: 'charge-small-decimal',
+        escrowId: 'escrow-prepaid-1',
+        menuItemId: 'menu-cut',
+        menuName: '커트',
+        amount: 0.355556,
+        status: 'pending_approval',
+        entryIds: JSON.stringify(smallUnitEntries.map((entry) => entry.id)),
+      });
+
+      await service.createChargeRequest(
+        'escrow-prepaid-1',
+        { menuItemId: 'menu-cut' },
+        businessUser,
+      );
+
+      expect(prisma.chargeRequest.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          amount: 0.355556,
+          entryIds: JSON.stringify(smallUnitEntries.map((entry) => entry.id)),
+        }),
+        include: { menuItem: true, escrow: { include: { business: true, consumer: true } } },
+      });
     });
   });
 
