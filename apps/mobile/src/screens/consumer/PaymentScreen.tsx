@@ -112,14 +112,9 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
 
   const monthlyAmount = effectiveAmount && effectiveMonths ? effectiveAmount / effectiveMonths : 0;
   const monthlyAmountKrw = effectiveAmountKrw && effectiveMonths ? effectiveAmountKrw / effectiveMonths : 0;
-  const prepaidSummary = effectiveAmountKrw && effectiveUnitPriceKrw && isPrepaidDivisible
-    ? `${prepaidEntryCount}개 단위 x ${formatKrw(effectiveUnitPriceKrw)}`
-    : '이용 횟수를 계산할 수 없습니다';
   const infoSecondary = effectiveEscrowType === 'monthly'
     ? formatRlusd(monthlyAmount)
-    : effectiveUnitPrice
-      ? formatRlusd(effectiveUnitPrice)
-      : formatRlusd(0);
+    : formatRlusd(effectiveAmount);
 
   return (
     <KeyboardAvoidingView
@@ -201,12 +196,12 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
                   <Text style={styles.productMeta}>
                     {product.escrowType === 'monthly'
                       ? `${product.months ?? 0}개월 · 월 ${formatKrwFromRlusd(product.monthlyAmount)} 정산`
-                      : `${product.validityMonths ?? 0}개월 · ${formatKrwFromRlusd(product.unitPrice ?? product.monthlyAmount)} 단위 보호`}
+                      : `${product.validityMonths ?? 0}개월 · 총 ${formatKrwFromRlusd(product.totalAmount)} 보호`}
                   </Text>
                   <Text style={styles.productMetaSub}>
                     {product.escrowType === 'monthly'
                       ? formatRlusd(product.monthlyAmount)
-                      : formatRlusd(product.unitPrice ?? product.monthlyAmount)}
+                      : formatRlusd(product.totalAmount)}
                   </Text>
                   {!!product.menuItems?.length && (
                     <View style={styles.menuList}>
@@ -298,8 +293,8 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
         </View>}
 
         <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>{effectiveEscrowType === 'monthly' ? '월별 릴리즈 금액' : '보호 단위'}</Text>
-          <Text style={styles.infoValue}>{effectiveEscrowType === 'monthly' ? `월 ${formatKrw(monthlyAmountKrw)}` : prepaidSummary}</Text>
+          <Text style={styles.infoLabel}>{effectiveEscrowType === 'monthly' ? '월별 릴리즈 금액' : '보호 금액권 잔액'}</Text>
+          <Text style={styles.infoValue}>{effectiveEscrowType === 'monthly' ? `월 ${formatKrw(monthlyAmountKrw)}` : formatKrw(effectiveAmountKrw)}</Text>
           <Text style={styles.infoSecondary}>{infoSecondary}</Text>
           <View style={styles.infoDivider} />
           {effectiveEscrowType === 'monthly' ? (
@@ -312,7 +307,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           ) : (
             <>
               <Text style={styles.infoDesc}>
-                메뉴 금액만큼 여러 Token Escrow 단위를 묶어 사업자가 차감 요청하고, 소비자 승인 후에만 정산됩니다
+                실제 사용금액만큼 사업자가 차감 요청하고, 소비자 승인 후 보호 금액권 잔액에서 정산됩니다
               </Text>
               <Text style={styles.infoHint}>유효기간: {effectiveValidityMonths || '0'}개월 · 미사용 이용권은 만료 후 환불 대상입니다</Text>
             </>

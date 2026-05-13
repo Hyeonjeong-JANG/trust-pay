@@ -557,6 +557,17 @@ function parseEntryIds(request) {
   }
 }
 
+function selectEntriesCoveringAmount(entries, amount) {
+  const selectedIds = [];
+  let coveredAmount = 0;
+  for (const entry of entries) {
+    selectedIds.push(entry.id);
+    coveredAmount += Number(entry.amount);
+    if (Number(coveredAmount.toFixed(6)) + 1e-4 >= amount) return selectedIds;
+  }
+  return null;
+}
+
 function send(res, status, data) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -649,8 +660,31 @@ module.exports = async function handler(req, res) {
     const scoped = escrows.filter((item) => item.businessId === businessId).map(withRelations);
     return send(res, 200, {
       business: businesses.find((item) => item.id === businessId),
-      totalReceived: scoped.reduce((sum, escrow) => sum + escrow.entries.filter((entry) => entry.status === 'released').length * escrow.monthlyAmount, 0),
-      totalPending: scoped.reduce((sum, escrow) => sum + escrow.entries.filter((entry) => entry.status === 'pending').length * escrow.monthlyAmount, 0),
+      totalReceived: scoped.reduce((sum, escrow) => {
+        if (escrow.escrowType === 'prepaid') {
+          const settledCharges = escrow.chargeRequests
+            .filter((request) => request.status === 'settled')
+            .reduce((chargeSum, request) => chargeSum + Number(request.amount), 0);
+          if (settledCharges > 0) return sum + settledCharges;
+        }
+        return sum + escrow.entries
+          .filter((entry) => entry.status === 'released')
+          .reduce((entrySum, entry) => entrySum + Number(entry.amount || escrow.monthlyAmount), 0);
+      }, 0),
+      totalPending: scoped.reduce((sum, escrow) => {
+        if (escrow.escrowType === 'prepaid') {
+          const settledCharges = escrow.chargeRequests
+            .filter((request) => request.status === 'settled')
+            .reduce((chargeSum, request) => chargeSum + Number(request.amount), 0);
+          const refundedAmount = escrow.entries
+            .filter((entry) => entry.status === 'refunded')
+            .reduce((entrySum, entry) => entrySum + Number(entry.amount), 0);
+          return sum + Math.max(Number(escrow.totalAmount) - settledCharges - refundedAmount, 0);
+        }
+        return sum + escrow.entries
+          .filter((entry) => entry.status === 'pending')
+          .reduce((entrySum, entry) => entrySum + Number(entry.amount || escrow.monthlyAmount), 0);
+      }, 0),
       activeEscrows: scoped.filter((item) => item.status === 'active').length,
       escrows: scoped,
     });
@@ -718,18 +752,17 @@ module.exports = async function handler(req, res) {
       return send(res, 400, { message: '차감 요청 금액을 확인해주세요' });
     }
 
-    const requiredEntryCount = requestAmount / escrow.monthlyAmount;
     const reservedEntryIds = new Set(
       chargeRequests
         .filter((item) => item.escrowId === escrow.id && item.status === 'pending_approval')
         .flatMap(parseEntryIds),
     );
     const availableEntries = escrow.entries.filter((entry) => entry.status === 'pending' && !reservedEntryIds.has(entry.id));
-    if (!Number.isInteger(requiredEntryCount) || availableEntries.length < requiredEntryCount) {
+    const selectedEntryIds = selectEntriesCoveringAmount(availableEntries, requestAmount);
+    if (!selectedEntryIds) {
       return send(res, 400, { message: '차감 가능한 이용권 잔액이 부족합니다' });
     }
 
-    const selectedEntryIds = availableEntries.slice(0, requiredEntryCount).map((entry) => entry.id);
     const request = {
       id: `demo-charge-${Date.now()}`,
       escrowId: escrow.id,

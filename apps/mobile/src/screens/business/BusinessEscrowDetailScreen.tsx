@@ -1,24 +1,40 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import type { ApiError } from '../../api/client';
 import { ErrorView } from '../../components/ErrorView';
-import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
+import { useBusinessMenuStore } from '../../store/businessMenus';
+import { formatKrwFromRlusd, formatRlusd, krwToRlusd } from '../../utils/money';
+import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { colors, font, radius, shadow, spacing } from '../../theme';
 import type { ScreenProps } from '../../navigation/types';
-import type { EscrowEntry, EscrowRecord } from '@prepaid-shield/shared-types';
+import type { CreateChargeRequest, EscrowEntry, EscrowRecord, ProductMenuItem } from '@prepaid-shield/shared-types';
 
 type EscrowWithRelations = EscrowRecord & {
   business?: { name: string };
   consumer?: { name: string };
 };
+
+type ChargeMenuOption = {
+  id: string;
+  label: string;
+  menuName: string;
+  amount: number;
+  menuItemId?: string;
+};
+
+const DIRECT_CHARGE_OPTION_ID = 'direct';
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   pending: { bg: colors.entry.pendingBg, text: colors.entry.pending },
@@ -63,13 +79,19 @@ function getPrepaidUsageRange(escrow: EscrowWithRelations): string | null {
 }
 
 function getEntryTitle(isPrepaid: boolean, entry: EscrowEntry): string {
-  if (isPrepaid) return `이용 단위 ${entry.month}`;
+  if (isPrepaid) return `보호 원장 항목 ${entry.month}`;
   const suffix = entry.status === 'released' ? '정산 완료' : entry.status === 'refunded' ? '환불' : '정산 예정';
   return `${entry.month}월차 ${suffix}`;
 }
 
 export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscrowDetail'>) {
   const { id } = route.params;
+  const queryClient = useQueryClient();
+  const menusByBusinessId = useBusinessMenuStore((s) => s.menusByBusinessId);
+  const [manualChargeName, setManualChargeName] = useState('');
+  const [manualChargeAmount, setManualChargeAmount] = useState('');
+  const [selectedChargeOptionId, setSelectedChargeOptionId] = useState(DIRECT_CHARGE_OPTION_ID);
+  const [isChargeDropdownOpen, setIsChargeDropdownOpen] = useState(false);
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['escrow', id],
@@ -77,6 +99,21 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
     retry: 2,
   });
   const escrow = data as EscrowWithRelations | undefined;
+
+  const chargeRequestMutation = useMutation({
+    mutationFn: (payload: CreateChargeRequest) => api.createChargeRequest(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['escrow', id] });
+      queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
+      setManualChargeName('');
+      setManualChargeAmount('');
+      showSuccessToast('이용분 승인 요청 전송', '소비자 승인 대기 상태로 등록되었습니다.');
+    },
+    onError: (err: Error) => {
+      const apiErr = err as ApiError;
+      showErrorToast('차감 요청 실패', apiErr.userMessage ?? err.message);
+    },
+  });
 
   if (isLoading || (!escrow && !isError)) {
     return (
@@ -96,13 +133,64 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
   const refunded = entries.filter((entry) => entry.status === 'refunded').length;
   const totalEntries = entries.length || escrow.months;
   const isPrepaid = escrow.escrowType === 'prepaid';
-  const progressPct = totalEntries > 0 ? (released / totalEntries) * 100 : 0;
   const escrowStyle = STATUS_STYLE[escrow.status] ?? STATUS_STYLE.cancelled;
   const usageRange = isPrepaid ? getPrepaidUsageRange(escrow) : getEntryUsageRange(entries);
   const usageRangeLabel = isPrepaid ? '사용기한' : '이용기간';
+  const settledChargeAmount = (escrow.chargeRequests ?? [])
+    .filter((request) => request.status === 'settled')
+    .reduce((sum, request) => sum + Number(request.amount), 0);
+  const releasedAmount = entries
+    .filter((entry) => entry.status === 'released')
+    .reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const prepaidUsedAmount = isPrepaid && settledChargeAmount > 0 ? settledChargeAmount : releasedAmount;
+  const prepaidRemainingAmount = Math.max(Number(escrow.totalAmount) - prepaidUsedAmount, 0);
+  const progressPct = isPrepaid
+    ? Number(escrow.totalAmount) > 0 ? (prepaidUsedAmount / Number(escrow.totalAmount)) * 100 : 0
+    : totalEntries > 0 ? (released / totalEntries) * 100 : 0;
   const progressText = isPrepaid
-    ? `사용 완료 ${released}/${totalEntries}단위 · 잔여 ${pending}단위${refunded > 0 ? ` · 환불 ${refunded}단위` : ''}`
+    ? `사용 ${formatKrwFromRlusd(prepaidUsedAmount)} · 잔액 ${formatKrwFromRlusd(prepaidRemainingAmount)}${refunded > 0 ? ` · 환불 ${refunded}건` : ''}`
     : `${released}개월 정산 완료 · ${pending}개월 예정${refunded > 0 ? ` · ${refunded}개월 환불` : ''}`;
+  const localMenus = escrow.businessId ? menusByBusinessId[escrow.businessId] ?? [] : [];
+  const chargeMenuOptions: ChargeMenuOption[] = [
+    ...((escrow.product?.menuItems ?? []).map((menu: ProductMenuItem) => ({
+      id: menu.id,
+      label: `${menu.name} · ${formatKrwFromRlusd(menu.amount)}`,
+      menuName: menu.name,
+      amount: Number(menu.amount),
+      menuItemId: menu.id,
+    }))),
+    ...localMenus.map((menu) => ({
+      id: menu.id,
+      label: `${menu.name} · ${formatKrwFromRlusd(menu.amount)}`,
+      menuName: menu.name,
+      amount: menu.amount,
+    })),
+  ];
+  const selectedChargeOption = chargeMenuOptions.find((option) => option.id === selectedChargeOptionId);
+  const isDirectSelected = selectedChargeOptionId === DIRECT_CHARGE_OPTION_ID || !selectedChargeOption;
+
+  const submitSelectedChargeRequest = () => {
+    if (!selectedChargeOption) return;
+    chargeRequestMutation.mutate(
+      selectedChargeOption.menuItemId
+        ? { menuItemId: selectedChargeOption.menuItemId }
+        : { menuName: selectedChargeOption.menuName, amount: selectedChargeOption.amount },
+    );
+  };
+
+  const submitManualChargeRequest = () => {
+    const menuName = manualChargeName.trim();
+    const amount = krwToRlusd(manualChargeAmount);
+    if (!menuName) {
+      showErrorToast('차감 요청 실패', '차감 항목명을 입력해주세요.');
+      return;
+    }
+    if (amount <= 0) {
+      showErrorToast('차감 요청 실패', '이용금액을 입력해주세요.');
+      return;
+    }
+    chargeRequestMutation.mutate({ menuName, amount });
+  };
 
   return (
     <View style={styles.container}>
@@ -136,9 +224,9 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                 </View>
                 <View style={styles.amountDivider} />
                 <View style={styles.amountItem}>
-                  <Text style={styles.amountLabel}>{isPrepaid ? '이용 단위' : '월별 정산'}</Text>
-                  <Text style={styles.amountValue}>{formatKrwFromRlusd(isPrepaid ? escrow.unitPrice ?? escrow.monthlyAmount : escrow.monthlyAmount)}</Text>
-                  <Text style={styles.amountUnit}>{formatRlusd(isPrepaid ? escrow.unitPrice ?? escrow.monthlyAmount : escrow.monthlyAmount)}</Text>
+                  <Text style={styles.amountLabel}>{isPrepaid ? '잔액' : '월별 정산'}</Text>
+                  <Text style={styles.amountValue}>{formatKrwFromRlusd(isPrepaid ? prepaidRemainingAmount : escrow.monthlyAmount)}</Text>
+                  <Text style={styles.amountUnit}>{formatRlusd(isPrepaid ? prepaidRemainingAmount : escrow.monthlyAmount)}</Text>
                 </View>
               </View>
 
@@ -155,7 +243,92 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                 <Text style={styles.progressText}>{progressText}</Text>
               </View>
             </View>
-            <Text style={styles.sectionTitle}>{isPrepaid ? '이용 단위 내역' : '월별 정산 내역'}</Text>
+            {isPrepaid && (
+              <View style={styles.chargeRequestCard}>
+                <Text style={styles.chargeRequestTitle}>고객 이용분 승인 요청</Text>
+                <Text style={styles.chargeRequestDesc}>
+                  등록 메뉴를 선택하거나 실제 이용 항목과 금액을 직접 입력해 손님 승인 요청을 보냅니다.
+                </Text>
+                <TouchableOpacity
+                  style={styles.dropdownButton}
+                  onPress={() => setIsChargeDropdownOpen((current) => !current)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.dropdownLabel}>차감 항목 선택</Text>
+                  <Text style={styles.dropdownValue}>{selectedChargeOption?.label ?? '직접 입력'}</Text>
+                </TouchableOpacity>
+                {isChargeDropdownOpen && (
+                  <View style={styles.dropdownList}>
+                    <TouchableOpacity
+                      style={styles.dropdownOption}
+                      onPress={() => {
+                        setSelectedChargeOptionId(DIRECT_CHARGE_OPTION_ID);
+                        setIsChargeDropdownOpen(false);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={styles.dropdownOptionText}>직접 입력</Text>
+                    </TouchableOpacity>
+                    {chargeMenuOptions.map((option) => (
+                      <TouchableOpacity
+                        key={option.id}
+                        style={styles.dropdownOption}
+                        onPress={() => {
+                          setSelectedChargeOptionId(option.id);
+                          setIsChargeDropdownOpen(false);
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.dropdownOptionText}>{option.label}</Text>
+                        <Text style={styles.dropdownOptionSub}>{formatRlusd(option.amount)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {isDirectSelected ? (
+                  <View style={styles.manualChargeBox}>
+                    <Text style={styles.manualChargeTitle}>이용금액 직접 입력</Text>
+                    <TextInput
+                      style={styles.manualChargeInput}
+                      placeholder="예: 수건 대여"
+                      placeholderTextColor={colors.gray400}
+                      value={manualChargeName}
+                      onChangeText={setManualChargeName}
+                    />
+                    <TextInput
+                      style={styles.manualChargeInput}
+                      placeholder="예: 67,500"
+                      placeholderTextColor={colors.gray400}
+                      keyboardType="number-pad"
+                      value={manualChargeAmount}
+                      onChangeText={setManualChargeAmount}
+                    />
+                    <TouchableOpacity
+                      style={[styles.chargeRequestButton, chargeRequestMutation.isPending && styles.buttonDisabled]}
+                      onPress={submitManualChargeRequest}
+                      disabled={chargeRequestMutation.isPending}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.chargeRequestButtonText}>직접 입력 승인 요청</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.chargeRequestButton, chargeRequestMutation.isPending && styles.buttonDisabled]}
+                    onPress={submitSelectedChargeRequest}
+                    disabled={chargeRequestMutation.isPending}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.chargeRequestButtonText}>선택 항목 승인 요청</Text>
+                    {selectedChargeOption && (
+                      <Text style={styles.chargeRequestButtonSub}>{formatRlusd(selectedChargeOption.amount)}</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+            <Text style={styles.sectionTitle}>{isPrepaid ? '보호 원장 내역' : '월별 정산 내역'}</Text>
           </>
         }
         renderItem={({ item }) => {
@@ -248,6 +421,61 @@ const styles = StyleSheet.create({
   progressBarBg: { height: 6, backgroundColor: colors.gray200, borderRadius: 3, overflow: 'hidden' },
   progressBarFill: { height: 6, backgroundColor: colors.success, borderRadius: 3 },
   progressText: { fontSize: font.size.sm, color: colors.gray500, textAlign: 'center', marginTop: spacing.sm },
+  chargeRequestCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.xl,
+    gap: spacing.sm,
+    ...shadow.sm,
+  },
+  chargeRequestTitle: { fontSize: font.size.md, fontWeight: font.weight.bold, color: colors.gray900 },
+  chargeRequestDesc: { fontSize: font.size.sm, color: colors.gray500, lineHeight: 20 },
+  dropdownButton: {
+    backgroundColor: colors.gray50,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    padding: spacing.md,
+  },
+  dropdownLabel: { fontSize: font.size.xs, color: colors.gray400, marginBottom: 2 },
+  dropdownValue: { fontSize: font.size.md, color: colors.gray900, fontWeight: font.weight.semibold },
+  dropdownList: {
+    backgroundColor: colors.white,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    overflow: 'hidden',
+  },
+  dropdownOption: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+  },
+  dropdownOptionText: { fontSize: font.size.sm, color: colors.gray800, fontWeight: font.weight.semibold },
+  dropdownOptionSub: { fontSize: font.size.xs, color: colors.gray400, marginTop: 1 },
+  manualChargeBox: { gap: spacing.sm },
+  manualChargeTitle: { fontSize: font.size.sm, fontWeight: font.weight.semibold, color: colors.gray800 },
+  manualChargeInput: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: Platform.OS === 'ios' ? spacing.md : spacing.sm,
+    fontSize: font.size.md,
+    color: colors.gray900,
+  },
+  chargeRequestButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+  },
+  chargeRequestButtonText: { color: colors.white, fontWeight: font.weight.semibold, fontSize: font.size.sm },
+  chargeRequestButtonSub: { color: 'rgba(255,255,255,0.75)', fontSize: font.size.xs, marginTop: 2 },
+  buttonDisabled: { opacity: 0.5 },
   sectionTitle: {
     fontSize: font.size.lg,
     fontWeight: font.weight.semibold,

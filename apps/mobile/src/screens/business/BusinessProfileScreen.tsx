@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,19 +8,31 @@ import {
   ActivityIndicator,
   ScrollView,
   RefreshControl,
+  TextInput,
+  Platform,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
+import { useBusinessMenuStore } from '../../store/businessMenus';
+import { formatKrwFromRlusd, krwToRlusd } from '../../utils/money';
+import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { ScreenProps } from '../../navigation/types';
+
+const EMPTY_MENUS: never[] = [];
 
 export function BusinessProfileScreen(_props: ScreenProps<'BusinessProfile'>) {
   const userId = useAuthStore((s) => s.userId);
   const name = useAuthStore((s) => s.name);
   const clearAuth = useAuthStore((s) => s.clearAuth);
+  const menusByBusinessId = useBusinessMenuStore((s) => s.menusByBusinessId);
+  const addMenu = useBusinessMenuStore((s) => s.addMenu);
   const queryClient = useQueryClient();
+  const [menuName, setMenuName] = useState('');
+  const [menuAmount, setMenuAmount] = useState('');
+  const menus = userId ? menusByBusinessId[userId] ?? EMPTY_MENUS : EMPTY_MENUS;
 
   const { data: balanceData, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['balance', userId],
@@ -41,6 +53,19 @@ export function BusinessProfileScreen(_props: ScreenProps<'BusinessProfile'>) {
     clearAuth();
   };
 
+  const submitMenu = () => {
+    const trimmedName = menuName.trim();
+    const amount = krwToRlusd(menuAmount);
+    if (!userId || !trimmedName || amount <= 0) {
+      showErrorToast('메뉴 추가 실패', '차감 항목명과 금액을 입력해주세요.');
+      return;
+    }
+    addMenu(userId, trimmedName, amount);
+    setMenuName('');
+    setMenuAmount('');
+    showSuccessToast('메뉴 추가 완료', '상세 화면 차감 요청에서 선택할 수 있습니다.');
+  };
+
   return (
     <ScrollView
       style={styles.container}
@@ -53,9 +78,48 @@ export function BusinessProfileScreen(_props: ScreenProps<'BusinessProfile'>) {
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{(name ?? '?')[0]}</Text>
         </View>
+        <Text style={styles.screenTitle}>가게관리</Text>
         <Text style={styles.name}>{name ?? '사업자'}</Text>
         <View style={styles.roleBadge}>
           <Text style={styles.roleText}>사업자</Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>차감 메뉴 등록</Text>
+        <View style={styles.card}>
+          <Text style={styles.menuDesc}>
+            자주 차감하는 항목을 등록하면 손님 상세 화면에서 드롭다운으로 바로 요청할 수 있습니다.
+          </Text>
+          <View style={styles.menuInputRow}>
+            <TextInput
+              style={[styles.menuInput, styles.menuNameInput]}
+              placeholder="예: PT 1회"
+              placeholderTextColor={colors.gray400}
+              value={menuName}
+              onChangeText={setMenuName}
+            />
+            <TextInput
+              style={[styles.menuInput, styles.menuAmountInput]}
+              placeholder="예: 67,500"
+              placeholderTextColor={colors.gray400}
+              keyboardType="number-pad"
+              value={menuAmount}
+              onChangeText={setMenuAmount}
+            />
+          </View>
+          <TouchableOpacity style={styles.addMenuButton} onPress={submitMenu} activeOpacity={0.8}>
+            <Text style={styles.addMenuButtonText}>메뉴 추가</Text>
+          </TouchableOpacity>
+          {menus.length > 0 && (
+            <View style={styles.menuList}>
+              {menus.map((menu) => (
+                <Text key={menu.id} style={styles.menuItemText}>
+                  {menu.name} · {formatKrwFromRlusd(menu.amount)}
+                </Text>
+              ))}
+            </View>
+          )}
         </View>
       </View>
 
@@ -138,6 +202,12 @@ const styles = StyleSheet.create({
     ...shadow.md,
   },
   avatarText: { fontSize: font.size.xxl, fontWeight: font.weight.bold, color: colors.white },
+  screenTitle: {
+    fontSize: font.size.xxl,
+    fontWeight: font.weight.bold,
+    color: colors.gray900,
+    marginBottom: spacing.xs,
+  },
   name: { fontSize: font.size.xl, fontWeight: font.weight.bold, color: colors.gray900, marginBottom: spacing.sm },
   roleBadge: {
     backgroundColor: colors.successLight,
@@ -187,6 +257,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   copyButtonText: { color: colors.success, fontWeight: font.weight.semibold, fontSize: font.size.sm },
+  menuDesc: {
+    fontSize: font.size.sm,
+    color: colors.gray500,
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
+  menuInputRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  menuInput: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: Platform.OS === 'ios' ? spacing.md : spacing.sm,
+    fontSize: font.size.md,
+    color: colors.gray900,
+  },
+  menuNameInput: { flex: 1 },
+  menuAmountInput: { width: 128 },
+  addMenuButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  addMenuButtonText: { color: colors.white, fontWeight: font.weight.semibold, fontSize: font.size.sm },
+  menuList: {
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  menuItemText: {
+    backgroundColor: colors.gray50,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: font.size.sm,
+    color: colors.gray700,
+    fontWeight: font.weight.medium,
+  },
   logoutButton: {
     minHeight: 48,
     backgroundColor: colors.white,

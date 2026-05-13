@@ -267,7 +267,7 @@ describe('ConsumerDashboardScreen', () => {
     expect(await findByText('이용분 승인 요청')).toBeTruthy();
     expect(await findByText('헤어살롱 루나에서 클리닉 ₩67,500 차감 요청')).toBeTruthy();
     expect(await findByText('50.00 RLUSD')).toBeTruthy();
-    expect(await findByText(/이미 보호 원장에 잠긴 이용권의 Token Escrow 단위만 정산됩니다/)).toBeTruthy();
+    expect(await findByText(/보호 금액권 잔액에서 해당 이용금액만 정산됩니다/)).toBeTruthy();
     fireEvent.press(await findByText('승인하고 정산'));
 
     await waitFor(() => {

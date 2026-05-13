@@ -34,7 +34,7 @@ const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; 
 };
 
 function getEscrowDetail(escrow: EscrowRecord): string {
-  if (escrow.escrowType === 'prepaid') return `기간 금액권 ${escrow.months}개 단위`;
+  if (escrow.escrowType === 'prepaid') return '기간 금액권';
   return `월정액 ${escrow.months}개월`;
 }
 
@@ -73,7 +73,7 @@ export function BusinessHistoryScreen({ navigation }: BusinessTabProps<'Business
             date: new Date((entry as any).updatedAt ?? (entry as any).createdAt ?? Date.now()),
             amount: Number(entry.amount),
             consumerName,
-            detail: escrow.escrowType === 'prepaid' ? `이용 단위 ${entry.month}` : `${entry.month}월차`,
+            detail: escrow.escrowType === 'prepaid' ? '차감 정산' : `${entry.month}월차`,
           });
         } else if (entry.status === 'refunded') {
           items.push({
@@ -83,7 +83,7 @@ export function BusinessHistoryScreen({ navigation }: BusinessTabProps<'Business
             date: new Date((entry as any).updatedAt ?? (entry as any).createdAt ?? Date.now()),
             amount: Number(entry.amount),
             consumerName,
-            detail: escrow.escrowType === 'prepaid' ? `이용 단위 ${entry.month}` : `${entry.month}월차`,
+            detail: escrow.escrowType === 'prepaid' ? '환불' : `${entry.month}월차`,
           });
         }
       }

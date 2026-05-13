@@ -36,6 +36,22 @@ function formatRlusdAmount(amount: number): string {
   return String(roundRlusdAmount(amount));
 }
 
+function selectEntriesCoveringAmount<T extends { id: string; amount: string | number }>(
+  entries: T[],
+  amount: number,
+): string[] | null {
+  const selectedIds: string[] = [];
+  let coveredAmount = 0;
+  for (const entry of entries) {
+    selectedIds.push(entry.id);
+    coveredAmount += Number(entry.amount);
+    if (roundRlusdAmount(coveredAmount) + INTEGER_RATIO_EPSILON >= amount) {
+      return selectedIds;
+    }
+  }
+  return null;
+}
+
 function safeWalletFromSeed(secret: string): Wallet {
   try {
     return Wallet.fromSeed(secret);
@@ -302,12 +318,6 @@ export class EscrowService {
       menuName = dto.menuName;
     }
 
-    const unitAmount = Number(escrow.unitPrice ?? escrow.monthlyAmount);
-    const requiredEntryCount = getWholeRatio(requestedAmount, unitAmount);
-    if (requiredEntryCount === null) {
-      throw new BadRequestException(`메뉴 금액은 ${unitAmount} RLUSD 단위로 나누어 떨어져야 합니다`);
-    }
-
     const reservedEntryIds = new Set(
       (escrow.chargeRequests ?? [])
         .filter((request) => RESERVED_CHARGE_STATUSES.has(request.status))
@@ -316,13 +326,10 @@ export class EscrowService {
     const availableEntries = escrow.entries
       .filter((entry) => entry.status === 'pending' && !reservedEntryIds.has(entry.id))
       .sort((a, b) => a.month - b.month);
-    if (availableEntries.length < requiredEntryCount) {
+    const selectedEntryIds = selectEntriesCoveringAmount(availableEntries, requestedAmount);
+    if (!selectedEntryIds) {
       throw new BadRequestException('차감 가능한 이용권 잔액이 부족합니다');
     }
-
-    const selectedEntryIds = availableEntries
-      .slice(0, requiredEntryCount)
-      .map((entry) => entry.id);
 
     const chargeRequest = await this.prisma.chargeRequest.create({
       data: {

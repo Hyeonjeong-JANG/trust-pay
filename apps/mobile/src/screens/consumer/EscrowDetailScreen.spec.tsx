@@ -96,7 +96,7 @@ describe('EscrowDetailScreen', () => {
     expect(await findByText(/정산 가능일: 2026\. 5\. 13\./)).toBeTruthy();
   });
 
-  it('should show prepaid ledger units with date-range usage period when there is no charge history', async () => {
+  it('should show prepaid voucher balance with date-range usage period when there is no charge history', async () => {
     const { api } = require('../../api/client');
     api.getEscrow.mockResolvedValue({
       id: 'e-prepaid',
@@ -114,14 +114,17 @@ describe('EscrowDetailScreen', () => {
       ],
     });
 
-    const { findByText, findAllByText } = renderWithProviders(
+    const { findByText, findAllByText, queryByText } = renderWithProviders(
       <EscrowDetailScreen route={{ params: { id: 'e-prepaid' } } as any} navigation={{} as any} />,
     );
 
-    expect(await findByText('이용 단위')).toBeTruthy();
+    expect(await findByText('잔액')).toBeTruthy();
+    expect(await findByText('₩195,750')).toBeTruthy();
     expect(await findByText(/사용기한 2026\. 4\. 27\. ~ 2026\. 7\. 10\./)).toBeTruthy();
-    expect(await findByText('이용 단위 내역')).toBeTruthy();
-    expect(await findByText('이용 단위 1')).toBeTruthy();
+    expect(await findByText('보호 원장 내역')).toBeTruthy();
+    expect(await findByText('보호 원장 항목 1')).toBeTruthy();
+    expect(queryByText('이용 단위')).toBeNull();
+    expect(queryByText('이용 단위 내역')).toBeNull();
     expect(await findAllByText(/만료:/)).toHaveLength(2);
   });
 
@@ -174,7 +177,7 @@ describe('EscrowDetailScreen', () => {
     );
 
     expect(await findByText('차감 내역')).toBeTruthy();
-    expect(await findByText('사용 완료 4/4단위 · 잔여 0단위 · 차감 2건')).toBeTruthy();
+    expect(await findByText('사용 ₩27,000 · 잔액 ₩175,500 · 차감 2건')).toBeTruthy();
     expect(await findByText('아메리카노 ₩6,750')).toBeTruthy();
     expect(await findByText('브런치 세트 ₩20,250')).toBeTruthy();
     expect((await findAllByText('5.00 RLUSD')).length).toBeGreaterThan(0);
@@ -212,7 +215,7 @@ describe('EscrowDetailScreen', () => {
     expect(await findByText('취소/환불 요약')).toBeTruthy();
     expect(await findByText('사용 ₩135,000')).toBeTruthy();
     expect(await findByText('환불 ₩405,000')).toBeTruthy();
-    expect(await findByText('환불 완료 3개 단위')).toBeTruthy();
+    expect(await findByText('환불 완료 ₩405,000')).toBeTruthy();
     expect(await findByText('XRPL 원장 상세')).toBeTruthy();
     expect(await findByText(/원장 증빙: USED_UNIT/)).toBeTruthy();
     expect(queryByText('이용 단위 내역')).toBeNull();
@@ -253,6 +256,7 @@ describe('EscrowDetailScreen', () => {
     expect(await findByText('승인 대기 차감 요청')).toBeTruthy();
     expect(await findByText('클리닉 ₩67,500')).toBeTruthy();
     expect(await findByText('50.00 RLUSD')).toBeTruthy();
+    expect(await findByText(/승인하면 보호 금액권 잔액에서 차감됩니다/)).toBeTruthy();
     fireEvent.press(await findByText('승인하고 정산'));
 
     await waitFor(() => {

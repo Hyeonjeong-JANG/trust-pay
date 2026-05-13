@@ -705,6 +705,35 @@ describe('EscrowService', () => {
       expect(result.status).toBe('pending_approval');
     });
 
+    it('should allow manual variable amount charge requests covered by available prepaid balance', async () => {
+      prisma.escrow.findUnique.mockResolvedValue(prepaidEscrow);
+      prisma.chargeRequest.create.mockResolvedValue({
+        id: 'charge-variable',
+        escrowId: 'escrow-prepaid-1',
+        menuItemId: null,
+        menuName: '수건 대여',
+        amount: 5,
+        status: 'pending_approval',
+        entryIds: JSON.stringify(['entry-1']),
+      });
+
+      const result = await service.createChargeRequest(
+        'escrow-prepaid-1',
+        { menuName: '수건 대여', amount: 5 },
+        businessUser,
+      );
+
+      expect(prisma.chargeRequest.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          menuName: '수건 대여',
+          amount: 5,
+          entryIds: JSON.stringify(['entry-1']),
+        }),
+        include: { menuItem: true, escrow: { include: { business: true, consumer: true } } },
+      });
+      expect(result.status).toBe('pending_approval');
+    });
+
     it('should finish reserved entries only after consumer approval', async () => {
       prisma.chargeRequest.findUnique.mockResolvedValue({
         id: 'charge-1',

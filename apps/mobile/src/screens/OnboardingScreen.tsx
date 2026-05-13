@@ -171,6 +171,10 @@ const s = StyleSheet.create({
     lineHeight: 24,
   },
   footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingHorizontal: spacing.xxl,
     paddingBottom: 50,
     alignItems: 'center',

@@ -64,13 +64,28 @@ export class BusinessService {
     if (!business) throw new NotFoundException('Business not found');
 
     const totalReceived = business.escrows.reduce((sum, e) => {
+      if (e.escrowType === 'prepaid') {
+        const settledCharges = e.chargeRequests
+          .filter((request) => request.status === 'settled')
+          .reduce((chargeSum, request) => chargeSum + Number(request.amount), 0);
+        if (settledCharges > 0) return sum + settledCharges;
+      }
       const released = e.entries.filter((en) => en.status === 'released');
-      return sum + released.length * e.monthlyAmount;
+      return sum + released.reduce((entrySum, entry) => entrySum + Number(entry.amount ?? e.monthlyAmount), 0);
     }, 0);
 
     const totalPending = business.escrows.reduce((sum, e) => {
+      if (e.escrowType === 'prepaid') {
+        const settledCharges = e.chargeRequests
+          .filter((request) => request.status === 'settled')
+          .reduce((chargeSum, request) => chargeSum + Number(request.amount), 0);
+        const refundedAmount = e.entries
+          .filter((en) => en.status === 'refunded')
+          .reduce((entrySum, entry) => entrySum + Number(entry.amount), 0);
+        return sum + Math.max(Number(e.totalAmount) - settledCharges - refundedAmount, 0);
+      }
       const pending = e.entries.filter((en) => en.status === 'pending');
-      return sum + pending.length * e.monthlyAmount;
+      return sum + pending.reduce((entrySum, entry) => entrySum + Number(entry.amount ?? e.monthlyAmount), 0);
     }, 0);
 
     return {

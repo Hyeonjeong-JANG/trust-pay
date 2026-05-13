@@ -143,6 +143,34 @@ describe('BusinessService', () => {
       expect(result.business).toEqual({ id: 'biz-1', name: '테스트카페' });
     });
 
+    it('should aggregate prepaid voucher totals from settled charge amounts instead of ledger unit amounts', async () => {
+      prisma.business.findUnique.mockResolvedValue({
+        ...mockBusiness,
+        escrows: [
+          {
+            id: 'e-prepaid-variable',
+            status: 'active',
+            escrowType: 'prepaid',
+            totalAmount: 100,
+            monthlyAmount: 10,
+            entries: [
+              { status: 'released', amount: '10' },
+              { status: 'pending', amount: '10' },
+            ],
+            chargeRequests: [
+              { status: 'settled', amount: 7.5 },
+            ],
+            consumer: { id: 'c-1', name: '소비자1' },
+          },
+        ],
+      });
+
+      const result = await service.dashboard('biz-1', businessUser);
+
+      expect(result.totalReceived).toBe(7.5);
+      expect(result.totalPending).toBe(92.5);
+    });
+
     it('should return zero amounts when no escrows', async () => {
       prisma.business.findUnique.mockResolvedValue({
         ...mockBusiness,

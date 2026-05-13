@@ -111,8 +111,8 @@ describe('PaymentScreen', () => {
     expect(payload.totalAmount).toBeCloseTo(22.22223, 6);
   });
 
-  it('should default cafe payments to prepaid vouchers', () => {
-    const { getAllByText, getByPlaceholderText, getByText } = renderWithProviders(
+  it('should default cafe payments to period vouchers without exposing fixed units', () => {
+    const { getByPlaceholderText, getByText, queryByText } = renderWithProviders(
       <PaymentScreen
         navigation={{ navigate: jest.fn() } as any}
         route={{ params: { businessId: 'b-1', businessName: '강남 블루보틀', businessCategory: '카페' } } as any}
@@ -124,8 +124,10 @@ describe('PaymentScreen', () => {
     fireEvent.changeText(getByPlaceholderText('예: 3'), '3');
 
     expect(getByText('이용권')).toBeTruthy();
-    expect(getByText('30개 단위 x ₩6,750')).toBeTruthy();
-    expect(getAllByText('5.00 RLUSD').length).toBeGreaterThan(0);
+    expect(getByText('보호 금액권 잔액')).toBeTruthy();
+    expect(getByText('₩202,500')).toBeTruthy();
+    expect(queryByText('30개 단위 x ₩6,750')).toBeNull();
+    expect(queryByText(/Token Escrow 단위/)).toBeNull();
     expect(getByText(/유효기간: 3개월/)).toBeTruthy();
   });
 
@@ -141,7 +143,7 @@ describe('PaymentScreen', () => {
 
       expect(getByText('1회 이용금액 (원)')).toBeTruthy();
       expect(getByText('유효기간 (개월)')).toBeTruthy();
-      expect(getByText(/메뉴 금액만큼 여러 Token Escrow 단위/)).toBeTruthy();
+      expect(getByText(/실제 사용금액만큼 사업자가 차감 요청/)).toBeTruthy();
     },
   );
 
@@ -182,7 +184,7 @@ describe('PaymentScreen', () => {
     ]);
 
     const navigate = jest.fn();
-    const { findByText, getByText } = renderWithProviders(
+    const { findByText, getByText, queryByText } = renderWithProviders(
       <PaymentScreen
         navigation={{ navigate } as any}
         route={{ params: { businessId: 'b-1', businessName: '헤어살롱 루나', businessCategory: '미용실' } } as any}
@@ -192,6 +194,7 @@ describe('PaymentScreen', () => {
     fireEvent.press(await findByText('헤어살롱 루나 선불권'));
     expect(await findByText('커트 ₩40,500')).toBeTruthy();
     expect(await findByText('클리닉 ₩67,500')).toBeTruthy();
+    expect(queryByText(/단위 보호/)).toBeNull();
     fireEvent.press(getByText('계좌 승인 결제 요청'));
 
     await waitFor(() => {
@@ -260,7 +263,7 @@ describe('PaymentScreen', () => {
   it('should carry voucher QR validity dates into the created prepaid escrow', async () => {
     const { api } = require('../../api/client');
     const navigate = jest.fn();
-    const { findByText, getByText } = renderWithProviders(
+    const { findByText, getByText, queryByText } = renderWithProviders(
       <PaymentScreen
         navigation={{ navigate } as any}
         route={{
@@ -291,6 +294,11 @@ describe('PaymentScreen', () => {
     );
 
     expect(await findByText('사용기간 2026-05-13 ~ 2026-08-13')).toBeTruthy();
+    expect(await findByText('보호 금액권 잔액')).toBeTruthy();
+    expect(await findByText('₩100,000')).toBeTruthy();
+    expect(queryByText('10개 단위 x ₩10,000')).toBeNull();
+    expect(queryByText('보호 단위')).toBeNull();
+    expect(queryByText(/Token Escrow 단위/)).toBeNull();
     fireEvent.press(getByText('계좌 승인 결제 요청'));
 
     await waitFor(() => {

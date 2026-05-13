@@ -9,6 +9,11 @@ jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(),
 }));
 
+jest.mock('../../utils/toast', () => ({
+  showSuccessToast: jest.fn(),
+  showErrorToast: jest.fn(),
+}));
+
 jest.mock('../../api/client', () => ({
   api: {
     getBalance: jest.fn().mockResolvedValue({ xrplAddress: 'rBusiness123456', balance: '1200' }),
@@ -45,11 +50,33 @@ describe('BusinessProfileScreen', () => {
     );
 
     expect(await findByText('파워짐')).toBeTruthy();
+    expect(await findByText('1,200 RLUSD')).toBeTruthy();
     fireEvent.press(await findByText('로그아웃'));
 
     await waitFor(() => {
       expect(clearQueryCache).toHaveBeenCalled();
       expect(mockClearAuth).toHaveBeenCalled();
     });
+  });
+
+  it('should manage multiple prepaid charge menus from store management', async () => {
+    const { findByPlaceholderText, findByText } = renderWithProviders(
+      <BusinessProfileScreen route={{} as any} navigation={{} as any} />,
+    );
+
+    expect(await findByText('가게관리')).toBeTruthy();
+    expect(await findByText('1,200 RLUSD')).toBeTruthy();
+    expect(await findByText('차감 메뉴 등록')).toBeTruthy();
+
+    fireEvent.changeText(await findByPlaceholderText('예: PT 1회'), 'PT 1회');
+    fireEvent.changeText(await findByPlaceholderText('예: 67,500'), '67500');
+    fireEvent.press(await findByText('메뉴 추가'));
+
+    fireEvent.changeText(await findByPlaceholderText('예: PT 1회'), '락커 대여');
+    fireEvent.changeText(await findByPlaceholderText('예: 67,500'), '2500');
+    fireEvent.press(await findByText('메뉴 추가'));
+
+    expect(await findByText('PT 1회 · ₩67,500')).toBeTruthy();
+    expect(await findByText('락커 대여 · ₩2,500')).toBeTruthy();
   });
 });

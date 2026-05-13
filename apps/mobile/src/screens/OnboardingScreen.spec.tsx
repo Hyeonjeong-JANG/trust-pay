@@ -104,7 +104,7 @@ describe('OnboardingScreen', () => {
     ).toBeTruthy();
   });
 
-  it('should center only the onboarding content while preserving footer position', () => {
+  it('should center onboarding content against the whole screen while preserving footer controls', () => {
     const { getAllByTestId, getByTestId } = render(
       <OnboardingScreen navigation={mockNavigation} route={mockRoute} />,
     );
@@ -118,7 +118,13 @@ describe('OnboardingScreen', () => {
       expect.objectContaining({ alignItems: 'center' }),
     );
     expect(getByTestId('onboarding-footer').props.style).toEqual(
-      expect.objectContaining({ paddingBottom: 50 }),
+      expect.objectContaining({
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        paddingBottom: 50,
+      }),
     );
   });
 });

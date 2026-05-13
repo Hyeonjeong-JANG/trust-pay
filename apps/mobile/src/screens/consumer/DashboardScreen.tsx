@@ -194,7 +194,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
                 </Text>
                 <Text style={styles.approvalSub}>{formatRlusd(pendingChargeApproval.amount)}</Text>
                 <Text style={styles.approvalDesc}>
-                  지금 승인하면 이미 보호 원장에 잠긴 이용권의 Token Escrow 단위만 정산됩니다.
+                  지금 승인하면 보호 금액권 잔액에서 해당 이용금액만 정산됩니다.
                 </Text>
                 <View style={styles.approvalActions}>
                   <TouchableOpacity

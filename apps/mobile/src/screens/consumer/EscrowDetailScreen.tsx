@@ -153,24 +153,30 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   const pendingChargeRequests = escrow.chargeRequests?.filter((request) => request.status === 'pending_approval') ?? [];
   const chargeHistory = escrow.chargeRequests?.filter((request) => request.status !== 'pending_approval') ?? [];
   const totalEntries = escrow.entries.length || escrow.months;
-  const progressPct = totalEntries > 0 ? (released / totalEntries) * 100 : 0;
   const escrowStyle = STATUS_STYLE[escrow.status] ?? STATUS_STYLE.cancelled;
   const usageRange = isPrepaid ? getPrepaidUsageRange(escrow) : getEntryUsageRange(escrow.entries);
   const usageRangeLabel = isPrepaid ? '사용기한' : '이용기간';
   const releasedAmount = sumEntries(escrow.entries, 'released');
   const refundedAmount = sumEntries(escrow.entries, 'refunded');
-  const settledChargeCount = chargeHistory.filter((request) => request.status === 'settled').length;
+  const settledChargeRequests = chargeHistory.filter((request) => request.status === 'settled');
+  const settledChargeAmount = settledChargeRequests.reduce((sum, request) => sum + Number(request.amount), 0);
+  const settledChargeCount = settledChargeRequests.length;
+  const prepaidUsedAmount = isPrepaid && settledChargeAmount > 0 ? settledChargeAmount : releasedAmount;
+  const prepaidRemainingAmount = Math.max(Number(escrow.totalAmount) - prepaidUsedAmount - refundedAmount, 0);
+  const progressPct = isPrepaid
+    ? Number(escrow.totalAmount) > 0 ? (prepaidUsedAmount / Number(escrow.totalAmount)) * 100 : 0
+    : totalEntries > 0 ? (released / totalEntries) * 100 : 0;
   const progressText = isPrepaid
     ? escrow.status === 'cancelled'
-      ? `사용 ${formatKrwFromRlusd(releasedAmount)} · 환불 ${formatKrwFromRlusd(refundedAmount)}`
-      : `사용 완료 ${released}/${totalEntries}단위 · 잔여 ${pending}단위 · 차감 ${settledChargeCount}건`
+      ? `사용 ${formatKrwFromRlusd(prepaidUsedAmount)} · 환불 ${formatKrwFromRlusd(refundedAmount)}`
+      : `사용 ${formatKrwFromRlusd(prepaidUsedAmount)} · 잔액 ${formatKrwFromRlusd(prepaidRemainingAmount)} · 차감 ${settledChargeCount}건`
     : `${released}개월 정산 완료 · ${pending}개월 예정${refunded > 0 ? ` · ${refunded}개월 환불` : ''}`;
   const sectionTitle = isPrepaid
     ? chargeHistory.length > 0
       ? '차감 내역'
       : escrow.status === 'cancelled'
         ? 'XRPL 원장 상세'
-        : '이용 단위 내역'
+        : '보호 원장 내역'
     : '월별 내역';
   const listData: Array<EscrowEntry | ChargeRequest> = isPrepaid && chargeHistory.length > 0
     ? chargeHistory
@@ -205,15 +211,15 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 </View>
                 <View style={styles.amountDivider} />
                 <View style={styles.amountItem}>
-                  <Text style={styles.amountLabel}>{isPrepaid ? '이용 단위' : '월별'}</Text>
-                  <Text style={styles.amountValue}>{formatKrwFromRlusd(isPrepaid ? escrow.unitPrice ?? escrow.monthlyAmount : escrow.monthlyAmount)}</Text>
-                  <Text style={styles.amountUnit}>{formatRlusd(isPrepaid ? escrow.unitPrice ?? escrow.monthlyAmount : escrow.monthlyAmount)}</Text>
+                  <Text style={styles.amountLabel}>{isPrepaid ? '사용분' : '월별'}</Text>
+                  <Text style={styles.amountValue}>{formatKrwFromRlusd(isPrepaid ? prepaidUsedAmount : escrow.monthlyAmount)}</Text>
+                  <Text style={styles.amountUnit}>{formatRlusd(isPrepaid ? prepaidUsedAmount : escrow.monthlyAmount)}</Text>
                 </View>
                 <View style={styles.amountDivider} />
                 <View style={styles.amountItem}>
-                  <Text style={styles.amountLabel}>{isPrepaid ? '단위 수' : '기간'}</Text>
-                  <Text style={styles.amountValue}>{isPrepaid ? totalEntries : escrow.months}</Text>
-                  <Text style={styles.amountUnit}>{isPrepaid ? '개' : '개월'}</Text>
+                  <Text style={styles.amountLabel}>{isPrepaid ? '잔액' : '기간'}</Text>
+                  <Text style={styles.amountValue}>{isPrepaid ? formatKrwFromRlusd(prepaidRemainingAmount) : escrow.months}</Text>
+                  <Text style={styles.amountUnit}>{isPrepaid ? formatRlusd(prepaidRemainingAmount) : '개월'}</Text>
                 </View>
               </View>
 
@@ -248,7 +254,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                     <Text style={styles.refundSummarySub}>{formatRlusd(refundedAmount)}</Text>
                   </View>
                 </View>
-                <Text style={styles.refundSummaryDesc}>환불 완료 {refunded}개 단위</Text>
+                <Text style={styles.refundSummaryDesc}>환불 완료 {formatKrwFromRlusd(refundedAmount)}</Text>
               </View>
             )}
             {pendingChargeRequests.length > 0 && (
@@ -261,7 +267,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                     </Text>
                     <Text style={styles.chargeRequestAmountSub}>{formatRlusd(request.amount)}</Text>
                     <Text style={styles.chargeRequestDesc}>
-                      {escrow.business?.name ?? '사업자'}가 메뉴 이용 금액 차감을 요청했습니다. 승인하면 연결된 Token Escrow 단위가 정산됩니다.
+                      {escrow.business?.name ?? '사업자'}가 실제 이용 금액 차감을 요청했습니다. 승인하면 보호 금액권 잔액에서 차감됩니다.
                     </Text>
                     <View style={styles.chargeRequestActions}>
                       <TouchableOpacity
@@ -332,7 +338,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                   <Text style={styles.entryMonthText}>{item.month}</Text>
                 </View>
                 <View style={styles.entryInfo}>
-                    <Text style={styles.entryMonth}>{isPrepaid ? `이용 단위 ${item.month}` : `${item.month}월차`}</Text>
+                    <Text style={styles.entryMonth}>{isPrepaid ? `보호 원장 항목 ${item.month}` : `${item.month}월차`}</Text>
                   <Text style={styles.entryDate}>
                     {isPrepaid ? '만료' : '정산 가능일'}: {rippleTimeToDate(isPrepaid ? item.cancelAfter : item.finishAfter)}
                   </Text>

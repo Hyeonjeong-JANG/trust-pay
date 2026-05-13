@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { TouchableOpacity, Text } from 'react-native';
+import { TouchableOpacity, Text, View } from 'react-native';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -81,10 +81,22 @@ function BusinessHeaderRight() {
   return (
     <TouchableOpacity
       onPress={() => navigation.navigate('BusinessProfile')}
-      style={{ marginRight: 8, minHeight: 40, justifyContent: 'center' }}
+      style={{ marginRight: 8, minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6 }}
       activeOpacity={0.7}
     >
-      <Text style={{ color: colors.primary, fontSize: font.size.md, fontWeight: font.weight.medium }}>프로필</Text>
+      <View
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 14,
+          backgroundColor: colors.primaryLight,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={{ color: colors.primary, fontSize: font.size.sm, fontWeight: font.weight.bold }}>가</Text>
+      </View>
+      <Text style={{ color: colors.primary, fontSize: font.size.sm, fontWeight: font.weight.semibold }}>가게관리</Text>
     </TouchableOpacity>
   );
 }
@@ -141,7 +153,7 @@ function AppNavigator() {
       <Stack.Navigator screenOptions={stackScreenOptions}>
         <Stack.Screen name="BusinessTabs" component={BusinessTabs} options={{ headerShown: false }} />
         <Stack.Screen name="BusinessEscrowDetail" component={BusinessEscrowDetailScreen} options={{ title: '결제 상세' }} />
-        <Stack.Screen name="BusinessProfile" component={BusinessProfileScreen} options={{ title: '프로필' }} />
+        <Stack.Screen name="BusinessProfile" component={BusinessProfileScreen} options={{ title: '가게관리' }} />
       </Stack.Navigator>
     );
   }
