@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { adminTabs, buildAdminAuthHeaders, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, summarizeDashboard, summarizeEscrow, summarizeReview, visibleQueueStatuses } from './admin-state.js';
+import { adminTabs, buildAdminAuthHeaders, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, visibleQueueStatuses } from './admin-state.js';
 
 test('getApiBase resolves local and deployed admin API roots', () => {
   assert.equal(getApiBase('/api', 'localhost'), 'http://localhost:3000');
@@ -17,24 +17,43 @@ test('getStatusLabel describes platform-first refund review states', () => {
 
 test('visibleQueueStatuses prioritizes operational refund review work', () => {
   assert.deepEqual(visibleQueueStatuses, [
-    'open',
+    'needs_action',
+    'waiting_merchant',
+    'resolved',
+    'all',
+  ]);
+  assert.equal(getStatusLabel('needs_action'), '처리 필요');
+  assert.equal(getStatusLabel('waiting_merchant'), '사업자 대기');
+  assert.equal(getStatusLabel('resolved'), '완료');
+});
+
+test('admin refund queue defaults to the actionable work view', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+
+  assert.match(js, /status: 'needs_action'/);
+  assert.match(js, /fetchReviewsForFilter/);
+});
+
+test('queue filters collapse detailed statuses into operator decisions', () => {
+  assert.deepEqual(getQueueFetchStatuses('needs_action'), [
     'platform_review',
-    'merchant_response_requested',
     'merchant_responded',
     'merchant_review',
     'platform_investigation',
-    'platform_approved',
-    'rejected',
   ]);
-  assert.equal(getStatusLabel('open'), '열린 전체');
-  assert.equal(getStatusLabel('merchant_review'), '사업자 검토');
+  assert.deepEqual(getQueueFetchStatuses('waiting_merchant'), ['merchant_response_requested']);
+  assert.deepEqual(getQueueFetchStatuses('resolved'), ['platform_approved', 'rejected', 'refunded']);
 });
 
-test('admin refund queue defaults to the open all-status view', () => {
-  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+test('sortReviewsForQueue puts oldest unprocessed incoming work first', () => {
+  const reviews = sortReviewsForQueue([
+    { id: 'terminal', status: 'platform_approved', requestedAt: '2026-05-13T00:00:00.000Z' },
+    { id: 'new-consumer', status: 'platform_review', requestedAt: '2026-05-15T00:00:00.000Z' },
+    { id: 'waiting-merchant', status: 'merchant_response_requested', requestedAt: '2026-05-12T00:00:00.000Z' },
+    { id: 'old-merchant-response', status: 'merchant_responded', requestedAt: '2026-05-10T00:00:00.000Z', merchantRespondedAt: '2026-05-14T00:00:00.000Z' },
+  ], 'needs_action');
 
-  assert.match(js, /status: 'open'/);
-  assert.match(js, /state\.status === 'open' \? '\/admin\/refund-reviews' :/);
+  assert.deepEqual(reviews.map((review) => review.id), ['old-merchant-response', 'new-consumer']);
 });
 
 test('admin refund detail renders a timeline and status-specific action modes', () => {

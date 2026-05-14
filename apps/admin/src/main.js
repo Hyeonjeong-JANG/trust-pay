@@ -1,4 +1,4 @@
-import { adminTabs, buildAdminAuthHeaders, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, summarizeDashboard, summarizeEscrow, summarizeReview, visibleQueueStatuses } from './admin-state.js';
+import { adminTabs, buildAdminAuthHeaders, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, visibleQueueStatuses } from './admin-state.js';
 
 const state = {
   apiBase: getApiBase(window.TRUSTPAY_ADMIN_API_BASE || '/api', window.location.hostname),
@@ -10,7 +10,7 @@ const state = {
   consumers: [],
   escrows: [],
   selectedId: null,
-  status: 'open',
+  status: 'needs_action',
   activeTab: sessionStorage.getItem('trustpay-admin-tab') || 'dashboard',
 };
 
@@ -319,11 +319,19 @@ function renderDetail(review) {
 async function loadReviews() {
   renderRefundLayout();
   setStatus('환불 검토 큐를 불러오는 중...');
-  const path = state.status === 'open' ? '/admin/refund-reviews' : `/admin/refund-reviews?status=${encodeURIComponent(state.status)}`;
-  state.reviews = await adminRequest(path);
+  state.reviews = await fetchReviewsForFilter(state.status);
   renderFilters();
   renderQueue();
   setStatus(`${getStatusLabel(state.status)} ${state.reviews.length}건`, 'ok');
+}
+
+async function fetchReviewsForFilter(status) {
+  const batches = await Promise.all(
+    getQueueFetchStatuses(status).map((reviewStatus) => adminRequest(`/admin/refund-reviews?status=${encodeURIComponent(reviewStatus)}`)),
+  );
+  const reviewsById = new Map();
+  for (const review of batches.flat()) reviewsById.set(review.id, review);
+  return sortReviewsForQueue([...reviewsById.values()], status);
 }
 
 function renderBusinessList() {

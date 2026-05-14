@@ -1,12 +1,8 @@
 export const visibleQueueStatuses = [
-  'open',
-  'platform_review',
-  'merchant_response_requested',
-  'merchant_responded',
-  'merchant_review',
-  'platform_investigation',
-  'platform_approved',
-  'rejected',
+  'needs_action',
+  'waiting_merchant',
+  'resolved',
+  'all',
 ];
 
 export const adminTabs = [
@@ -19,6 +15,10 @@ export const adminTabs = [
 ];
 
 const STATUS_LABELS = {
+  needs_action: '처리 필요',
+  waiting_merchant: '사업자 대기',
+  resolved: '완료',
+  all: '전체',
   open: '열린 전체',
   platform_review: 'TrustPay 검토',
   merchant_response_requested: '사업자 소명 요청',
@@ -32,6 +32,9 @@ const STATUS_LABELS = {
 
 const KRW_PER_RLUSD = 1350;
 const TERMINAL_REFUND_REVIEW_STATUSES = new Set(['platform_approved', 'rejected', 'refunded']);
+const NEEDS_ACTION_STATUSES = ['platform_review', 'merchant_responded', 'merchant_review', 'platform_investigation'];
+const WAITING_MERCHANT_STATUSES = ['merchant_response_requested'];
+const RESOLVED_STATUSES = ['platform_approved', 'rejected', 'refunded'];
 
 function isLocalHost(hostname) {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
@@ -63,6 +66,14 @@ export function getStatusLabel(status) {
   return STATUS_LABELS[status] ?? status;
 }
 
+export function getQueueFetchStatuses(status) {
+  if (status === 'needs_action') return NEEDS_ACTION_STATUSES;
+  if (status === 'waiting_merchant') return WAITING_MERCHANT_STATUSES;
+  if (status === 'resolved') return RESOLVED_STATUSES;
+  if (status === 'all') return [...NEEDS_ACTION_STATUSES, ...WAITING_MERCHANT_STATUSES, ...RESOLVED_STATUSES];
+  return [status];
+}
+
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString('ko-KR') : '';
 }
@@ -76,6 +87,23 @@ export function getReviewActionMode(review = {}) {
   if (review.status === 'merchant_response_requested') return 'awaiting_merchant';
   if (review.status === 'merchant_responded') return 'needs_decision';
   return 'request_or_decide';
+}
+
+function getQueueTimestamp(review = {}) {
+  if (review.status === 'merchant_responded' && review.merchantRespondedAt) return review.merchantRespondedAt;
+  if (TERMINAL_REFUND_REVIEW_STATUSES.has(review.status) && review.resolvedAt) return review.resolvedAt;
+  return review.requestedAt || review.merchantRespondedAt || review.resolvedAt || '';
+}
+
+export function sortReviewsForQueue(reviews = [], status = 'needs_action') {
+  const allowed = new Set(getQueueFetchStatuses(status));
+  return reviews
+    .filter((review) => status === 'all' || allowed.has(review.status))
+    .sort((a, b) => {
+      const aTime = new Date(getQueueTimestamp(a)).getTime() || 0;
+      const bTime = new Date(getQueueTimestamp(b)).getTime() || 0;
+      return aTime - bTime;
+    });
 }
 
 export function buildReviewTimeline(review = {}) {
