@@ -31,6 +31,7 @@ const STATUS_LABELS = {
 };
 
 const KRW_PER_RLUSD = 1350;
+const TERMINAL_REFUND_REVIEW_STATUSES = new Set(['platform_approved', 'rejected', 'refunded']);
 
 function isLocalHost(hostname) {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
@@ -60,6 +61,74 @@ export function getApiBase(configuredBase = '/api', hostname = globalThis.locati
 
 export function getStatusLabel(status) {
   return STATUS_LABELS[status] ?? status;
+}
+
+function formatDateTime(value) {
+  return value ? new Date(value).toLocaleString('ko-KR') : '';
+}
+
+function formatDate(value) {
+  return value ? new Date(value).toLocaleDateString('ko-KR') : '';
+}
+
+export function getReviewActionMode(review = {}) {
+  if (TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) return 'terminal';
+  if (review.status === 'merchant_response_requested') return 'awaiting_merchant';
+  if (review.status === 'merchant_responded') return 'needs_decision';
+  return 'request_or_decide';
+}
+
+export function buildReviewTimeline(review = {}) {
+  const events = [
+    {
+      label: '소비자 요청 접수',
+      description: review.consumerReason || '환불 검토 요청이 접수되었습니다.',
+      timestamp: formatDateTime(review.requestedAt),
+      state: 'done',
+    },
+    {
+      label: 'TrustPay 1차 검토',
+      description: review.investigationReason || '요청 내용과 에스크로 상태를 확인합니다.',
+      timestamp: formatDateTime(review.businessClosureCheckedAt),
+      state: review.status === 'platform_review' ? 'current' : 'done',
+    },
+  ];
+
+  if (review.merchantNotice || ['merchant_response_requested', 'merchant_responded'].includes(review.status) || TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) {
+    events.push({
+      label: '사업자 소명 요청',
+      description: review.merchantNotice || '사업자에게 소명 요청을 보냈습니다.',
+      timestamp: review.merchantRespondBy ? `기한 ${formatDate(review.merchantRespondBy)}` : '',
+      state: review.status === 'merchant_response_requested' ? 'current' : 'done',
+    });
+  }
+
+  if (review.merchantResponse || review.status === 'merchant_responded' || TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) {
+    events.push({
+      label: '사업자 응답 완료',
+      description: review.merchantResponse || '사업자 응답이 접수되었습니다.',
+      timestamp: formatDateTime(review.merchantRespondedAt),
+      state: 'done',
+    });
+  }
+
+  if (TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) {
+    events.push({
+      label: getStatusLabel(review.status),
+      description: review.adminResolutionReason || '운영자 결정이 완료되었습니다.',
+      timestamp: formatDateTime(review.resolvedAt),
+      state: 'done',
+    });
+  } else if (review.status === 'merchant_responded') {
+    events.push({
+      label: '운영자 최종 결정',
+      description: '사업자 응답을 확인한 뒤 승인, 거절, 추가 조사 중 하나를 선택하세요.',
+      timestamp: '',
+      state: 'current',
+    });
+  }
+
+  return events;
 }
 
 export function getTabMeta(tabId) {
@@ -136,8 +205,8 @@ export function summarizeReview(review) {
     consumerName: escrow.consumer?.name ?? '소비자 미확인',
     refundableKrw: formatKrwFromRlusd(review.refundableAmount),
     usedKrw: formatKrwFromRlusd(usedAmount),
-    requestedAt: review.requestedAt ? new Date(review.requestedAt).toLocaleString('ko-KR') : '-',
-    respondBy: review.merchantRespondBy ? new Date(review.merchantRespondBy).toLocaleDateString('ko-KR') : '-',
+    requestedAt: formatDateTime(review.requestedAt) || '-',
+    respondBy: formatDate(review.merchantRespondBy) || '-',
     photoCountText: `첨부 ${(review.photoDataUrls ?? []).length}장`,
     reasonPreview: reason.length > 80 ? `${reason.slice(0, 80)}...` : reason,
   };

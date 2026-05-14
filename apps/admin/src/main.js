@@ -1,4 +1,4 @@
-import { adminTabs, buildAdminAuthHeaders, escapeHtml, getAdminRequestErrorMessage, getApiBase, getStatusLabel, getTabMeta, safeDataImageSrc, summarizeDashboard, summarizeEscrow, summarizeReview, visibleQueueStatuses } from './admin-state.js';
+import { adminTabs, buildAdminAuthHeaders, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, summarizeDashboard, summarizeEscrow, summarizeReview, visibleQueueStatuses } from './admin-state.js';
 
 const state = {
   apiBase: getApiBase(window.TRUSTPAY_ADMIN_API_BASE || '/api', window.location.hostname),
@@ -206,6 +206,73 @@ function renderQueue() {
   renderDetail(selected);
 }
 
+function renderReviewTimeline(review) {
+  return buildReviewTimeline(review).map((event) => `
+    <li class="timeline-item" data-state="${escapeHtml(event.state)}">
+      <span class="timeline-dot" aria-hidden="true"></span>
+      <div>
+        <strong>${escapeHtml(event.label)}</strong>
+        <p>${escapeHtml(event.description)}</p>
+        ${event.timestamp ? `<small>${escapeHtml(event.timestamp)}</small>` : ''}
+      </div>
+    </li>
+  `).join('');
+}
+
+function renderDecisionButtons() {
+  return `
+    <div class="button-row">
+      <button id="approve-review" type="button">환불 승인</button>
+      <button id="reject-review" type="button">환불 거절</button>
+      <button id="investigate-review" type="button">추가 조사</button>
+    </div>
+  `;
+}
+
+function renderActionPanel(review, summary) {
+  switch (getReviewActionMode(review)) {
+    case 'awaiting_merchant':
+      return `
+        <section class="action-panel" data-mode="awaiting_merchant">
+          <h3>사업자 응답 대기 중</h3>
+          <p>소명 요청을 보냈습니다. 응답 기한은 <strong>${escapeHtml(summary.respondBy)}</strong>입니다.</p>
+          <blockquote>${escapeHtml(review.merchantNotice || '사업자에게 소명을 요청했습니다.')}</blockquote>
+          ${renderDecisionButtons()}
+        </section>
+      `;
+    case 'needs_decision':
+      return `
+        <section class="action-panel action-panel-focus" data-mode="needs_decision">
+          <h3>사업자 응답 도착</h3>
+          <p>사업자 소명을 확인한 뒤 최종 처리 방향을 선택하세요.</p>
+          <blockquote>${escapeHtml(review.merchantResponse || '사업자 응답이 접수되었습니다.')}</blockquote>
+          ${renderDecisionButtons()}
+        </section>
+      `;
+    case 'terminal':
+      return `
+        <section class="action-panel" data-mode="terminal">
+          <h3>검토 종료</h3>
+          <p>${escapeHtml(review.adminResolutionReason || `${summary.statusLabel} 상태로 검토가 종료되었습니다.`)}</p>
+        </section>
+      `;
+    case 'request_or_decide':
+    default:
+      return `
+        <section class="action-panel" data-mode="request_or_decide">
+          <label>사업자에게 보낼 소명 요청</label>
+          <textarea id="merchant-notice" maxlength="500">${escapeHtml(review.merchantNotice || '고객이 장기 휴업 또는 이용 불가를 주장했습니다. 영업 가능 여부와 미사용분 처리 방안을 답변해주세요.')}</textarea>
+          <div class="button-row">
+            <button id="request-merchant" class="primary" type="button">사업자 소명 요청</button>
+            <button id="approve-review" type="button">환불 승인</button>
+            <button id="reject-review" type="button">환불 거절</button>
+            <button id="investigate-review" type="button">추가 조사</button>
+          </div>
+        </section>
+      `;
+  }
+}
+
 function renderDetail(review) {
   const detail = $('#case-detail');
   if (!review) {
@@ -236,22 +303,17 @@ function renderDetail(review) {
       <p>${escapeHtml(review.consumerReason || '기록된 사유가 없습니다.')}</p>
       <div class="photo-grid">${photos}</div>
     </section>
-    <section class="action-panel">
-      <label>사업자에게 보낼 소명 요청</label>
-      <textarea id="merchant-notice" maxlength="500">${escapeHtml(review.merchantNotice || '고객이 장기 휴업 또는 이용 불가를 주장했습니다. 영업 가능 여부와 미사용분 처리 방안을 답변해주세요.')}</textarea>
-      <div class="button-row">
-        <button id="request-merchant" class="primary" type="button">사업자 소명 요청</button>
-        <button id="approve-review" type="button">환불 승인</button>
-        <button id="reject-review" type="button">환불 거절</button>
-        <button id="investigate-review" type="button">추가 조사</button>
-      </div>
+    <section class="timeline-panel">
+      <h3>처리 타임라인</h3>
+      <ol class="review-timeline">${renderReviewTimeline(review)}</ol>
     </section>
+    ${renderActionPanel(review, summary)}
   `;
 
-  $('#request-merchant').addEventListener('click', () => requestMerchant(review.id));
-  $('#approve-review').addEventListener('click', () => resolveReview(review.id, 'approve'));
-  $('#reject-review').addEventListener('click', () => resolveReview(review.id, 'reject'));
-  $('#investigate-review').addEventListener('click', () => resolveReview(review.id, 'investigate'));
+  $('#request-merchant')?.addEventListener('click', () => requestMerchant(review.id));
+  $('#approve-review')?.addEventListener('click', () => resolveReview(review.id, 'approve'));
+  $('#reject-review')?.addEventListener('click', () => resolveReview(review.id, 'reject'));
+  $('#investigate-review')?.addEventListener('click', () => resolveReview(review.id, 'investigate'));
 }
 
 async function loadReviews() {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { adminTabs, buildAdminAuthHeaders, escapeHtml, getAdminRequestErrorMessage, getApiBase, getStatusLabel, getTabMeta, safeDataImageSrc, summarizeDashboard, summarizeEscrow, summarizeReview, visibleQueueStatuses } from './admin-state.js';
+import { adminTabs, buildAdminAuthHeaders, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, summarizeDashboard, summarizeEscrow, summarizeReview, visibleQueueStatuses } from './admin-state.js';
 
 test('getApiBase resolves local and deployed admin API roots', () => {
   assert.equal(getApiBase('/api', 'localhost'), 'http://localhost:3000');
@@ -35,6 +35,16 @@ test('admin refund queue defaults to the open all-status view', () => {
 
   assert.match(js, /status: 'open'/);
   assert.match(js, /state\.status === 'open' \? '\/admin\/refund-reviews' :/);
+});
+
+test('admin refund detail renders a timeline and status-specific action modes', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+
+  assert.match(js, /buildReviewTimeline/);
+  assert.match(js, /getReviewActionMode/);
+  assert.match(js, /class="review-timeline"/);
+  assert.match(js, /case 'needs_decision'/);
+  assert.match(js, /case 'awaiting_merchant'/);
 });
 
 test('adminTabs defines standard operations sections', () => {
@@ -83,6 +93,33 @@ test('summarizeReview creates an operator-readable queue item', () => {
   assert.equal(summary.usedKrw, '₩135,000');
   assert.equal(summary.photoCountText, '첨부 1장');
   assert.equal(summary.reasonPreview, '2주 넘게 안 열고 전화도 안 받아요ㅠㅠ');
+});
+
+test('buildReviewTimeline explains merchant response progress and next admin decision', () => {
+  const timeline = buildReviewTimeline({
+    status: 'merchant_responded',
+    requestedAt: '2026-05-14T00:00:00.000Z',
+    merchantNotice: '영업 여부와 미사용분 처리 방안을 답변해주세요.',
+    merchantRespondBy: '2026-05-19T00:00:00.000Z',
+    merchantResponse: '정상 영업 중이며 환불 가능 범위를 확인했습니다.',
+    merchantRespondedAt: '2026-05-16T05:20:00.000Z',
+  });
+
+  assert.deepEqual(timeline.map((item) => [item.label, item.state]), [
+    ['소비자 요청 접수', 'done'],
+    ['TrustPay 1차 검토', 'done'],
+    ['사업자 소명 요청', 'done'],
+    ['사업자 응답 완료', 'done'],
+    ['운영자 최종 결정', 'current'],
+  ]);
+  assert.match(timeline[3].description, /정상 영업 중/);
+});
+
+test('getReviewActionMode separates waiting, responded, terminal, and requestable states', () => {
+  assert.equal(getReviewActionMode({ status: 'merchant_response_requested' }), 'awaiting_merchant');
+  assert.equal(getReviewActionMode({ status: 'merchant_responded' }), 'needs_decision');
+  assert.equal(getReviewActionMode({ status: 'platform_approved' }), 'terminal');
+  assert.equal(getReviewActionMode({ status: 'platform_review' }), 'request_or_decide');
 });
 
 test('summarizeEscrow creates compact transaction rows', () => {
