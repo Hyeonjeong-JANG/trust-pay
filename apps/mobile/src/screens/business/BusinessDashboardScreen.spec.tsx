@@ -299,6 +299,42 @@ describe('BusinessDashboardScreen', () => {
     expect(queryByText(/2주 넘게 안 열고 전화도 받지 않아/)).toBeNull();
   });
 
+  it('should surface merchant-review refund status on merchant escrow list cards', async () => {
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 25,
+      totalPending: 125,
+      escrows: [
+        {
+          id: 'e-merchant-review',
+          status: 'active',
+          escrowType: 'prepaid',
+          totalAmount: 150,
+          monthlyAmount: 5,
+          months: 30,
+          consumer: { id: 'consumer-2', name: '김민수' },
+          entries: [],
+          chargeRequests: [],
+          refundReviewRequests: [
+            {
+              id: 'refund-review-merchant',
+              status: 'merchant_review',
+              refundableAmount: 10,
+              consumerReason: '2주 넘게 문을 열지 않아 환불 검토를 요청합니다.',
+              requestedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+    expect(await findByText('김민수')).toBeTruthy();
+    expect(await findByText('환불 검토 중: 사업자 응답 대기')).toBeTruthy();
+    expect(queryByText(/2주 넘게 문을 열지 않아/)).toBeNull();
+  });
+
   it('should not expose monthly auto-settlement copy inside each dashboard card', async () => {
     const { api } = require('../../api/client');
     api.getBusinessDashboard.mockResolvedValue({

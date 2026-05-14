@@ -21,11 +21,13 @@ test('visibleQueueStatuses prioritizes operational refund review work', () => {
     'platform_review',
     'merchant_response_requested',
     'merchant_responded',
+    'merchant_review',
     'platform_investigation',
     'platform_approved',
     'rejected',
   ]);
   assert.equal(getStatusLabel('open'), '열린 전체');
+  assert.equal(getStatusLabel('merchant_review'), '사업자 검토');
 });
 
 test('admin refund queue defaults to the open all-status view', () => {

@@ -68,7 +68,7 @@ describe('AdminService', () => {
     await service.listRefundReviews(adminUser, {});
 
     expect(prisma.refundReviewRequest.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { status: { in: ['platform_review', 'merchant_response_requested', 'merchant_responded', 'platform_investigation'] } },
+      where: { status: { in: ['platform_review', 'merchant_response_requested', 'merchant_responded', 'merchant_review', 'platform_investigation'] } },
       orderBy: [{ requestedAt: 'asc' }],
     }));
   });
@@ -97,7 +97,7 @@ describe('AdminService', () => {
       escrows: { active: 5 },
     });
     expect(prisma.refundReviewRequest.count).toHaveBeenCalledWith({
-      where: { status: { in: ['platform_review', 'merchant_response_requested', 'merchant_responded', 'platform_investigation'] } },
+      where: { status: { in: ['platform_review', 'merchant_response_requested', 'merchant_responded', 'merchant_review', 'platform_investigation'] } },
     });
   });
 

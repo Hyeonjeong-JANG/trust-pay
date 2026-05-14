@@ -243,6 +243,12 @@ describe('BusinessService', () => {
                 consumerReason: '원문은 사업자에게 바로 노출하지 않습니다.',
                 photoDataUrlsJson: JSON.stringify(['data:image/png;base64,c2VjcmV0']),
               },
+              {
+                id: 'refund-review-3',
+                status: 'merchant_review',
+                consumerReason: '기존 요청 원문은 사업자에게 노출하지 않습니다.',
+                photoDataUrlsJson: JSON.stringify(['data:image/png;base64,bGVnYWN5']),
+              },
             ],
             consumer: { id: 'c-1', name: '소비자1' },
           },
@@ -252,8 +258,9 @@ describe('BusinessService', () => {
       const result = await service.dashboard('biz-1', businessUser);
       const platformReview = result.escrows[0].refundReviewRequests[0];
       const merchantReview = result.escrows[0].refundReviewRequests[1];
+      const legacyMerchantReview = result.escrows[0].refundReviewRequests[2];
 
-      expect(result.escrows[0].refundReviewRequests).toHaveLength(2);
+      expect(result.escrows[0].refundReviewRequests).toHaveLength(3);
       expect(platformReview).toMatchObject({ id: 'refund-review-1', status: 'platform_review' });
       expect(platformReview).not.toHaveProperty('photoDataUrlsJson');
       expect(platformReview).not.toHaveProperty('photoDataUrls');
@@ -266,6 +273,10 @@ describe('BusinessService', () => {
       expect(merchantReview).not.toHaveProperty('photoDataUrlsJson');
       expect(merchantReview).not.toHaveProperty('photoDataUrls');
       expect(merchantReview).not.toHaveProperty('consumerReason');
+      expect(legacyMerchantReview).toMatchObject({ id: 'refund-review-3', status: 'merchant_review' });
+      expect(legacyMerchantReview).not.toHaveProperty('photoDataUrlsJson');
+      expect(legacyMerchantReview).not.toHaveProperty('photoDataUrls');
+      expect(legacyMerchantReview).not.toHaveProperty('consumerReason');
     });
 
     it('should return zero amounts when no escrows', async () => {

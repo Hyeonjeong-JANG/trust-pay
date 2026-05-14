@@ -570,13 +570,19 @@ describe('EscrowService', () => {
             consumerReason: '원문은 사업자에게 바로 노출하지 않습니다.',
             photoDataUrlsJson: JSON.stringify(['data:image/png;base64,c2VjcmV0']),
           },
+          {
+            id: 'refund-review-legacy',
+            status: 'merchant_review',
+            consumerReason: '기존 요청 원문은 사업자에게 바로 노출하지 않습니다.',
+            photoDataUrlsJson: JSON.stringify(['data:image/png;base64,bGVnYWN5']),
+          },
         ],
       };
       prisma.escrow.findUnique.mockResolvedValue(escrow);
 
       const result = await service.findById('escrow-1', businessUser);
 
-      expect(result.refundReviewRequests).toHaveLength(2);
+      expect(result.refundReviewRequests).toHaveLength(3);
       expect(result.refundReviewRequests[0]).toMatchObject({
         id: 'refund-review-platform',
         status: 'platform_review',
@@ -592,6 +598,13 @@ describe('EscrowService', () => {
       expect(result.refundReviewRequests[1]).not.toHaveProperty('consumerReason');
       expect(result.refundReviewRequests[1]).not.toHaveProperty('photoDataUrls');
       expect(result.refundReviewRequests[1]).not.toHaveProperty('photoDataUrlsJson');
+      expect(result.refundReviewRequests[2]).toMatchObject({
+        id: 'refund-review-legacy',
+        status: 'merchant_review',
+      });
+      expect(result.refundReviewRequests[2]).not.toHaveProperty('consumerReason');
+      expect(result.refundReviewRequests[2]).not.toHaveProperty('photoDataUrls');
+      expect(result.refundReviewRequests[2]).not.toHaveProperty('photoDataUrlsJson');
     });
   });
 

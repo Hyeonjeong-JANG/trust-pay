@@ -298,4 +298,41 @@ describe('BusinessEscrowDetailScreen', () => {
     expect(queryByText(/2주 넘게 안 열고 전화도 안/)).toBeNull();
     expect(queryByText('첨부 사진 1장')).toBeNull();
   });
+
+  it('should surface merchant-review refund status without consumer evidence in merchant detail', async () => {
+    const { api } = require('../../api/client');
+    api.getEscrow.mockResolvedValue({
+      id: 'e-prepaid-merchant-review',
+      status: 'active',
+      escrowType: 'prepaid',
+      totalAmount: 150,
+      monthlyAmount: 5,
+      unitPrice: 5,
+      months: 30,
+      business: { name: '강남 블루보틀' },
+      consumer: { name: '김민수' },
+      entries: [{ id: 'en-1', month: 1, amount: '5', status: 'pending', finishAfter: 830607775, cancelAfter: 837000000 }],
+      chargeRequests: [],
+      refundReviewRequests: [
+        {
+          id: 'refund-review-merchant',
+          status: 'merchant_review',
+          refundableAmount: 10,
+          merchantRespondBy: '2026-05-18T00:00:00.000Z',
+          consumerReason: '2주 넘게 문을 열지 않아 환불 검토를 요청합니다.',
+          photoDataUrls: ['data:image/png;base64,ZmFrZQ=='],
+          requestedAt: '2026-05-14T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const { findByText, queryByText } = renderWithProviders(
+      <BusinessEscrowDetailScreen route={{ params: { id: 'e-prepaid-merchant-review' } } as any} navigation={{} as any} />,
+    );
+
+    expect(await findByText('환불 검토 요청 접수됨')).toBeTruthy();
+    expect(await findByText('사업자 응답 대기')).toBeTruthy();
+    expect(queryByText(/2주 넘게 문을 열지 않아/)).toBeNull();
+    expect(queryByText('첨부 사진 1장')).toBeNull();
+  });
 });

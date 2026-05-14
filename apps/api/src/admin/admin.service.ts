@@ -4,7 +4,7 @@ import type { AdminRefundReviewListInput, AdminRequestMerchantResponseInput, Adm
 
 type AdminSession = { role: string };
 const TERMINAL_REFUND_REVIEW_STATUSES = new Set(['platform_approved', 'rejected', 'refunded']);
-const OPEN_REFUND_REVIEW_STATUSES = ['platform_review', 'merchant_response_requested', 'merchant_responded', 'platform_investigation'];
+const OPEN_REFUND_REVIEW_STATUSES = ['platform_review', 'merchant_response_requested', 'merchant_responded', 'merchant_review', 'platform_investigation'];
 
 function parsePhotoDataUrls(value?: string | null): string[] {
   if (!value) return [];
