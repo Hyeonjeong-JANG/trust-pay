@@ -126,6 +126,22 @@ test('admin app shell keeps navigation separate from login form', () => {
   assert.doesNotMatch(html, /Refund Operations/);
 });
 
+test('admin login flow checks credentials before rendering any tab', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  const loadActiveTab = js.slice(js.indexOf('async function loadActiveTab'), js.indexOf('function renderDashboard'));
+
+  assert.ok(loadActiveTab.indexOf('if (!hasAdminCredentials())') < loadActiveTab.indexOf("state.activeTab === 'settings'"));
+  assert.match(loadActiveTab, /renderAdminShell\(\);/);
+});
+
+test('admin login submit always enters the dashboard tab', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  const submitHandler = js.slice(js.indexOf('function boot()'), js.indexOf('boot();'));
+
+  assert.match(submitHandler, /state\.activeTab = 'dashboard';/);
+  assert.match(submitHandler, /sessionStorage\.setItem\('trustpay-admin-tab', state\.activeTab\);/);
+});
+
 test('buildAdminAuthHeaders sends both admin id and password headers', () => {
   assert.deepEqual(buildAdminAuthHeaders('admin', 'admin1234'), {
     'Content-Type': 'application/json',

@@ -94,15 +94,15 @@ function setActiveTab(tabId) {
 
 async function loadActiveTab() {
   renderTitle();
-  if (state.activeTab === 'settings') {
-    renderSettings();
-    return;
-  }
   if (!hasAdminCredentials()) {
     renderLoginRequired();
     return;
   }
   renderAdminShell();
+  if (state.activeTab === 'settings') {
+    renderSettings();
+    return;
+  }
   try {
     if (state.activeTab === 'dashboard') await loadDashboard();
     if (state.activeTab === 'refunds') await loadReviews();
@@ -350,10 +350,14 @@ function renderSettings() {
   $('#logout-admin').addEventListener('click', () => {
     state.adminId = '';
     state.adminSecret = '';
+    state.activeTab = 'dashboard';
     sessionStorage.removeItem('trustpay-admin-id');
     sessionStorage.removeItem('trustpay-admin-secret');
+    sessionStorage.setItem('trustpay-admin-tab', state.activeTab);
     $('#admin-id').value = '';
     $('#admin-secret').value = '';
+    renderTabs();
+    renderTitle();
     setLoginStatus('로그아웃했습니다.', 'ok');
     renderLoginRequired();
   });
@@ -397,8 +401,12 @@ function boot() {
     event.preventDefault();
     state.adminId = $('#admin-id').value.trim();
     state.adminSecret = $('#admin-secret').value.trim();
+    state.activeTab = 'dashboard';
     sessionStorage.setItem('trustpay-admin-id', state.adminId);
     sessionStorage.setItem('trustpay-admin-secret', state.adminSecret);
+    sessionStorage.setItem('trustpay-admin-tab', state.activeTab);
+    renderTabs();
+    renderTitle();
     loadActiveTab();
   });
   $('#admin-id').value = state.adminId;
