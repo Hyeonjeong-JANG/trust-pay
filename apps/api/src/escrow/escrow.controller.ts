@@ -12,7 +12,7 @@ import { EscrowService } from './escrow.service';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import { FinishEscrowDto } from './dto/finish-escrow.dto';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
-import { createChargeRequestSchema, createEscrowSchema, finishEscrowSchema, type CreateChargeRequestInput } from '@prepaid-shield/validators';
+import { createChargeRequestSchema, createEscrowSchema, finishEscrowSchema, requestRefundReviewSchema, type CreateChargeRequestInput, type RequestRefundReviewInput } from '@prepaid-shield/validators';
 import { AuthGuard } from '../common/auth.guard';
 
 @Controller('escrow')
@@ -56,8 +56,12 @@ export class EscrowController {
   }
 
   @Post(':id/refund-review-requests')
-  requestRefundReview(@Param('id') id: string, @Req() req: any) {
-    return this.escrowService.requestRefundReview(id, req.user);
+  requestRefundReview(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(requestRefundReviewSchema)) dto: RequestRefundReviewInput,
+    @Req() req: any,
+  ) {
+    return this.escrowService.requestRefundReview(id, req.user, dto);
   }
 
   @Get(':id')

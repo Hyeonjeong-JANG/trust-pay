@@ -1,10 +1,10 @@
 import React, { useEffect } from 'react';
-import { TouchableOpacity, Text, View } from 'react-native';
+import { TouchableOpacity, Text } from 'react-native';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import Toast from 'react-native-toast-message';
@@ -57,48 +57,41 @@ const tabScreenOptions = {
   tabBarLabelStyle: { fontSize: 11, fontWeight: font.weight.medium as '500' },
 } as const;
 
-function LogoutButton() {
-  const clearAuth = useAuthStore((s) => s.clearAuth);
-  const qc = useQueryClient();
+function ConsumerProfileButton() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <TouchableOpacity
-      onPress={() => { qc.clear(); clearAuth(); }}
-      style={{ marginRight: 8 }}
+      onPress={() => navigation.navigate('Profile')}
+      style={{ marginRight: 8, minHeight: 40, justifyContent: 'center' }}
       activeOpacity={0.7}
     >
-      <Text style={{ color: colors.danger, fontSize: font.size.md, fontWeight: font.weight.medium }}>로그아웃</Text>
+      <Text style={{ color: colors.primary, fontSize: font.size.sm, fontWeight: font.weight.semibold }}>프로필</Text>
+    </TouchableOpacity>
+  );
+}
+
+function BusinessProfileButton() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  return (
+    <TouchableOpacity
+      onPress={() => navigation.navigate('BusinessProfile')}
+      style={{ marginRight: 8, minHeight: 40, justifyContent: 'center' }}
+      activeOpacity={0.7}
+    >
+      <Text style={{ color: colors.primary, fontSize: font.size.sm, fontWeight: font.weight.semibold }}>가게관리</Text>
     </TouchableOpacity>
   );
 }
 
 function ConsumerHeaderRight() {
   return (
-    <>{<NotificationBell />}<LogoutButton /></>
+    <>{<NotificationBell />}<ConsumerProfileButton /></>
   );
 }
 
 function BusinessHeaderRight() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   return (
-    <TouchableOpacity
-      onPress={() => navigation.navigate('BusinessProfile')}
-      style={{ marginRight: 8, minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-      activeOpacity={0.7}
-    >
-      <View
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 14,
-          backgroundColor: colors.primaryLight,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={{ color: colors.primary, fontSize: font.size.sm, fontWeight: font.weight.bold }}>가</Text>
-      </View>
-      <Text style={{ color: colors.primary, fontSize: font.size.sm, fontWeight: font.weight.semibold }}>가게관리</Text>
-    </TouchableOpacity>
+    <>{<NotificationBell />}<BusinessProfileButton /></>
   );
 }
 
@@ -111,8 +104,6 @@ function ConsumerTabs() {
         options={{ title: '일정', tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📅</Text> }} />
       <ConsumerTab.Screen name="History" component={HistoryScreen}
         options={{ title: '내역', tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📜</Text> }} />
-      <ConsumerTab.Screen name="Profile" component={ProfileScreen}
-        options={{ title: '프로필', tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>👤</Text> }} />
     </ConsumerTab.Navigator>
   );
 }
@@ -154,6 +145,7 @@ function AppNavigator() {
       <Stack.Navigator screenOptions={stackScreenOptions}>
         <Stack.Screen name="BusinessTabs" component={BusinessTabs} options={{ headerShown: false }} />
         <Stack.Screen name="BusinessEscrowDetail" component={BusinessEscrowDetailScreen} options={{ title: '결제 상세' }} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: '알림' }} />
         <Stack.Screen name="BusinessProfile" component={BusinessProfileScreen} options={{ title: '가게관리' }} />
       </Stack.Navigator>
     );
@@ -166,6 +158,7 @@ function AppNavigator() {
       <Stack.Screen name="ScanPayment" component={ScanPaymentScreen} options={{ title: 'QR 스캔 결제' }} />
       <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: '보호 결제' }} />
       <Stack.Screen name="EscrowDetail" component={EscrowDetailScreen} options={{ title: '에스크로 상세' }} />
+      <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: '프로필' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: '알림' }} />
     </Stack.Navigator>
   );

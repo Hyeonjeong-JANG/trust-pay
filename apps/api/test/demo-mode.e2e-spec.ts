@@ -7,11 +7,12 @@
  * 플로우: 사업자 등록 → 소비자 로그인 → 에스크로 생성 → 릴리즈 → 취소 → 대시보드
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { configureHttpApp } from '../src/http-app.config';
 
 function expectNoWalletSecret(value: unknown) {
   const serialized = JSON.stringify(value);
@@ -21,7 +22,7 @@ function expectNoWalletSecret(value: unknown) {
 }
 
 describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
-  let app: INestApplication;
+  let app: NestExpressApplication;
   let prisma: PrismaService;
 
   let consumerId: string;
@@ -64,7 +65,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleRef.createNestApplication();
+    app = moduleRef.createNestApplication<NestExpressApplication>();
+    configureHttpApp(app);
     prisma = moduleRef.get(PrismaService);
 
     // Verify demo mode is active
@@ -75,6 +77,8 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
   });
 
   afterAll(async () => {
+    await prisma.chargeRequest.deleteMany();
+    await prisma.refundReviewRequest.deleteMany();
     await prisma.escrowEntry.deleteMany();
     await prisma.escrow.deleteMany();
     await prisma.consumer.deleteMany();
@@ -92,6 +96,7 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
         category: '카페',
         address: '서울시 강남구 역삼로 1',
         phone: '010-5555-6666',
+        registrationNumber: '1234567890',
       })
       .expect(201);
 
@@ -100,6 +105,7 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
     expect(res.body).not.toHaveProperty('xrplSecret');
     expectNoWalletSecret(res.body);
     expect(res.body.name).toBe('데모카페');
+    expect(res.body.registrationVerificationStatus).toBe('demo_verified');
     businessId = res.body.id;
   });
 

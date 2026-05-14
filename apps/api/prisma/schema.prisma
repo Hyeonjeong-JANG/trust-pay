@@ -14,7 +14,10 @@ model Business {
   address              String
   phone                String?
   email                String?
-  registrationNumber   String?
+  registrationNumber   String
+  registrationVerificationStatus String @default("demo_verified")
+  registrationVerificationSource String @default("demo")
+  registrationVerifiedAt DateTime?
   xrplAddress          String                @unique
   xrplSecret           String
   isActive             Boolean               @default(true)
@@ -110,6 +113,8 @@ model RefundReviewRequest {
   businessClosureSource    String?
   businessClosureCheckedAt DateTime?
   investigationReason      String?
+  consumerReason           String?
+  photoDataUrlsJson        String?
   requestedAt              DateTime  @default(now())
   resolvedAt               DateTime?
   createdAt                DateTime  @default(now())

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Platform,
   RefreshControl,
   StyleSheet,
@@ -19,11 +20,12 @@ import { formatKrwFromRlusd, formatRlusd, krwToRlusd } from '../../utils/money';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { colors, font, radius, shadow, spacing } from '../../theme';
 import type { ScreenProps } from '../../navigation/types';
-import type { ChargeRequest, CreateChargeRequest, EscrowEntry, EscrowRecord, ProductMenuItem } from '@prepaid-shield/shared-types';
+import type { ChargeRequest, CreateChargeRequest, EscrowEntry, EscrowRecord, ProductMenuItem, RefundReviewRequest } from '@prepaid-shield/shared-types';
 
 type EscrowWithRelations = EscrowRecord & {
   business?: { name: string };
   consumer?: { name: string };
+  refundReviewRequests?: RefundReviewRequest[];
 };
 
 type ChargeMenuOption = {
@@ -62,6 +64,18 @@ const STATUS_KO: Record<string, string> = {
   cancelled: '취소됨',
 };
 
+const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
+  merchant_review: '사업자 응답 대기',
+  merchant_disputed: '사업자 이의제기',
+  platform_investigation: 'TrustPay 조사 중',
+  closure_suspected: '영업중단 의심 · TrustPay 조사',
+  closure_confirmed: '폐업 확인 · TrustPay 검토',
+  auto_approved: '무응답 자동 승인',
+  platform_approved: 'TrustPay 환불 승인',
+  refunded: '환불 완료',
+  rejected: '환불 검토 거절',
+};
+
 function rippleTimeToDate(rippleTime: number): string {
   const RIPPLE_EPOCH = 946684800;
   return new Date((rippleTime + RIPPLE_EPOCH) * 1000).toLocaleDateString('ko-KR');
@@ -93,6 +107,11 @@ function getEntryTitle(entry: EscrowEntry): string {
 
 function isChargeRequest(item: EscrowEntry | ChargeRequest): item is ChargeRequest {
   return 'menuName' in item;
+}
+
+function getLatestRefundReview(requests?: RefundReviewRequest[]): RefundReviewRequest | null {
+  if (!requests?.length) return null;
+  return [...requests].sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())[0];
 }
 
 export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscrowDetail'>) {
@@ -163,6 +182,7 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
     : `${released}개월 정산 완료 · ${pending}개월 예정${refunded > 0 ? ` · ${refunded}개월 환불` : ''}`;
   const localMenus = escrow.businessId ? menusByBusinessId[escrow.businessId] ?? [] : [];
   const chargeHistory = escrow.chargeRequests ?? [];
+  const latestRefundReview = getLatestRefundReview(escrow.refundReviewRequests);
   const listData: Array<EscrowEntry | ChargeRequest> = isPrepaid ? chargeHistory : entries;
   const chargeMenuOptions: ChargeMenuOption[] = [
     ...((escrow.product?.menuItems ?? []).map((menu: ProductMenuItem) => ({
@@ -256,6 +276,36 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                 <Text style={styles.progressText}>{progressText}</Text>
               </View>
             </View>
+            {latestRefundReview && (
+              <View style={styles.refundReviewCard}>
+                <View style={styles.refundReviewHeader}>
+                  <Text style={styles.refundReviewTitle}>환불 검토 요청 접수됨</Text>
+                  <Text style={styles.refundReviewStatus}>{REFUND_REVIEW_STATUS_KO[latestRefundReview.status] ?? latestRefundReview.status}</Text>
+                </View>
+                <Text style={styles.refundReviewDesc}>
+                  환불 검토 금액 {formatKrwFromRlusd(latestRefundReview.refundableAmount)} · 사업자 응답 기한 {isoToDate(latestRefundReview.merchantRespondBy) ?? '-'}
+                </Text>
+                {!!latestRefundReview.investigationReason && (
+                  <Text style={styles.refundReviewPolicy}>{latestRefundReview.investigationReason}</Text>
+                )}
+                {!!latestRefundReview.consumerReason && (
+                  <View style={styles.refundReviewReasonBox}>
+                    <Text style={styles.refundReviewReasonLabel}>소비자 요청 사유</Text>
+                    <Text style={styles.refundReviewReason}>{latestRefundReview.consumerReason}</Text>
+                  </View>
+                )}
+                {!!latestRefundReview.photoDataUrls?.length && (
+                  <View style={styles.refundReviewPhotoBox}>
+                    <Text style={styles.refundReviewPhotoCount}>첨부 사진 {latestRefundReview.photoDataUrls.length}장</Text>
+                    <View style={styles.refundReviewPhotoRow}>
+                      {latestRefundReview.photoDataUrls.map((uri, index) => (
+                        <Image key={`${uri.slice(0, 32)}-${index}`} source={{ uri }} style={styles.refundReviewPhotoThumb} />
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
             {isPrepaid && (
               <View style={styles.chargeRequestCard}>
                 <Text style={styles.chargeRequestTitle}>고객 이용분 승인 요청</Text>
@@ -469,6 +519,68 @@ const styles = StyleSheet.create({
   progressBarBg: { height: 6, backgroundColor: colors.gray200, borderRadius: 3, overflow: 'hidden' },
   progressBarFill: { height: 6, backgroundColor: colors.success, borderRadius: 3 },
   progressText: { fontSize: font.size.sm, color: colors.gray500, textAlign: 'center', marginTop: spacing.sm },
+  refundReviewCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    marginBottom: spacing.xl,
+    padding: spacing.lg,
+    ...shadow.sm,
+  },
+  refundReviewHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  refundReviewTitle: { color: colors.gray900, fontSize: font.size.md, fontWeight: font.weight.bold },
+  refundReviewStatus: {
+    backgroundColor: colors.warningLight,
+    borderRadius: radius.full,
+    color: colors.warning,
+    fontSize: font.size.xs,
+    fontWeight: font.weight.bold,
+    overflow: 'hidden',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  refundReviewDesc: { color: colors.gray700, fontSize: font.size.sm, lineHeight: 20 },
+  refundReviewPolicy: {
+    backgroundColor: colors.gray50,
+    borderRadius: radius.sm,
+    color: colors.gray600,
+    fontSize: font.size.sm,
+    lineHeight: 20,
+    marginTop: spacing.sm,
+    padding: spacing.md,
+  },
+  refundReviewReasonBox: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.sm,
+    marginTop: spacing.sm,
+    padding: spacing.md,
+  },
+  refundReviewReasonLabel: {
+    color: colors.primary,
+    fontSize: font.size.xs,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.xs,
+  },
+  refundReviewReason: { color: colors.gray700, fontSize: font.size.sm, lineHeight: 20 },
+  refundReviewPhotoBox: { marginTop: spacing.sm },
+  refundReviewPhotoCount: {
+    color: colors.gray600,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    marginBottom: spacing.xs,
+  },
+  refundReviewPhotoRow: { flexDirection: 'row', gap: spacing.xs },
+  refundReviewPhotoThumb: {
+    backgroundColor: colors.gray100,
+    borderRadius: radius.sm,
+    height: 48,
+    width: 48,
+  },
   chargeRequestCard: {
     backgroundColor: colors.white,
     borderRadius: radius.lg,

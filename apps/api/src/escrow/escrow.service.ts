@@ -8,7 +8,7 @@ import { Wallet } from 'xrpl';
 import type { EscrowResult } from '@prepaid-shield/xrpl-client';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import type { SessionUser } from '../common/session-token';
-import type { CreateChargeRequestInput } from '@prepaid-shield/validators';
+import { requestRefundReviewSchema, type CreateChargeRequestInput, type RequestRefundReviewInput } from '@prepaid-shield/validators';
 import type { BusinessClosureStatus, RefundReviewStatus } from '@prepaid-shield/shared-types';
 
 const MAX_PREPAID_ESCROW_ENTRIES = 50;
@@ -26,6 +26,24 @@ const ACTIVE_REFUND_REVIEW_STATUSES = [
   'auto_approved',
   'platform_approved',
 ];
+
+function parseRefundReviewPhotoDataUrls(value?: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function validateRefundReviewInput(input: RequestRefundReviewInput): RequestRefundReviewInput {
+  const result = requestRefundReviewSchema.safeParse(input);
+  if (!result.success) {
+    throw new BadRequestException(result.error.issues[0]?.message ?? '환불 검토 요청 사유를 확인해주세요');
+  }
+  return result.data;
+}
 
 function getWholeRatio(total: number, unit: number): number | null {
   if (!Number.isFinite(total) || !Number.isFinite(unit) || unit <= 0) return null;
@@ -504,7 +522,8 @@ export class EscrowService {
     return { cancelled: pendingEntries.length };
   }
 
-  async requestRefundReview(escrowId: string, user: SessionUser) {
+  async requestRefundReview(escrowId: string, user: SessionUser, dto: RequestRefundReviewInput) {
+    const input = validateRefundReviewInput(dto);
     const escrow = await this.prisma.escrow.findUnique({
       where: { id: escrowId },
       include: { entries: true, business: true, consumer: true },
@@ -551,6 +570,8 @@ export class EscrowService {
         businessClosureSource: closureCheck.source,
         businessClosureCheckedAt: closureCheck.checkedAt,
         investigationReason: policy.reason,
+        consumerReason: input.reason,
+        photoDataUrlsJson: JSON.stringify(input.photoDataUrls),
       },
       include: { escrow: { include: { business: true, consumer: true } } },
     });
@@ -605,6 +626,9 @@ export class EscrowService {
       const { xrplSecret: _, ...consumer } = escrow.consumer;
       escrow = { ...escrow, consumer };
     }
+    if (escrow.refundReviewRequests) {
+      escrow = { ...escrow, refundReviewRequests: escrow.refundReviewRequests.map((request: any) => this.stripRefundReviewRequestSecrets(request)) };
+    }
     return escrow;
   }
 
@@ -616,6 +640,10 @@ export class EscrowService {
   }
 
   private stripRefundReviewRequestSecrets(refundReviewRequest: any) {
+    if ('photoDataUrlsJson' in refundReviewRequest) {
+      const { photoDataUrlsJson, ...rest } = refundReviewRequest;
+      refundReviewRequest = { ...rest, photoDataUrls: parseRefundReviewPhotoDataUrls(photoDataUrlsJson) };
+    }
     if (refundReviewRequest.escrow) {
       return { ...refundReviewRequest, escrow: this.stripSecrets(refundReviewRequest.escrow) };
     }
@@ -645,14 +673,14 @@ export class EscrowService {
       return {
         status: 'merchant_review',
         slaBusinessDays: 3,
-        reason: '사업자등록번호가 없어 SLA와 TrustPay 자체 조사로 진행합니다.',
+        reason: '사업자 인증 정보 재확인이 필요해 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.',
       };
     }
     if (closureStatus === 'unavailable') {
       return {
         status: 'merchant_review',
         slaBusinessDays: 3,
-        reason: '국세청 조회가 일시적으로 불가하여 사업자 응답 SLA를 적용합니다.',
+        reason: '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.',
       };
     }
     return {

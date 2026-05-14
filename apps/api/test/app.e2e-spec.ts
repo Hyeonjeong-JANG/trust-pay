@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { XrplService } from '../src/xrpl/xrpl.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { configureHttpApp } from '../src/http-app.config';
 
 // Mock Wallet.fromSeed to avoid real XRPL seed validation
 jest.mock('xrpl', () => ({
@@ -22,7 +23,7 @@ function expectNoWalletSecret(value: unknown) {
 }
 
 describe('TrustPay E2E', () => {
-  let app: INestApplication;
+  let app: NestExpressApplication;
   let prisma: PrismaService;
 
   // Track created IDs for cleanup
@@ -102,7 +103,8 @@ describe('TrustPay E2E', () => {
       .useValue(mockXrplService)
       .compile();
 
-    app = moduleRef.createNestApplication();
+    app = moduleRef.createNestApplication<NestExpressApplication>();
+    configureHttpApp(app);
     prisma = moduleRef.get(PrismaService);
 
     await app.init();
@@ -110,6 +112,8 @@ describe('TrustPay E2E', () => {
 
   afterAll(async () => {
     // Clean up test data
+    await prisma.chargeRequest.deleteMany();
+    await prisma.refundReviewRequest.deleteMany();
     await prisma.escrowEntry.deleteMany();
     await prisma.escrow.deleteMany();
     await prisma.consumer.deleteMany();
@@ -127,11 +131,14 @@ describe('TrustPay E2E', () => {
           category: '카페',
           address: '서울시 강남구 테헤란로 1',
           phone: '010-1111-2222',
+          registrationNumber: '1234567890',
         })
         .expect(201);
 
       expect(res.body).toHaveProperty('id');
       expect(res.body.name).toBe('테스트카페');
+      expect(res.body.registrationNumber).toBe('1234567890');
+      expect(res.body.registrationVerificationStatus).toBe('demo_verified');
       expect(res.body).not.toHaveProperty('xrplSecret');
       expectNoWalletSecret(res.body);
       businessId = res.body.id;
@@ -426,6 +433,25 @@ describe('TrustPay E2E', () => {
       const entry2 = res.body.entries.find((e: any) => e.month === 2);
       expect(entry1.status).toBe('released');
       expect(entry2.status).toBe('pending');
+    });
+  });
+
+  describe('POST /escrow/:id/refund-review-requests — 환불 검토 요청', () => {
+    it('should accept refund review photos near the product upload limit', async () => {
+      const largePhoto = `data:image/jpeg;base64,${'a'.repeat(180_000)}`;
+
+      const res = await request(app.getHttpServer())
+        .post(`/escrow/${escrowId}/refund-review-requests`)
+        .set('Authorization', auth(consumerToken))
+        .send({
+          reason: '사업장이 장기간 연락되지 않아 남은 이용권 환불 검토를 요청합니다.',
+          photoDataUrls: [largePhoto],
+        })
+        .expect(201);
+
+      expect(res.body.consumerReason).toBe('사업장이 장기간 연락되지 않아 남은 이용권 환불 검토를 요청합니다.');
+      expect(res.body.photoDataUrls).toEqual([largePhoto]);
+      expect(res.body).not.toHaveProperty('photoDataUrlsJson');
     });
   });
 

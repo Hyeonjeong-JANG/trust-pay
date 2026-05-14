@@ -896,6 +896,10 @@ describe('EscrowService', () => {
         { id: 'entry-pending-2', amount: '10', status: 'pending' },
       ],
     };
+    const refundReviewInput = {
+      reason: '폐업 안내문을 확인했고 남은 이용권 환불 검토를 요청합니다.',
+      photoDataUrls: ['data:image/png;base64,ZmFrZS1pbWFnZQ=='],
+    };
 
     it('should create a merchant review case with SLA without cancelling ledger entries', async () => {
       prisma.escrow.findUnique.mockResolvedValue(refundableEscrow);
@@ -905,9 +909,11 @@ describe('EscrowService', () => {
         escrowId: 'escrow-refund-1',
         status: 'merchant_review',
         refundableAmount: 30,
+        consumerReason: refundReviewInput.reason,
+        photoDataUrlsJson: JSON.stringify(refundReviewInput.photoDataUrls),
       });
 
-      const result = await service.requestRefundReview('escrow-refund-1', consumerUser);
+      const result = await service.requestRefundReview('escrow-refund-1', consumerUser, refundReviewInput);
 
       expect(businessClosureService.checkBusinessStatus).toHaveBeenCalledWith('1234567890');
       expect(prisma.refundReviewRequest.create).toHaveBeenCalledWith({
@@ -920,6 +926,8 @@ describe('EscrowService', () => {
           businessClosureStatus: 'active',
           businessClosureSource: 'nts',
           investigationReason: '사업자 응답 SLA를 적용합니다.',
+          consumerReason: refundReviewInput.reason,
+          photoDataUrlsJson: JSON.stringify(refundReviewInput.photoDataUrls),
           merchantRespondBy: expect.any(Date),
         }),
         include: { escrow: { include: { business: true, consumer: true } } },
@@ -927,6 +935,14 @@ describe('EscrowService', () => {
       expect(xrplService.cancelEscrow).not.toHaveBeenCalled();
       expect(prisma.escrowEntry.update).not.toHaveBeenCalled();
       expect(result.status).toBe('merchant_review');
+      expect(result.photoDataUrls).toEqual(refundReviewInput.photoDataUrls);
+    });
+
+    it('should reject refund review requests without a detailed consumer reason', async () => {
+      await expect(
+        service.requestRefundReview('escrow-refund-1', consumerUser, { reason: '짧음', photoDataUrls: [] }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.escrow.findUnique).not.toHaveBeenCalled();
     });
 
     it('should escalate to closure confirmed when the NTS check says the business is closed', async () => {
@@ -944,7 +960,7 @@ describe('EscrowService', () => {
         refundableAmount: 30,
       });
 
-      await service.requestRefundReview('escrow-refund-1', consumerUser);
+      await service.requestRefundReview('escrow-refund-1', consumerUser, refundReviewInput);
 
       expect(prisma.refundReviewRequest.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
@@ -966,11 +982,31 @@ describe('EscrowService', () => {
       prisma.escrow.findUnique.mockResolvedValue(refundableEscrow);
       prisma.refundReviewRequest.findFirst.mockResolvedValue(existing);
 
-      const result = await service.requestRefundReview('escrow-refund-1', consumerUser);
+      const result = await service.requestRefundReview('escrow-refund-1', consumerUser, refundReviewInput);
 
       expect(result).toBe(existing);
       expect(prisma.refundReviewRequest.create).not.toHaveBeenCalled();
       expect(businessClosureService.checkBusinessStatus).not.toHaveBeenCalled();
+    });
+
+    it('should use demo NTS wording instead of saying the business number is missing', async () => {
+      businessClosureService.checkBusinessStatus.mockResolvedValue({
+        status: 'unavailable',
+        source: 'internal',
+        checkedAt: new Date('2026-05-14T00:00:00.000Z'),
+      });
+      prisma.escrow.findUnique.mockResolvedValue(refundableEscrow);
+      prisma.refundReviewRequest.findFirst.mockResolvedValue(null);
+      prisma.refundReviewRequest.create.mockResolvedValue({ id: 'refund-review-demo-nts' });
+
+      await service.requestRefundReview('escrow-refund-1', consumerUser, refundReviewInput);
+
+      expect(prisma.refundReviewRequest.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          investigationReason: '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.',
+        }),
+        include: { escrow: { include: { business: true, consumer: true } } },
+      });
     });
   });
 

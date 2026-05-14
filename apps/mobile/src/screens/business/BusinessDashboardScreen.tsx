@@ -20,7 +20,7 @@ import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, BusinessSummaryRowSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
 import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { EscrowRecord, EscrowEntry } from '@prepaid-shield/shared-types';
+import type { EscrowRecord, EscrowEntry, RefundReviewRequest } from '@prepaid-shield/shared-types';
 import type { BusinessTabProps } from '../../navigation/types';
 
 type StatusFilter = 'all' | 'active' | 'completed' | 'cancelled';
@@ -30,6 +30,16 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
   { key: 'completed', label: '완료' },
   { key: 'cancelled', label: '취소됨' },
 ];
+
+const ACTIVE_REFUND_REVIEW_STATUSES = new Set([
+  'merchant_review',
+  'merchant_disputed',
+  'platform_investigation',
+  'closure_suspected',
+  'closure_confirmed',
+  'auto_approved',
+  'platform_approved',
+]);
 
 type EscrowWithConsumer = EscrowRecord & { consumer?: { id: string; name: string } };
 
@@ -126,6 +136,12 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
     : statusFilter === 'all'
       ? '에스크로'
       : `${FILTER_OPTIONS.find((option) => option.key === statusFilter)?.label ?? '진행중'} 에스크로`;
+  const refundReviewItems = ((dashboard?.escrows ?? []) as EscrowWithConsumer[])
+    .flatMap((escrow) => (escrow.refundReviewRequests ?? [])
+      .filter((request: RefundReviewRequest) => ACTIVE_REFUND_REVIEW_STATUSES.has(request.status))
+      .map((request: RefundReviewRequest) => ({ escrow, request })))
+    .sort((a, b) => new Date(b.request.requestedAt).getTime() - new Date(a.request.requestedAt).getTime());
+  const latestRefundReviewItem = refundReviewItems[0];
 
   if (isLoading) {
     return (
@@ -195,6 +211,30 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
                 <Text style={styles.summaryLabel}>대기액</Text>
               </View>
             </View>
+
+            {latestRefundReviewItem && (
+              <View style={styles.refundReviewCard}>
+                <View style={styles.refundReviewHeader}>
+                  <View>
+                    <Text style={styles.refundReviewEyebrow}>환불 검토 요청</Text>
+                    <Text style={styles.refundReviewTitle}>{refundReviewItems.length}건 대기</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.refundReviewAction}
+                    onPress={() => navigation.navigate('BusinessEscrowDetail', { id: latestRefundReviewItem.escrow.id })}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.refundReviewActionText}>요청 확인</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.refundReviewSummary}>
+                  {latestRefundReviewItem.escrow.consumer?.name ?? '손님'} · 환불 가능 {formatKrwFromRlusd(latestRefundReviewItem.request.refundableAmount)}
+                </Text>
+                {!!latestRefundReviewItem.request.consumerReason && (
+                  <Text style={styles.refundReviewReason} numberOfLines={2}>{latestRefundReviewItem.request.consumerReason}</Text>
+                )}
+              </View>
+            )}
 
             <TouchableOpacity
               style={styles.createPaymentCard}
@@ -353,6 +393,48 @@ const styles = StyleSheet.create({
   },
   summarySub: { fontSize: font.size.xs, color: colors.gray400, marginTop: 2 },
   summaryLabel: { fontSize: font.size.xs, color: colors.gray500, marginTop: spacing.xs },
+  refundReviewCard: {
+    backgroundColor: colors.warningLight,
+    borderRadius: radius.lg,
+    marginBottom: spacing.xl,
+    padding: spacing.lg,
+  },
+  refundReviewHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  refundReviewEyebrow: {
+    color: colors.warning,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.bold,
+    marginBottom: 2,
+  },
+  refundReviewTitle: {
+    color: colors.gray900,
+    fontSize: font.size.lg,
+    fontWeight: font.weight.bold,
+  },
+  refundReviewAction: {
+    backgroundColor: colors.white,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  refundReviewActionText: { color: colors.warning, fontSize: font.size.sm, fontWeight: font.weight.bold },
+  refundReviewSummary: {
+    color: colors.gray800,
+    fontSize: font.size.md,
+    fontWeight: font.weight.semibold,
+    marginTop: spacing.md,
+  },
+  refundReviewReason: {
+    color: colors.gray600,
+    fontSize: font.size.sm,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+  },
   createPaymentCard: {
     flexDirection: 'row',
     alignItems: 'center',

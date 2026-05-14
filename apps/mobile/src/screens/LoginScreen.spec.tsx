@@ -8,6 +8,8 @@ jest.mock('../api/client', () => ({
   api: {
     requestCode: jest.fn(),
     verifyCode: jest.fn(),
+    verifyBusinessRegistrationNumber: jest.fn(),
+    registerBusiness: jest.fn(),
   },
 }));
 
@@ -79,7 +81,7 @@ describe('LoginScreen', () => {
     fireEvent.press(getByText('사업자'));
 
     expect(
-      getByText('사업자 계정은 관리자가 사전 등록해야 합니다'),
+      getByText('사업자는 국세청 사업자등록번호 인증 후 가입할 수 있습니다'),
     ).toBeTruthy();
   });
 
@@ -189,6 +191,75 @@ describe('LoginScreen', () => {
         role: 'business',
       });
     });
+  });
+
+  it('should guide a new business through NTS demo verification and registration before login', async () => {
+    const { api } = require('../api/client');
+    api.requestCode.mockResolvedValue({ delivery: 'demo', code: '123456', expiresInSeconds: 300, isNewUser: true });
+    api.verifyBusinessRegistrationNumber.mockResolvedValue({
+      registrationNumber: '1234567890',
+      status: 'demo_verified',
+      source: 'demo',
+      message: '국세청 사업자등록번호 인증은 데모 환경에서 모의 인증으로 진행됩니다.',
+    });
+    api.registerBusiness.mockResolvedValue({ id: 'biz-new', name: '테스트짐' });
+    api.verifyCode.mockResolvedValue({ userId: 'biz-new', role: 'business', name: '테스트짐', token: 'signed-token' });
+
+    const { getByText, getByPlaceholderText, findByText } = renderWithProviders(<LoginScreen />);
+
+    fireEvent.press(getByText('사업자'));
+    fireEvent.changeText(getByPlaceholderText('전화번호 또는 이메일'), '02-1234-5678');
+    fireEvent.press(getByText('인증코드 받기'));
+
+    expect(await findByText('사업자 가입 정보')).toBeTruthy();
+    fireEvent.changeText(getByPlaceholderText('상호명'), '테스트짐');
+    fireEvent.changeText(getByPlaceholderText('업종'), '헬스장');
+    fireEvent.changeText(getByPlaceholderText('사업장 주소'), '서울시 강남구 테헤란로 1');
+    fireEvent.changeText(getByPlaceholderText('사업자등록번호 10자리'), '123-45-67890');
+    fireEvent.press(getByText('국세청 사업자등록번호 인증'));
+
+    expect(await findByText('데모 국세청 인증 완료')).toBeTruthy();
+    fireEvent.changeText(getByPlaceholderText('123456'), '123456');
+    fireEvent.press(getByText('가입하고 로그인'));
+
+    await waitFor(() => {
+      expect(api.verifyBusinessRegistrationNumber).toHaveBeenCalledWith({ registrationNumber: '1234567890' });
+      expect(api.registerBusiness).toHaveBeenCalledWith({
+        name: '테스트짐',
+        category: '헬스장',
+        address: '서울시 강남구 테헤란로 1',
+        phone: '0212345678',
+        registrationNumber: '1234567890',
+      });
+      expect(api.verifyCode).toHaveBeenCalledWith({ phone: '0212345678', role: 'business', code: '123456' });
+      expect(mockSetAuth).toHaveBeenCalledWith('business', 'biz-new', '테스트짐', 'signed-token');
+    });
+  });
+
+  it('should not mark an unavailable business registration check as verified', async () => {
+    const { api } = require('../api/client');
+    api.requestCode.mockResolvedValue({ delivery: 'demo', code: '123456', expiresInSeconds: 300, isNewUser: true });
+    api.verifyBusinessRegistrationNumber.mockResolvedValue({
+      registrationNumber: '1234567890',
+      status: 'unavailable',
+      source: 'nts',
+      message: '국세청 사업자등록번호 인증을 완료할 수 없어 TrustPay 검토로 진행합니다.',
+    });
+
+    const { getByText, getByPlaceholderText, findByText, queryByText } = renderWithProviders(<LoginScreen />);
+
+    fireEvent.press(getByText('사업자'));
+    fireEvent.changeText(getByPlaceholderText('전화번호 또는 이메일'), '02-1234-5678');
+    fireEvent.press(getByText('인증코드 받기'));
+
+    expect(await findByText('사업자 가입 정보')).toBeTruthy();
+    fireEvent.changeText(getByPlaceholderText('사업자등록번호 10자리'), '123-45-67890');
+    fireEvent.press(getByText('국세청 사업자등록번호 인증'));
+
+    await waitFor(() => {
+      expect(api.verifyBusinessRegistrationNumber).toHaveBeenCalledWith({ registrationNumber: '1234567890' });
+    });
+    expect(queryByText('데모 국세청 인증 완료')).toBeNull();
   });
 
   it('should show a signup confirmation message for a new consumer phone number', async () => {

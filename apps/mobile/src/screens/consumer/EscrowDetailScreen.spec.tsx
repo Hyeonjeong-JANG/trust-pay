@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Platform } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EscrowDetailScreen } from './EscrowDetailScreen';
@@ -35,7 +35,13 @@ function isoDateToRippleTime(value: string) {
 }
 
 describe('EscrowDetailScreen', () => {
+  const originalPlatformOS = Platform.OS;
+
   beforeEach(() => jest.clearAllMocks());
+
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+  });
 
   it('should show ledger status and transaction evidence', async () => {
     const { api } = require('../../api/client');
@@ -279,13 +285,15 @@ describe('EscrowDetailScreen', () => {
   it('should request refund review without directly cancelling escrow entries', async () => {
     const { api } = require('../../api/client');
     const { showSuccessToast } = require('../../utils/toast');
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const reason = '사업자가 폐업 안내문을 붙여두었고 남은 이용권 환불이 필요합니다.';
     api.requestRefundReview.mockResolvedValue({
       id: 'refund-review-1',
       escrowId: 'e-prepaid-refund',
       status: 'merchant_review',
       refundableAmount: 10,
       merchantRespondBy: '2026-05-18T00:00:00.000Z',
+      consumerReason: reason,
+      photoDataUrls: [],
     });
     api.getEscrow.mockResolvedValue({
       id: 'e-prepaid-refund',
@@ -304,26 +312,52 @@ describe('EscrowDetailScreen', () => {
       chargeRequests: [],
     });
 
-    const { findByText } = renderWithProviders(
+    const { findByPlaceholderText, findByText } = renderWithProviders(
       <EscrowDetailScreen route={{ params: { id: 'e-prepaid-refund' } } as any} navigation={{} as any} />,
     );
 
     expect(await findByText('환불 검토 요청')).toBeTruthy();
     expect(await findByText(/실제 결제액, 보너스 혜택, 사용분 공제 후 환불 가능 금액을 산정합니다/)).toBeTruthy();
     fireEvent.press(await findByText('환불 검토 요청'));
+    expect(await findByText('환불 검토 접수')).toBeTruthy();
+    fireEvent.changeText(await findByPlaceholderText('환불 요청 사유를 입력해주세요'), reason);
+    fireEvent.press(await findByText('검토 요청 접수'));
 
-    expect(alertSpy).toHaveBeenCalledWith(
-      '환불 검토 요청',
-      expect.stringContaining('즉시 에스크로를 취소하지 않습니다'),
-      expect.any(Array),
-    );
-    const actions = alertSpy.mock.calls[0][2] as Array<{ text: string; onPress?: () => void }>;
-    actions[1].onPress?.();
-
-    await waitFor(() => expect(api.requestRefundReview).toHaveBeenCalledWith('e-prepaid-refund'));
+    await waitFor(() => expect(api.requestRefundReview).toHaveBeenCalledWith('e-prepaid-refund', { reason, photoDataUrls: [] }));
     expect(api.cancelEscrow).not.toHaveBeenCalled();
     expect(showSuccessToast).toHaveBeenCalledWith('환불 검토 요청 접수', '사업자 응답 기한과 폐업 여부를 확인한 뒤 환불 가능 금액을 안내합니다.');
-    alertSpy.mockRestore();
+  });
+
+  it('should require a detailed refund reason before submitting the modal', async () => {
+    const { api } = require('../../api/client');
+    api.getEscrow.mockResolvedValue({
+      id: 'e-prepaid-refund-web',
+      status: 'active',
+      escrowType: 'prepaid',
+      totalAmount: 300,
+      monthlyAmount: 10,
+      months: 30,
+      unitPrice: 10,
+      validityMonths: 6,
+      business: { name: '헤어살롱 루나' },
+      entries: [
+        { id: 'en-1', month: 1, amount: '10', status: 'released', finishAfter: 830607775, cancelAfter: 837000000 },
+        { id: 'en-2', month: 2, amount: '10', status: 'pending', finishAfter: 830607775, cancelAfter: 837000000 },
+      ],
+      chargeRequests: [],
+    });
+
+    const { findByPlaceholderText, findByText } = renderWithProviders(
+      <EscrowDetailScreen route={{ params: { id: 'e-prepaid-refund-web' } } as any} navigation={{} as any} />,
+    );
+
+    fireEvent.press(await findByText('환불 검토 요청'));
+    fireEvent.changeText(await findByPlaceholderText('환불 요청 사유를 입력해주세요'), '짧음');
+    fireEvent.press(await findByText('검토 요청 접수'));
+
+    expect(await findByText('환불 사유를 10자 이상 입력해주세요.')).toBeTruthy();
+    expect(api.requestRefundReview).not.toHaveBeenCalled();
+    expect(api.cancelEscrow).not.toHaveBeenCalled();
   });
 
   it('should show the latest refund review status instead of a new request button', async () => {
@@ -351,6 +385,8 @@ describe('EscrowDetailScreen', () => {
           merchantRespondBy: '2026-05-14T00:00:00.000Z',
           requestedAt: '2026-05-14T00:00:00.000Z',
           investigationReason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 검토로 전환합니다.',
+          consumerReason: '사업장 문이 닫혀 있고 예약 전화가 연결되지 않아 환불 검토를 요청합니다.',
+          photoDataUrls: ['data:image/png;base64,ZmFrZQ==', 'data:image/jpeg;base64,ZmFrZTI='],
         },
       ],
     });
@@ -362,6 +398,8 @@ describe('EscrowDetailScreen', () => {
     expect(await findByText('환불 검토 요청 접수됨')).toBeTruthy();
     expect(await findByText('폐업 확인 · TrustPay 검토')).toBeTruthy();
     expect(await findByText(/국세청 사업자 상태가 폐업으로 확인/)).toBeTruthy();
+    expect(await findByText(/사업장 문이 닫혀 있고 예약 전화가 연결되지 않아/)).toBeTruthy();
+    expect(await findByText('첨부 사진 2장')).toBeTruthy();
     expect(queryByText('환불 검토 요청')).toBeNull();
   });
 });

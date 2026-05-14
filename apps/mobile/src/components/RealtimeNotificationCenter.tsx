@@ -6,10 +6,20 @@ import { useAuthStore } from '../store/auth';
 import { useAppStore } from '../store/app';
 import { formatKrwFromRlusd, formatRlusd } from '../utils/money';
 import { colors, font, radius, shadow, spacing } from '../theme';
-import type { BusinessDashboard, ChargeRequest, EscrowRecord } from '@prepaid-shield/shared-types';
+import type { BusinessDashboard, ChargeRequest, EscrowRecord, RefundReviewRequest } from '@prepaid-shield/shared-types';
 
 type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
 type EscrowWithConsumer = EscrowRecord & { consumer?: { name: string } };
+
+const ACTIVE_REFUND_REVIEW_STATUSES = new Set([
+  'merchant_review',
+  'merchant_disputed',
+  'platform_investigation',
+  'closure_suspected',
+  'closure_confirmed',
+  'auto_approved',
+  'platform_approved',
+]);
 
 type RealtimeEvent = {
   id: string;
@@ -78,7 +88,15 @@ export function buildBusinessRealtimeEvents(dashboard?: BusinessDashboard): Real
         }
         return [];
       });
-    return [...escrowEvents, ...chargeEvents];
+    const refundEvents = (escrow.refundReviewRequests ?? [])
+      .filter((request: RefundReviewRequest) => ACTIVE_REFUND_REVIEW_STATUSES.has(request.status))
+      .map((request: RefundReviewRequest) => ({
+        id: `business-refund-review-${request.id}`,
+        title: '환불 검토 요청 도착',
+        body: `${consumerName}님이 ${formatKrwFromRlusd(request.refundableAmount)} 환불 검토를 요청했습니다.`,
+        detail: request.consumerReason ?? undefined,
+      }));
+    return [...escrowEvents, ...chargeEvents, ...refundEvents];
   });
 }
 

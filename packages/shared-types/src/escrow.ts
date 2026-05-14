@@ -13,6 +13,7 @@ export type RefundReviewStatus =
   | 'refunded'
   | 'rejected';
 export type BusinessClosureStatus = 'active' | 'suspended' | 'closed' | 'not_configured' | 'unavailable';
+export type BusinessRegistrationVerificationStatus = 'verified' | 'demo_verified' | 'unavailable';
 export type UserRole = 'consumer' | 'business';
 
 export interface Business {
@@ -22,9 +23,29 @@ export interface Business {
   address: string;
   phone?: string | null;
   email?: string | null;
-  registrationNumber?: string | null;
+  registrationNumber: string;
+  registrationVerificationStatus?: BusinessRegistrationVerificationStatus | null;
+  registrationVerificationSource?: 'nts' | 'demo' | 'internal' | null;
+  registrationVerifiedAt?: Date | string | null;
   xrplAddress: string;
   isActive: boolean;
+}
+
+export interface BusinessRegistrationVerificationResponse {
+  registrationNumber: string;
+  status: BusinessRegistrationVerificationStatus;
+  source: 'nts' | 'demo' | 'internal';
+  checkedAt: Date | string;
+  message: string;
+}
+
+export interface BusinessRegistrationRequest {
+  name: string;
+  category: string;
+  address: string;
+  phone?: string;
+  email?: string;
+  registrationNumber: string;
 }
 
 export interface Consumer {
@@ -126,8 +147,15 @@ export interface RefundReviewRequest {
   businessClosureSource?: string | null;
   businessClosureCheckedAt?: Date | string | null;
   investigationReason?: string | null;
+  consumerReason?: string | null;
+  photoDataUrls?: string[];
   requestedAt: Date | string;
   resolvedAt?: Date | string | null;
+}
+
+export interface CreateRefundReviewRequest {
+  reason: string;
+  photoDataUrls?: string[];
 }
 
 export interface CreateEscrowRequest {

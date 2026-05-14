@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProfileScreen } from './ProfileScreen';
 
@@ -9,15 +9,20 @@ jest.mock('../../api/client', () => ({
   api: { getBalance: jest.fn().mockResolvedValue({ xrplAddress: 'rTest12345678', balance: '5000' }) },
 }));
 
+const mockClearAuth = jest.fn();
 jest.mock('../../store/auth', () => ({
   useAuthStore: (selector: any) =>
-    selector({ role: 'consumer', userId: 'c-1', name: '김테스트' }),
+    selector({ role: 'consumer', userId: 'c-1', name: '김테스트', clearAuth: mockClearAuth }),
 }));
 
 function renderWithProviders(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+  const clearQueryCache = jest.spyOn(qc, 'clear');
+  const result = render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+  return { ...result, clearQueryCache };
 }
+
+beforeEach(() => jest.clearAllMocks());
 
 describe('ProfileScreen', () => {
   it('should render user name and role', async () => {
@@ -37,5 +42,16 @@ describe('ProfileScreen', () => {
     expect(await findByText('XRPL Testnet')).toBeTruthy();
     expect(await findByText('Token Escrow (XLS-85)')).toBeTruthy();
     expect(await findByText(/보호 원장 증빙용 RLUSD와 Testnet 주소를 확인/)).toBeTruthy();
+  });
+
+  it('should keep logout inside the profile screen', async () => {
+    const { findByText, clearQueryCache } = renderWithProviders(<ProfileScreen navigation={{} as any} route={{} as any} />);
+
+    fireEvent.press(await findByText('로그아웃'));
+
+    await waitFor(() => {
+      expect(clearQueryCache).toHaveBeenCalled();
+      expect(mockClearAuth).toHaveBeenCalled();
+    });
   });
 });

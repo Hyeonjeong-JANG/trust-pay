@@ -87,6 +87,19 @@ export const createChargeRequestSchema = z.union([
   }),
 ]);
 
+export const requestRefundReviewSchema = z.object({
+  reason: z.string().trim().min(10, 'Refund reason must be at least 10 characters').max(500, 'Refund reason must be at most 500 characters'),
+  photoDataUrls: z
+    .array(
+      z
+        .string()
+        .startsWith('data:image/', 'Refund review photos must be image data URLs')
+        .max(2_800_000, 'Refund review photo exceeds 2MB'),
+    )
+    .max(3, 'Refund review supports up to 3 photos')
+    .default([]),
+});
+
 export const cancelEscrowSchema = z.object({
   escrowId: z.string().uuid(),
 });
@@ -97,7 +110,11 @@ export const businessRegistrationSchema = z.object({
   address: z.string().min(1).max(200),
   phone: z.string().optional(),
   email: z.string().email().optional(),
-  registrationNumber: z.string().regex(/^\d{10}$/, 'Business registration number must be 10 digits').optional(),
+  registrationNumber: z.string().transform((value) => value.replace(/\D/g, '')).pipe(z.string().regex(/^\d{10}$/, 'Business registration number must be 10 digits')),
+});
+
+export const verifyBusinessRegistrationNumberSchema = z.object({
+  registrationNumber: z.string().transform((value) => value.replace(/\D/g, '')).pipe(z.string().regex(/^\d{10}$/, 'Business registration number must be 10 digits')),
 });
 
 export const consumerRegistrationSchema = z.object({
@@ -128,8 +145,10 @@ export const verifyCodeSchema = loginIdentifierSchema.and(
 export type CreateEscrowInput = z.infer<typeof createEscrowSchema>;
 export type FinishEscrowInput = z.infer<typeof finishEscrowSchema>;
 export type CreateChargeRequestInput = z.infer<typeof createChargeRequestSchema>;
+export type RequestRefundReviewInput = z.infer<typeof requestRefundReviewSchema>;
 export type CancelEscrowInput = z.infer<typeof cancelEscrowSchema>;
 export type BusinessRegistrationInput = z.infer<typeof businessRegistrationSchema>;
+export type VerifyBusinessRegistrationNumberInput = z.infer<typeof verifyBusinessRegistrationNumberSchema>;
 export type ConsumerRegistrationInput = z.infer<typeof consumerRegistrationSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RequestCodeInput = z.infer<typeof requestCodeSchema>;

@@ -8,7 +8,6 @@ export type ConsumerTabParamList = {
   Home: undefined;
   Schedule: undefined;
   History: undefined;
-  Profile: undefined;
 };
 
 // Business bottom tabs
@@ -27,6 +26,7 @@ export type RootStackParamList = {
   ScanPayment: undefined;
   Payment: { businessId: string; businessName: string; businessCategory?: string; paymentRequest?: PaymentRequest };
   EscrowDetail: { id: string };
+  Profile: undefined;
   BusinessEscrowDetail: { id: string };
   BusinessProfile: undefined;
   BusinessDetail: { businessId: string };

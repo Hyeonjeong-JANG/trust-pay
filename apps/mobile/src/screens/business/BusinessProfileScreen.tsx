@@ -19,11 +19,16 @@ import { useBusinessMenuStore } from '../../store/businessMenus';
 import { formatKrwFromRlusd, krwToRlusd } from '../../utils/money';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { ScreenProps } from '../../navigation/types';
 
 const EMPTY_MENUS: never[] = [];
 
-export function BusinessProfileScreen(_props: ScreenProps<'BusinessProfile'>) {
+function formatRegistrationNumber(value?: string | null): string {
+  const digits = value?.replace(/\D/g, '') ?? '';
+  if (digits.length !== 10) return value ?? '-';
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+}
+
+export function BusinessProfileScreen(_props: { route?: unknown; navigation?: unknown }) {
   const userId = useAuthStore((s) => s.userId);
   const name = useAuthStore((s) => s.name);
   const clearAuth = useAuthStore((s) => s.clearAuth);
@@ -37,6 +42,13 @@ export function BusinessProfileScreen(_props: ScreenProps<'BusinessProfile'>) {
   const { data: balanceData, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['balance', userId],
     queryFn: () => api.getBalance(userId!, 'business'),
+    enabled: !!userId,
+    retry: 1,
+  });
+
+  const { data: business } = useQuery({
+    queryKey: ['business', userId],
+    queryFn: () => api.getBusiness(userId!),
     enabled: !!userId,
     retry: 1,
   });
@@ -82,6 +94,36 @@ export function BusinessProfileScreen(_props: ScreenProps<'BusinessProfile'>) {
         <Text style={styles.name}>{name ?? '사업자'}</Text>
         <View style={styles.roleBadge}>
           <Text style={styles.roleText}>사업자</Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>사업자 정보</Text>
+        <View style={styles.card}>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>상호명</Text>
+            <Text style={styles.infoValue}>{business?.name ?? name ?? '-'}</Text>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>업종</Text>
+            <Text style={styles.infoValue}>{business?.category ?? '-'}</Text>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>주소</Text>
+            <Text style={styles.infoValue}>{business?.address ?? '-'}</Text>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>사업자등록번호</Text>
+            <Text style={styles.infoValue}>{formatRegistrationNumber(business?.registrationNumber)}</Text>
+          </View>
+          <View style={styles.verificationBadge}>
+            <Text style={styles.verificationBadgeText}>
+              {business?.registrationVerificationStatus === 'verified' ? '국세청 인증 완료' : '국세청 데모 인증 완료'}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -257,6 +299,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   copyButtonText: { color: colors.success, fontWeight: font.weight.semibold, fontSize: font.size.sm },
+  verificationBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.successLight,
+    borderRadius: radius.full,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  verificationBadgeText: { color: colors.success, fontSize: font.size.sm, fontWeight: font.weight.semibold },
   menuDesc: {
     fontSize: font.size.sm,
     color: colors.gray500,

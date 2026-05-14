@@ -1,9 +1,10 @@
 import { Test } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { BusinessService } from './business.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
 import { CryptoService } from '../common/crypto.service';
+import { BusinessClosureService } from './business-closure.service';
 
 const mockBusiness = {
   id: 'biz-1',
@@ -12,6 +13,10 @@ const mockBusiness = {
   address: '서울시 강남구',
   phone: '010-1234-5678',
   email: 'cafe@test.com',
+  registrationNumber: '1234567890',
+  registrationVerificationStatus: 'demo_verified',
+  registrationVerificationSource: 'demo',
+  registrationVerifiedAt: new Date('2026-01-01'),
   xrplAddress: 'rBizAddr123',
   xrplSecret: 'encrypted:sBizSecret123',
   isActive: true,
@@ -25,6 +30,7 @@ describe('BusinessService', () => {
   let service: BusinessService;
   let prisma: any;
   let xrplService: any;
+  let businessClosureService: any;
 
   beforeEach(async () => {
     prisma = {
@@ -45,12 +51,21 @@ describe('BusinessService', () => {
       setTrustLine: jest.fn().mockResolvedValue('TX_HASH'),
     };
 
+    businessClosureService = {
+      checkBusinessStatus: jest.fn().mockResolvedValue({
+        status: 'unavailable',
+        source: 'internal',
+        checkedAt: new Date('2026-05-14T00:00:00.000Z'),
+      }),
+    };
+
     const module = await Test.createTestingModule({
       providers: [
         BusinessService,
         { provide: PrismaService, useValue: prisma },
         { provide: XrplService, useValue: xrplService },
         { provide: CryptoService, useValue: { encrypt: jest.fn((v: string) => 'encrypted:' + v), decrypt: jest.fn((v: string) => v.replace('encrypted:', '')) } },
+        { provide: BusinessClosureService, useValue: businessClosureService },
       ],
     }).compile();
 
@@ -67,8 +82,10 @@ describe('BusinessService', () => {
         address: '서울시 강남구',
         phone: '010-1234-5678',
         email: 'cafe@test.com',
+        registrationNumber: '123-45-67890',
       });
 
+      expect(businessClosureService.checkBusinessStatus).toHaveBeenCalledWith('1234567890');
       expect(xrplService.createWallet).toHaveBeenCalled();
       expect(xrplService.setTrustLine).toHaveBeenCalled();
       expect(prisma.business.create).toHaveBeenCalledWith({
@@ -76,6 +93,10 @@ describe('BusinessService', () => {
           name: '테스트카페',
           category: '카페',
           address: '서울시 강남구',
+          registrationNumber: '1234567890',
+          registrationVerificationStatus: 'demo_verified',
+          registrationVerificationSource: 'demo',
+          registrationVerifiedAt: expect.any(Date),
           xrplAddress: 'rBizAddr123',
           xrplSecret: 'encrypted:sBizSecret123',
         }),
@@ -83,6 +104,31 @@ describe('BusinessService', () => {
       // Should NOT include xrplSecret in response
       expect(result).not.toHaveProperty('xrplSecret');
       expect(result).toHaveProperty('name', '테스트카페');
+    });
+
+    it('should reject registration without a business registration number', async () => {
+      await expect(service.register({
+        name: '테스트카페',
+        category: '카페',
+        address: '서울시 강남구',
+        phone: '010-1234-5678',
+      } as any)).rejects.toThrow(BadRequestException);
+
+      expect(prisma.business.create).not.toHaveBeenCalled();
+      expect(xrplService.createWallet).not.toHaveBeenCalled();
+    });
+
+    it('should expose a demo NTS verification result when real NTS is unavailable', async () => {
+      const result = await service.verifyRegistrationNumber('123-45-67890');
+
+      expect(businessClosureService.checkBusinessStatus).toHaveBeenCalledWith('1234567890');
+      expect(result).toEqual({
+        registrationNumber: '1234567890',
+        status: 'demo_verified',
+        source: 'demo',
+        checkedAt: expect.any(Date),
+        message: '국세청 사업자등록번호 인증은 데모 환경에서 모의 인증으로 진행됩니다.',
+      });
     });
   });
 
@@ -169,6 +215,36 @@ describe('BusinessService', () => {
 
       expect(result.totalReceived).toBe(7.5);
       expect(result.totalPending).toBe(92.5);
+    });
+
+    it('should expose refund review photos without leaking the storage field', async () => {
+      prisma.business.findUnique.mockResolvedValue({
+        ...mockBusiness,
+        escrows: [
+          {
+            id: 'e-refund-review',
+            status: 'active',
+            escrowType: 'prepaid',
+            totalAmount: 100,
+            monthlyAmount: 10,
+            entries: [{ status: 'pending', amount: '10' }],
+            chargeRequests: [],
+            refundReviewRequests: [
+              {
+                id: 'refund-review-1',
+                photoDataUrlsJson: JSON.stringify(['data:image/png;base64,ZmFrZQ==']),
+              },
+            ],
+            consumer: { id: 'c-1', name: '소비자1' },
+          },
+        ],
+      });
+
+      const result = await service.dashboard('biz-1', businessUser);
+      const refundReview = result.escrows[0].refundReviewRequests[0];
+
+      expect(refundReview).not.toHaveProperty('photoDataUrlsJson');
+      expect(refundReview.photoDataUrls).toEqual(['data:image/png;base64,ZmFrZQ==']);
     });
 
     it('should return zero amounts when no escrows', async () => {
