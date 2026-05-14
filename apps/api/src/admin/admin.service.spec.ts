@@ -62,6 +62,17 @@ describe('AdminService', () => {
     await expect(service.listRefundReviews(businessUser, {})).rejects.toThrow(ForbiddenException);
   });
 
+  it('defaults refund review lists to open operational statuses', async () => {
+    prisma.refundReviewRequest.findMany.mockResolvedValue([]);
+
+    await service.listRefundReviews(adminUser, {});
+
+    expect(prisma.refundReviewRequest.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { status: { in: ['platform_review', 'merchant_response_requested', 'merchant_responded', 'platform_investigation'] } },
+      orderBy: [{ requestedAt: 'asc' }],
+    }));
+  });
+
   it('returns dashboard counts for admin operations tabs', async () => {
     prisma.refundReviewRequest.count
       .mockResolvedValueOnce(3)

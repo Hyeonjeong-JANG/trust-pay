@@ -1,4 +1,5 @@
 export const visibleQueueStatuses = [
+  'open',
   'platform_review',
   'merchant_response_requested',
   'merchant_responded',
@@ -17,6 +18,7 @@ export const adminTabs = [
 ];
 
 const STATUS_LABELS = {
+  open: '열린 전체',
   platform_review: 'TrustPay 검토',
   merchant_response_requested: '사업자 소명 요청',
   merchant_responded: '사업자 응답 완료',

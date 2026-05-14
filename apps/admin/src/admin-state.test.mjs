@@ -17,6 +17,7 @@ test('getStatusLabel describes platform-first refund review states', () => {
 
 test('visibleQueueStatuses prioritizes operational refund review work', () => {
   assert.deepEqual(visibleQueueStatuses, [
+    'open',
     'platform_review',
     'merchant_response_requested',
     'merchant_responded',
@@ -24,6 +25,14 @@ test('visibleQueueStatuses prioritizes operational refund review work', () => {
     'platform_approved',
     'rejected',
   ]);
+  assert.equal(getStatusLabel('open'), '열린 전체');
+});
+
+test('admin refund queue defaults to the open all-status view', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+
+  assert.match(js, /status: 'open'/);
+  assert.match(js, /state\.status === 'open' \? '\/admin\/refund-reviews' :/);
 });
 
 test('adminTabs defines standard operations sections', () => {

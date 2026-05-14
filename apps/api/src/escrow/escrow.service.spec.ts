@@ -548,7 +548,7 @@ describe('EscrowService', () => {
       await expect(service.findById('bad-id', consumerUser)).rejects.toThrow(NotFoundException);
     });
 
-    it('should hide platform-review consumer evidence from business viewers', async () => {
+    it('should expose platform-review status to business viewers without consumer evidence', async () => {
       const escrow = {
         id: 'escrow-1',
         consumerId: 'consumer-1',
@@ -576,15 +576,22 @@ describe('EscrowService', () => {
 
       const result = await service.findById('escrow-1', businessUser);
 
-      expect(result.refundReviewRequests).toHaveLength(1);
+      expect(result.refundReviewRequests).toHaveLength(2);
       expect(result.refundReviewRequests[0]).toMatchObject({
-        id: 'refund-review-visible',
-        status: 'merchant_response_requested',
-        merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부를 답변해주세요.',
+        id: 'refund-review-platform',
+        status: 'platform_review',
       });
       expect(result.refundReviewRequests[0]).not.toHaveProperty('consumerReason');
       expect(result.refundReviewRequests[0]).not.toHaveProperty('photoDataUrls');
       expect(result.refundReviewRequests[0]).not.toHaveProperty('photoDataUrlsJson');
+      expect(result.refundReviewRequests[1]).toMatchObject({
+        id: 'refund-review-visible',
+        status: 'merchant_response_requested',
+        merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부를 답변해주세요.',
+      });
+      expect(result.refundReviewRequests[1]).not.toHaveProperty('consumerReason');
+      expect(result.refundReviewRequests[1]).not.toHaveProperty('photoDataUrls');
+      expect(result.refundReviewRequests[1]).not.toHaveProperty('photoDataUrlsJson');
     });
   });
 

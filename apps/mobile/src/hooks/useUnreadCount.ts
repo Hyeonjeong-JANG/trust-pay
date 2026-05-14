@@ -6,6 +6,7 @@ import { useAppStore } from '../store/app';
 import type { BusinessDashboard, ChargeRequest, EscrowRecord, RefundReviewRequest } from '@prepaid-shield/shared-types';
 
 const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'platform_review',
   'merchant_response_requested',
   'merchant_responded',
   'merchant_disputed',

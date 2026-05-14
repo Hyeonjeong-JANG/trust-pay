@@ -32,6 +32,7 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
 ];
 
 const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'platform_review',
   'merchant_response_requested',
   'merchant_responded',
   'merchant_disputed',
@@ -41,6 +42,18 @@ const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
   'refunded',
   'rejected',
 ]);
+
+const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
+  platform_review: 'TrustPay 검토 중',
+  merchant_response_requested: '사업자 응답 대기',
+  merchant_responded: '사업자 응답 완료',
+  merchant_disputed: '사업자 이의제기',
+  platform_investigation: 'TrustPay 조사 중',
+  auto_approved: '무응답 자동 승인',
+  platform_approved: 'TrustPay 환불 승인',
+  refunded: '환불 완료',
+  rejected: '환불 검토 거절',
+};
 
 type EscrowWithConsumer = EscrowRecord & { consumer?: { id: string; name: string } };
 
@@ -219,6 +232,7 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
                   <View>
                     <Text style={styles.refundReviewEyebrow}>환불 검토 요청</Text>
                     <Text style={styles.refundReviewTitle}>{refundReviewItems.length}건 대기</Text>
+                    <Text style={styles.refundReviewStatus}>{REFUND_REVIEW_STATUS_KO[latestRefundReviewItem.request.status] ?? latestRefundReviewItem.request.status}</Text>
                   </View>
                   <TouchableOpacity
                     style={styles.refundReviewAction}
@@ -301,6 +315,9 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
           const progressPct = isPrepaid
             ? Number(item.totalAmount) > 0 ? ((prepaidAmounts?.usedAmount ?? 0) / Number(item.totalAmount)) * 100 : 0
             : totalEntries > 0 ? (releasedCount / totalEntries) * 100 : 0;
+          const latestRefundReview = (item.refundReviewRequests ?? [])
+            .filter((request: RefundReviewRequest) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
+            .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())[0];
           return (
             <View style={styles.card}>
               <TouchableOpacity
@@ -334,6 +351,11 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
                 <View style={styles.progressBarBg}>
                   <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
                 </View>
+                {latestRefundReview && (
+                  <Text style={styles.refundReviewBadge}>
+                    환불 검토 중: {REFUND_REVIEW_STATUS_KO[latestRefundReview.status] ?? latestRefundReview.status}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           );
@@ -417,6 +439,7 @@ const styles = StyleSheet.create({
     fontSize: font.size.lg,
     fontWeight: font.weight.bold,
   },
+  refundReviewStatus: { color: colors.gray700, fontSize: font.size.sm, marginTop: 2 },
   refundReviewAction: {
     backgroundColor: colors.white,
     borderRadius: radius.full,
@@ -514,6 +537,12 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   cardAmountSub: { fontSize: font.size.xs, color: colors.gray400, marginTop: 1 },
+  refundReviewBadge: {
+    color: colors.warning,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    marginTop: spacing.sm,
+  },
   progressBarBg: {
     height: 4,
     backgroundColor: colors.gray200,

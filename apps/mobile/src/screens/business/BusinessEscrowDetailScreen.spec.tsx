@@ -261,7 +261,7 @@ describe('BusinessEscrowDetailScreen', () => {
     }));
   });
 
-  it('should hide platform-review refund case details from the merchant', async () => {
+  it('should surface platform-review refund status without consumer evidence in merchant detail', async () => {
     const { api } = require('../../api/client');
     api.getEscrow.mockResolvedValue({
       id: 'e-prepaid-platform-review',
@@ -293,7 +293,8 @@ describe('BusinessEscrowDetailScreen', () => {
     );
 
     expect(await findByText(/강남 블루보틀/)).toBeTruthy();
-    expect(queryByText('환불 검토 요청 접수됨')).toBeNull();
+    expect(await findByText('환불 검토 요청 접수됨')).toBeTruthy();
+    expect(await findByText('TrustPay 검토 중')).toBeTruthy();
     expect(queryByText(/2주 넘게 안 열고 전화도 안/)).toBeNull();
     expect(queryByText('첨부 사진 1장')).toBeNull();
   });

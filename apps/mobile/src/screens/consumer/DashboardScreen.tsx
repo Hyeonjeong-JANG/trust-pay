@@ -18,7 +18,7 @@ import { BalanceCardSkeleton, EscrowCardSkeleton } from '../../components/Skelet
 import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { ChargeRequest, EscrowEntry } from '@prepaid-shield/shared-types';
+import type { ChargeRequest, EscrowEntry, RefundReviewRequest } from '@prepaid-shield/shared-types';
 import type { ConsumerTabProps } from '../../navigation/types';
 import type { EscrowRecord, EscrowStatus } from '@prepaid-shield/shared-types';
 type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
@@ -44,6 +44,11 @@ function getPrepaidAmounts(escrow: EscrowWithBusiness) {
   };
 }
 
+function getLatestRefundReview(requests?: RefundReviewRequest[]): RefundReviewRequest | null {
+  if (!requests?.length) return null;
+  return [...requests].sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())[0] ?? null;
+}
+
 const STATUS_KO: Record<string, string> = {
   active: '진행중',
   completed: '완료',
@@ -54,6 +59,16 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   active: { bg: colors.escrow.activeBg, text: colors.escrow.active },
   completed: { bg: colors.escrow.completedBg, text: colors.escrow.completed },
   cancelled: { bg: colors.escrow.cancelledBg, text: colors.escrow.cancelled },
+};
+
+const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
+  platform_review: 'TrustPay 검토 중',
+  merchant_response_requested: '사업자 응답 대기',
+  merchant_responded: '사업자 응답 완료',
+  platform_investigation: 'TrustPay 조사 중',
+  platform_approved: 'TrustPay 환불 승인',
+  refunded: '환불 완료',
+  rejected: '환불 검토 거절',
 };
 
 type StatusFilter = 'all' | EscrowStatus;
@@ -314,6 +329,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
             0,
           );
           const pendingChargeCount = item.chargeRequests?.filter((request) => request.status === 'pending_approval').length ?? 0;
+          const latestRefundReview = getLatestRefundReview(item.refundReviewRequests);
           const statusStyle = STATUS_STYLE[item.status] ?? STATUS_STYLE.cancelled;
           const progressPct = isPrepaid
             ? Number(item.totalAmount) > 0 ? ((prepaidAmounts?.usedAmount ?? 0) / Number(item.totalAmount)) * 100 : 0
@@ -348,6 +364,11 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
               {pendingChargeCount > 0 && (
                 <Text style={styles.pendingApproval}>
                   승인 대기 {pendingChargeCount}건
+                </Text>
+              )}
+              {latestRefundReview && (
+                <Text style={styles.refundReviewBadge}>
+                  환불 검토 중: {REFUND_REVIEW_STATUS_KO[latestRefundReview.status] ?? latestRefundReview.status}
                 </Text>
               )}
             </TouchableOpacity>
@@ -650,6 +671,12 @@ const styles = StyleSheet.create({
   pendingApproval: {
     fontSize: font.size.sm,
     color: colors.danger,
+    fontWeight: font.weight.semibold,
+    marginTop: spacing.xs,
+  },
+  refundReviewBadge: {
+    fontSize: font.size.sm,
+    color: colors.warning,
     fontWeight: font.weight.semibold,
     marginTop: spacing.xs,
   },

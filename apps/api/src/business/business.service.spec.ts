@@ -217,7 +217,7 @@ describe('BusinessService', () => {
       expect(result.totalPending).toBe(92.5);
     });
 
-    it('should hide platform-review evidence and expose only admin-requested merchant notices', async () => {
+    it('should expose platform-review status to merchants without consumer evidence', async () => {
       prisma.business.findUnique.mockResolvedValue({
         ...mockBusiness,
         escrows: [
@@ -250,14 +250,22 @@ describe('BusinessService', () => {
       });
 
       const result = await service.dashboard('biz-1', businessUser);
-      const refundReview = result.escrows[0].refundReviewRequests[0];
+      const platformReview = result.escrows[0].refundReviewRequests[0];
+      const merchantReview = result.escrows[0].refundReviewRequests[1];
 
-      expect(result.escrows[0].refundReviewRequests).toHaveLength(1);
-      expect(refundReview.id).toBe('refund-review-2');
-      expect(refundReview).not.toHaveProperty('photoDataUrlsJson');
-      expect(refundReview).not.toHaveProperty('photoDataUrls');
-      expect(refundReview).not.toHaveProperty('consumerReason');
-      expect(refundReview.merchantNotice).toBe('고객이 장기 휴업을 주장했습니다. 영업 가능 여부를 답변해주세요.');
+      expect(result.escrows[0].refundReviewRequests).toHaveLength(2);
+      expect(platformReview).toMatchObject({ id: 'refund-review-1', status: 'platform_review' });
+      expect(platformReview).not.toHaveProperty('photoDataUrlsJson');
+      expect(platformReview).not.toHaveProperty('photoDataUrls');
+      expect(platformReview).not.toHaveProperty('consumerReason');
+      expect(merchantReview).toMatchObject({
+        id: 'refund-review-2',
+        status: 'merchant_response_requested',
+        merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부를 답변해주세요.',
+      });
+      expect(merchantReview).not.toHaveProperty('photoDataUrlsJson');
+      expect(merchantReview).not.toHaveProperty('photoDataUrls');
+      expect(merchantReview).not.toHaveProperty('consumerReason');
     });
 
     it('should return zero amounts when no escrows', async () => {

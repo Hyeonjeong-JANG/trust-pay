@@ -89,4 +89,33 @@ describe('useUnreadCount', () => {
     expect(mockApi.getConsumerEscrows).not.toHaveBeenCalled();
     expect(await findByText('1')).toBeTruthy();
   });
+
+  it('counts platform-review refund requests as unread for merchants', async () => {
+    mockApi.getBusinessDashboard.mockResolvedValue({
+      business: { id: 'business-1', name: '파워짐' },
+      escrows: [
+        {
+          id: 'e-refund-platform',
+          status: 'completed',
+          createdAt: '2026-05-12T00:00:00.000Z',
+          entries: [],
+          chargeRequests: [],
+          refundReviewRequests: [
+            {
+              id: 'refund-review-platform',
+              status: 'platform_review',
+              refundableAmount: 10,
+              requestedAt: '2026-05-14T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+    });
+    mockAppState.notificationsLastViewed = new Date('2026-05-13T00:00:00.000Z').getTime();
+
+    const { findByText } = renderWithProviders();
+
+    await waitFor(() => expect(mockApi.getBusinessDashboard).toHaveBeenCalledWith('business-1'));
+    expect(await findByText('1')).toBeTruthy();
+  });
 });

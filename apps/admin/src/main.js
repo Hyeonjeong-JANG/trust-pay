@@ -10,7 +10,7 @@ const state = {
   consumers: [],
   escrows: [],
   selectedId: null,
-  status: 'platform_review',
+  status: 'open',
   activeTab: sessionStorage.getItem('trustpay-admin-tab') || 'dashboard',
 };
 
@@ -257,7 +257,8 @@ function renderDetail(review) {
 async function loadReviews() {
   renderRefundLayout();
   setStatus('환불 검토 큐를 불러오는 중...');
-  state.reviews = await adminRequest(`/admin/refund-reviews?status=${encodeURIComponent(state.status)}`);
+  const path = state.status === 'open' ? '/admin/refund-reviews' : `/admin/refund-reviews?status=${encodeURIComponent(state.status)}`;
+  state.reviews = await adminRequest(path);
   renderFilters();
   renderQueue();
   setStatus(`${getStatusLabel(state.status)} ${state.reviews.length}건`, 'ok');

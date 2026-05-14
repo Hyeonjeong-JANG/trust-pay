@@ -12,6 +12,7 @@ type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
 type EscrowWithConsumer = EscrowRecord & { consumer?: { name: string } };
 
 const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'platform_review',
   'merchant_response_requested',
   'merchant_responded',
   'merchant_disputed',

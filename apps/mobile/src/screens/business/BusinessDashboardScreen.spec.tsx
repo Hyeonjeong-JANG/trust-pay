@@ -261,7 +261,7 @@ describe('BusinessDashboardScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('BusinessEscrowDetail', { id: 'e-refund' });
   });
 
-  it('should hide platform-review refund cases from the merchant dashboard', async () => {
+  it('should surface platform-review refund status on the merchant dashboard without consumer evidence', async () => {
     const { api } = require('../../api/client');
     api.getBusinessDashboard.mockResolvedValue({
       totalReceived: 25,
@@ -293,7 +293,9 @@ describe('BusinessDashboardScreen', () => {
     const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
     expect(await findByText('이서연')).toBeTruthy();
-    expect(queryByText('환불 검토 요청')).toBeNull();
+    expect(await findByText('환불 검토 요청')).toBeTruthy();
+    expect(await findByText('TrustPay 검토 중')).toBeTruthy();
+    expect(await findByText('환불 검토 중: TrustPay 검토 중')).toBeTruthy();
     expect(queryByText(/2주 넘게 안 열고 전화도 받지 않아/)).toBeNull();
   });
 

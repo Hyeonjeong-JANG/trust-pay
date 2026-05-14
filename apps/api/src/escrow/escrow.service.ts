@@ -30,6 +30,7 @@ const ACTIVE_REFUND_REVIEW_STATUSES = [
   'platform_approved',
 ];
 const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'platform_review',
   'merchant_response_requested',
   'merchant_responded',
   'merchant_disputed',

@@ -131,4 +131,35 @@ describe('NotificationsScreen', () => {
     expect(await findByText(/김민수님이 ₩13,500 환불 검토를 요청했습니다/)).toBeTruthy();
     expect(await findByText(/고객이 장기 휴업을 주장했습니다/)).toBeTruthy();
   });
+
+  it('should render platform-review refund notifications without consumer evidence for businesses', async () => {
+    const { api } = require('../../api/client');
+    mockAuthState.role = 'business';
+    mockAuthState.userId = 'business-1';
+    api.getBusinessDashboard.mockResolvedValue({
+      business: { id: 'business-1', name: '파워짐' },
+      escrows: [
+        {
+          id: 'e-refund-platform',
+          consumer: { name: '김민수' },
+          entries: [],
+          refundReviewRequests: [
+            {
+              id: 'refund-review-platform',
+              status: 'platform_review',
+              refundableAmount: 10,
+              consumerReason: '2주 넘게 문을 열지 않아 환불 검토를 요청합니다.',
+              requestedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const { findByText, queryByText } = renderWithProviders(<NotificationsScreen />);
+
+    expect(await findByText('환불 검토 요청')).toBeTruthy();
+    expect(await findByText(/김민수님이 ₩13,500 환불 검토를 요청했습니다/)).toBeTruthy();
+    expect(queryByText(/2주 넘게 문을 열지 않아/)).toBeNull();
+  });
 });

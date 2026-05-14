@@ -169,6 +169,43 @@ describe('RealtimeNotificationCenter', () => {
     expect(mockAppState.markRealtimeNotificationSeen).toHaveBeenCalledWith('business-refund-review-refund-review-1');
   });
 
+  it('should show platform-review refund notifications to merchants without consumer evidence', async () => {
+    const { api } = require('../api/client');
+    mockAuthState.role = 'business';
+    mockAuthState.userId = 'b-1';
+    api.getBusinessDashboard.mockResolvedValue({ business: { id: 'b-1', name: '카페' }, escrows: [] });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    const screen = renderWithClient(client);
+
+    await waitFor(() => expect(api.getBusinessDashboard).toHaveBeenCalledWith('b-1'));
+    await waitFor(() => expect(client.getQueryData(['businessDashboard', 'b-1'])).toEqual({ business: { id: 'b-1', name: '카페' }, escrows: [] }));
+    await flushEffects();
+
+    act(() => {
+      client.setQueryData(['businessDashboard', 'b-1'], {
+        business: { id: 'b-1', name: '카페' },
+        escrows: [{
+          id: 'e-refund-platform',
+          consumer: { name: '김민수' },
+          chargeRequests: [],
+          entries: [],
+          refundReviewRequests: [{
+            id: 'refund-review-platform',
+            status: 'platform_review',
+            refundableAmount: 10,
+            consumerReason: '2주 넘게 문을 열지 않아 환불 검토를 요청합니다.',
+            photoDataUrls: ['data:image/png;base64,ZmFrZQ=='],
+            requestedAt: new Date().toISOString(),
+          }],
+        }],
+      });
+    });
+
+    expect(await screen.findByText('환불 검토 요청 도착')).toBeTruthy();
+    expect(await screen.findByText('김민수님이 ₩13,500 환불 검토를 요청했습니다.')).toBeTruthy();
+    expect(screen.queryByText(/2주 넘게 문을 열지 않아/)).toBeNull();
+  });
+
   it('should show a popup when a consumer approves a new protected payment', async () => {
     const { api } = require('../api/client');
     mockAuthState.role = 'business';

@@ -97,7 +97,7 @@ export class AdminService {
   async listRefundReviews(user: AdminSession, query: AdminRefundReviewListInput) {
     this.assertAdmin(user);
     const reviews = await this.prisma.refundReviewRequest.findMany({
-      where: query.status ? { status: query.status } : undefined,
+      where: { status: query.status ?? { in: OPEN_REFUND_REVIEW_STATUSES } },
       include: this.refundReviewInclude(),
       orderBy: [{ requestedAt: 'asc' }],
     });

@@ -259,6 +259,37 @@ describe('ConsumerDashboardScreen', () => {
     expect(await findByText('승인 대기 1건')).toBeTruthy();
   });
 
+  it('should surface refund review status on consumer escrow cards', async () => {
+    const { api } = require('../../api/client');
+    api.getConsumerEscrows.mockResolvedValue([
+      {
+        id: 'e-refund-review',
+        totalAmount: 150,
+        monthlyAmount: 5,
+        months: 30,
+        escrowType: 'prepaid',
+        status: 'active',
+        business: { name: '강남 블루보틀' },
+        entries: [{ id: 'p-1', amount: '5', status: 'pending' }],
+        refundReviewRequests: [
+          {
+            id: 'refund-review-1',
+            status: 'platform_review',
+            refundableAmount: 10,
+            requestedAt: '2026-05-14T00:00:00.000Z',
+          },
+        ],
+      },
+    ]);
+
+    const { findByText } = renderWithProviders(
+      <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
+    );
+
+    expect(await findByText('강남 블루보틀')).toBeTruthy();
+    expect(await findByText('환불 검토 중: TrustPay 검토 중')).toBeTruthy();
+  });
+
   it('should surface a push-style on-site charge approval and approve it from home', async () => {
     const { api } = require('../../api/client');
     api.getConsumerEscrows.mockResolvedValue([
