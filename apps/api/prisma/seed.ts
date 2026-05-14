@@ -10,6 +10,10 @@ function isoToRippleTime(iso: string): number {
 // Stable UUIDs for seed data (deterministic for demo scripts)
 const CONSUMER_MINSU_ID = '00000000-0000-4000-a000-000000000001';
 const CONSUMER_SEOYEON_ID = '00000000-0000-4000-a000-000000000002';
+const CONSUMER_JIHUN_ID = '00000000-0000-4000-a000-000000000003';
+const CONSUMER_YUNA_ID = '00000000-0000-4000-a000-000000000004';
+const CONSUMER_HAJUN_ID = '00000000-0000-4000-a000-000000000005';
+const CONSUMER_DAEUN_ID = '00000000-0000-4000-a000-000000000006';
 const BUSINESS_CAFE_ID = '00000000-0000-4000-a000-000000000010';
 const BUSINESS_GYM_ID = '00000000-0000-4000-a000-000000000020';
 const BUSINESS_SALON_ID = '00000000-0000-4000-a000-000000000030';
@@ -20,9 +24,18 @@ const ESCROW_COMPLETED_ID = '00000000-0000-4000-a000-000000000200';
 const ESCROW_CANCELLED_ID = '00000000-0000-4000-a000-000000000300';
 const ESCROW_PREPAID_CAFE_ID = '00000000-0000-4000-a000-000000000400';
 const ESCROW_PREPAID_SALON_ID = '00000000-0000-4000-a000-000000000500';
+const ESCROW_GYM_YUNA_ID = '00000000-0000-4000-a000-000000000600';
+const ESCROW_GYM_HAJUN_ID = '00000000-0000-4000-a000-000000000700';
+const ESCROW_SALON_DAEUN_ID = '00000000-0000-4000-a000-000000000800';
+const ESCROW_LAUNDRY_JIHUN_ID = '00000000-0000-4000-a000-000000000900';
+const ESCROW_LAUNDRY_DAEUN_ID = '00000000-0000-4000-a000-000000000901';
+const ESCROW_ACADEMY_YUNA_ID = '00000000-0000-4000-a000-000000000902';
+const ESCROW_ACADEMY_HAJUN_ID = '00000000-0000-4000-a000-000000000903';
 const PRODUCT_CAFE_PASS_ID = '00000000-0000-4000-a000-000000001010';
 const PRODUCT_GYM_MEMBERSHIP_ID = '00000000-0000-4000-a000-000000001020';
 const PRODUCT_SALON_PASS_ID = '00000000-0000-4000-a000-000000001030';
+const PRODUCT_LAUNDRY_PASS_ID = '00000000-0000-4000-a000-000000001040';
+const PRODUCT_ACADEMY_COURSE_ID = '00000000-0000-4000-a000-000000001050';
 const MENU_CAFE_AMERICANO_ID = '00000000-0000-4000-a000-000000002011';
 const MENU_CAFE_BRUNCH_ID = '00000000-0000-4000-a000-000000002012';
 const MENU_CAFE_DRIP_BAG_ID = '00000000-0000-4000-a000-000000002013';
@@ -30,6 +43,9 @@ const MENU_CAFE_OFFICE_BOX_ID = '00000000-0000-4000-a000-000000002014';
 const MENU_SALON_CUT_ID = '00000000-0000-4000-a000-000000002031';
 const MENU_SALON_CLINIC_ID = '00000000-0000-4000-a000-000000002032';
 const MENU_SALON_COLOR_ID = '00000000-0000-4000-a000-000000002033';
+const MENU_LAUNDRY_SHIRTS_ID = '00000000-0000-4000-a000-000000002041';
+const MENU_LAUNDRY_DRY_CLEANING_ID = '00000000-0000-4000-a000-000000002042';
+const MENU_LAUNDRY_BEDDING_ID = '00000000-0000-4000-a000-000000002043';
 const CHARGE_CAFE_COMPLETED_AMERICANO_ID = '00000000-0000-4000-a000-000000003011';
 const CHARGE_CAFE_COMPLETED_BRUNCH_ID = '00000000-0000-4000-a000-000000003012';
 const CHARGE_CAFE_COMPLETED_DRIP_BAG_ID = '00000000-0000-4000-a000-000000003013';
@@ -41,6 +57,12 @@ const CHARGE_CAFE_ACTIVE_AMERICANO_2_ID = '00000000-0000-4000-a000-000000003023'
 const CHARGE_CAFE_ACTIVE_BRUNCH_2_ID = '00000000-0000-4000-a000-000000003024';
 const CHARGE_SALON_SETTLED_ID = '00000000-0000-4000-a000-000000003001';
 const CHARGE_SALON_PENDING_ID = '00000000-0000-4000-a000-000000003002';
+const CHARGE_SALON_DAEUN_COLOR_ID = '00000000-0000-4000-a000-000000003033';
+const CHARGE_LAUNDRY_JIHUN_SHIRTS_ID = '00000000-0000-4000-a000-000000003041';
+const CHARGE_LAUNDRY_JIHUN_DRY_CLEANING_ID = '00000000-0000-4000-a000-000000003042';
+const CHARGE_LAUNDRY_DAEUN_BEDDING_ID = '00000000-0000-4000-a000-000000003043';
+const REFUND_REVIEW_GYM_HAJUN_ID = '00000000-0000-4000-a000-000000004001';
+const REFUND_REVIEW_LAUNDRY_DAEUN_ID = '00000000-0000-4000-a000-000000004002';
 
 function entryIds(escrowId: string, start: number, end: number): string[] {
   return Array.from({ length: end - start + 1 }, (_, index) => `${escrowId}-entry-${start + index}`);
@@ -50,6 +72,7 @@ async function main() {
   console.log('Seeding database...');
 
   // Clean existing data
+  await prisma.refundReviewRequest.deleteMany();
   await prisma.chargeRequest.deleteMany();
   await prisma.escrowEntry.deleteMany();
   await prisma.escrow.deleteMany();
@@ -78,6 +101,50 @@ async function main() {
       email: 'seoyeon@demo.com',
       xrplAddress: 'rDemoConsumer2345678901BCDEFG',
       xrplSecret: 'sEdDemoConsumerSecret000000002',
+    },
+  });
+
+  const jihun = await prisma.consumer.create({
+    data: {
+      id: CONSUMER_JIHUN_ID,
+      name: '박지훈',
+      phone: '010-2000-0003',
+      email: 'jihun@demo.com',
+      xrplAddress: 'rDemoConsumerJihun000000003',
+      xrplSecret: 'sEdDemoConsumerSecret000000003',
+    },
+  });
+
+  const yuna = await prisma.consumer.create({
+    data: {
+      id: CONSUMER_YUNA_ID,
+      name: '최유나',
+      phone: '010-2000-0004',
+      email: 'yuna@demo.com',
+      xrplAddress: 'rDemoConsumerYuna0000000004',
+      xrplSecret: 'sEdDemoConsumerSecret000000004',
+    },
+  });
+
+  const hajun = await prisma.consumer.create({
+    data: {
+      id: CONSUMER_HAJUN_ID,
+      name: '오하준',
+      phone: '010-2000-0005',
+      email: 'hajun@demo.com',
+      xrplAddress: 'rDemoConsumerHajun000000005',
+      xrplSecret: 'sEdDemoConsumerSecret000000005',
+    },
+  });
+
+  const daeun = await prisma.consumer.create({
+    data: {
+      id: CONSUMER_DAEUN_ID,
+      name: '정다은',
+      phone: '010-2000-0006',
+      email: 'daeun@demo.com',
+      xrplAddress: 'rDemoConsumerDaeun000000006',
+      xrplSecret: 'sEdDemoConsumerSecret000000006',
     },
   });
 
@@ -227,6 +294,41 @@ async function main() {
           { id: MENU_SALON_COLOR_ID, name: '염색', amount: 80 },
         ],
       },
+    },
+  });
+
+  const laundryPass = await prisma.businessProduct.create({
+    data: {
+      id: PRODUCT_LAUNDRY_PASS_ID,
+      businessId: laundry.id,
+      name: '세탁 정기 이용권',
+      description: '와이셔츠, 드라이클리닝, 침구 세탁을 10 RLUSD 단위로 차감합니다',
+      escrowType: 'prepaid',
+      totalAmount: 120,
+      monthlyAmount: 10,
+      months: 12,
+      unitPrice: 10,
+      validityMonths: 4,
+      menuItems: {
+        create: [
+          { id: MENU_LAUNDRY_SHIRTS_ID, name: '와이셔츠 5벌', amount: 10 },
+          { id: MENU_LAUNDRY_DRY_CLEANING_ID, name: '드라이클리닝', amount: 30 },
+          { id: MENU_LAUNDRY_BEDDING_ID, name: '침구 세탁', amount: 40 },
+        ],
+      },
+    },
+  });
+
+  const academyCourse = await prisma.businessProduct.create({
+    data: {
+      id: PRODUCT_ACADEMY_COURSE_ID,
+      businessId: academy.id,
+      name: '영어 회화 6개월 과정',
+      description: '매월 150 RLUSD가 정산되는 학원 수강권',
+      escrowType: 'monthly',
+      totalAmount: 900,
+      monthlyAmount: 150,
+      months: 6,
     },
   });
 
@@ -583,9 +685,390 @@ async function main() {
     },
   });
 
+  // ─── 추가 Escrow: 파워짐 피트니스 (월정액 회원권을 3명으로 분산) ───
+  const gymYuna = await prisma.escrow.create({
+    data: {
+      id: ESCROW_GYM_YUNA_ID,
+      consumerId: yuna.id,
+      businessId: gym.id,
+      productId: gymMembership.id,
+      consumerAddress: yuna.xrplAddress,
+      businessAddress: gym.xrplAddress,
+      totalAmount: 600,
+      monthlyAmount: 100,
+      months: 6,
+      escrowType: 'monthly',
+      currency: 'RLUSD',
+      issuer: 'rDemoIssuerRLUSD000000000001',
+      status: 'active',
+    },
+  });
+
+  for (let m = 1; m <= 6; m++) {
+    const finishDate = new Date('2026-03-01');
+    finishDate.setMonth(finishDate.getMonth() + m);
+    const cancelDate = new Date(finishDate);
+    cancelDate.setMonth(cancelDate.getMonth() + 1);
+
+    await prisma.escrowEntry.create({
+      data: {
+        id: `${gymYuna.id}-entry-${m}`,
+        escrowId: gymYuna.id,
+        month: m,
+        sequence: 6000 + m,
+        amount: '100',
+        finishAfter: isoToRippleTime(finishDate.toISOString()),
+        cancelAfter: isoToRippleTime(cancelDate.toISOString()),
+        status: m <= 2 ? 'released' : 'pending',
+        txHash: m <= 2 ? `DEMO_TX_HASH_GYM_YUNA_MONTH_${m}_${Date.now()}` : null,
+      },
+    });
+  }
+
+  const gymHajun = await prisma.escrow.create({
+    data: {
+      id: ESCROW_GYM_HAJUN_ID,
+      consumerId: hajun.id,
+      businessId: gym.id,
+      productId: gymMembership.id,
+      consumerAddress: hajun.xrplAddress,
+      businessAddress: gym.xrplAddress,
+      totalAmount: 600,
+      monthlyAmount: 100,
+      months: 6,
+      escrowType: 'monthly',
+      currency: 'RLUSD',
+      issuer: 'rDemoIssuerRLUSD000000000001',
+      status: 'active',
+    },
+  });
+
+  for (let m = 1; m <= 6; m++) {
+    const finishDate = new Date('2026-04-01');
+    finishDate.setMonth(finishDate.getMonth() + m);
+    const cancelDate = new Date(finishDate);
+    cancelDate.setMonth(cancelDate.getMonth() + 1);
+
+    await prisma.escrowEntry.create({
+      data: {
+        id: `${gymHajun.id}-entry-${m}`,
+        escrowId: gymHajun.id,
+        month: m,
+        sequence: 7000 + m,
+        amount: '100',
+        finishAfter: isoToRippleTime(finishDate.toISOString()),
+        cancelAfter: isoToRippleTime(cancelDate.toISOString()),
+        status: m === 1 ? 'released' : 'pending',
+        txHash: m === 1 ? `DEMO_TX_HASH_GYM_HAJUN_MONTH_${m}_${Date.now()}` : null,
+      },
+    });
+  }
+
+  await prisma.refundReviewRequest.create({
+    data: {
+      id: REFUND_REVIEW_GYM_HAJUN_ID,
+      escrowId: gymHajun.id,
+      consumerId: hajun.id,
+      businessId: gym.id,
+      status: 'merchant_review',
+      refundableAmount: 500,
+      merchantRespondBy: new Date('2026-05-20T09:00:00.000Z'),
+      businessClosureStatus: 'not_checked',
+      consumerReason: '개인 일정으로 이용이 어려워 남은 기간 환불을 요청합니다.',
+      merchantNotice: '소비자가 남은 5개월분 환불 검토를 요청했습니다.',
+      photoDataUrlsJson: JSON.stringify(['demo://refund/gym-hajun-membership.png']),
+      requestedAt: new Date('2026-05-14T08:30:00.000Z'),
+    },
+  });
+
+  // ─── 추가 Escrow: 헤어살롱 루나 (다른 소비자의 활성 선불권) ───
+  const salonDaeun = await prisma.escrow.create({
+    data: {
+      id: ESCROW_SALON_DAEUN_ID,
+      consumerId: daeun.id,
+      businessId: salon.id,
+      productId: salonPass.id,
+      consumerAddress: daeun.xrplAddress,
+      businessAddress: salon.xrplAddress,
+      totalAmount: 300,
+      monthlyAmount: 10,
+      months: 30,
+      escrowType: 'prepaid',
+      unitPrice: 10,
+      validityMonths: 6,
+      currency: 'RLUSD',
+      issuer: 'rDemoIssuerRLUSD000000000001',
+      status: 'active',
+    },
+  });
+
+  const salonDaeunFinishAfter = isoToRippleTime(new Date('2026-05-08').toISOString());
+  const salonDaeunCancelAfter = isoToRippleTime(new Date('2026-11-08').toISOString());
+  for (let m = 1; m <= 30; m++) {
+    await prisma.escrowEntry.create({
+      data: {
+        id: `${salonDaeun.id}-entry-${m}`,
+        escrowId: salonDaeun.id,
+        month: m,
+        sequence: 8000 + m,
+        amount: '10',
+        finishAfter: salonDaeunFinishAfter,
+        cancelAfter: salonDaeunCancelAfter,
+        status: m <= 8 ? 'released' : 'pending',
+        txHash: m <= 8 ? `DEMO_TX_HASH_SALON_DAEUN_COLOR_${m}_${Date.now()}` : null,
+      },
+    });
+  }
+
+  await prisma.chargeRequest.create({
+    data: {
+      id: CHARGE_SALON_DAEUN_COLOR_ID,
+      escrowId: salonDaeun.id,
+      consumerId: daeun.id,
+      businessId: salon.id,
+      productId: salonPass.id,
+      menuItemId: MENU_SALON_COLOR_ID,
+      menuName: '염색',
+      amount: 80,
+      status: 'settled',
+      entryIds: JSON.stringify(entryIds(salonDaeun.id, 1, 8)),
+      approvedAt: new Date('2026-05-12T06:20:00Z'),
+      settledAt: new Date('2026-05-12T06:22:00Z'),
+      txHash: `DEMO_TX_HASH_SALON_DAEUN_COLOR_${Date.now()}`,
+    },
+  });
+
+  // ─── 추가 Escrow: 크린토피아 역삼점 (세탁 선불권 2명) ───
+  const laundryJihun = await prisma.escrow.create({
+    data: {
+      id: ESCROW_LAUNDRY_JIHUN_ID,
+      consumerId: jihun.id,
+      businessId: laundry.id,
+      productId: laundryPass.id,
+      consumerAddress: jihun.xrplAddress,
+      businessAddress: laundry.xrplAddress,
+      totalAmount: 120,
+      monthlyAmount: 10,
+      months: 12,
+      escrowType: 'prepaid',
+      unitPrice: 10,
+      validityMonths: 4,
+      currency: 'RLUSD',
+      issuer: 'rDemoIssuerRLUSD000000000001',
+      status: 'active',
+    },
+  });
+
+  const laundryFinishAfter = isoToRippleTime(new Date('2026-05-04').toISOString());
+  const laundryCancelAfter = isoToRippleTime(new Date('2026-09-04').toISOString());
+  for (let m = 1; m <= 12; m++) {
+    await prisma.escrowEntry.create({
+      data: {
+        id: `${laundryJihun.id}-entry-${m}`,
+        escrowId: laundryJihun.id,
+        month: m,
+        sequence: 9000 + m,
+        amount: '10',
+        finishAfter: laundryFinishAfter,
+        cancelAfter: laundryCancelAfter,
+        status: m <= 4 ? 'released' : 'pending',
+        txHash: m <= 4 ? `DEMO_TX_HASH_LAUNDRY_JIHUN_${m}_${Date.now()}` : null,
+      },
+    });
+  }
+
+  await prisma.chargeRequest.create({
+    data: {
+      id: CHARGE_LAUNDRY_JIHUN_SHIRTS_ID,
+      escrowId: laundryJihun.id,
+      consumerId: jihun.id,
+      businessId: laundry.id,
+      productId: laundryPass.id,
+      menuItemId: MENU_LAUNDRY_SHIRTS_ID,
+      menuName: '와이셔츠 5벌',
+      amount: 10,
+      status: 'settled',
+      entryIds: JSON.stringify(entryIds(laundryJihun.id, 1, 1)),
+      approvedAt: new Date('2026-05-06T02:30:00Z'),
+      settledAt: new Date('2026-05-06T02:32:00Z'),
+      txHash: `DEMO_TX_HASH_LAUNDRY_JIHUN_SHIRTS_${Date.now()}`,
+    },
+  });
+
+  await prisma.chargeRequest.create({
+    data: {
+      id: CHARGE_LAUNDRY_JIHUN_DRY_CLEANING_ID,
+      escrowId: laundryJihun.id,
+      consumerId: jihun.id,
+      businessId: laundry.id,
+      productId: laundryPass.id,
+      menuItemId: MENU_LAUNDRY_DRY_CLEANING_ID,
+      menuName: '드라이클리닝',
+      amount: 30,
+      status: 'settled',
+      entryIds: JSON.stringify(entryIds(laundryJihun.id, 2, 4)),
+      approvedAt: new Date('2026-05-13T03:15:00Z'),
+      settledAt: new Date('2026-05-13T03:16:00Z'),
+      txHash: `DEMO_TX_HASH_LAUNDRY_JIHUN_DRY_${Date.now()}`,
+    },
+  });
+
+  const laundryDaeun = await prisma.escrow.create({
+    data: {
+      id: ESCROW_LAUNDRY_DAEUN_ID,
+      consumerId: daeun.id,
+      businessId: laundry.id,
+      productId: laundryPass.id,
+      consumerAddress: daeun.xrplAddress,
+      businessAddress: laundry.xrplAddress,
+      totalAmount: 120,
+      monthlyAmount: 10,
+      months: 12,
+      escrowType: 'prepaid',
+      unitPrice: 10,
+      validityMonths: 4,
+      currency: 'RLUSD',
+      issuer: 'rDemoIssuerRLUSD000000000001',
+      status: 'active',
+    },
+  });
+
+  const laundryDaeunFinishAfter = isoToRippleTime(new Date('2026-05-11').toISOString());
+  const laundryDaeunCancelAfter = isoToRippleTime(new Date('2026-09-11').toISOString());
+  for (let m = 1; m <= 12; m++) {
+    await prisma.escrowEntry.create({
+      data: {
+        id: `${laundryDaeun.id}-entry-${m}`,
+        escrowId: laundryDaeun.id,
+        month: m,
+        sequence: 9100 + m,
+        amount: '10',
+        finishAfter: laundryDaeunFinishAfter,
+        cancelAfter: laundryDaeunCancelAfter,
+        status: m === 1 ? 'released' : 'pending',
+        txHash: m === 1 ? `DEMO_TX_HASH_LAUNDRY_DAEUN_${m}_${Date.now()}` : null,
+      },
+    });
+  }
+
+  await prisma.chargeRequest.create({
+    data: {
+      id: CHARGE_LAUNDRY_DAEUN_BEDDING_ID,
+      escrowId: laundryDaeun.id,
+      consumerId: daeun.id,
+      businessId: laundry.id,
+      productId: laundryPass.id,
+      menuItemId: MENU_LAUNDRY_BEDDING_ID,
+      menuName: '침구 세탁',
+      amount: 40,
+      status: 'pending_approval',
+      entryIds: JSON.stringify(entryIds(laundryDaeun.id, 2, 5)),
+    },
+  });
+
+  await prisma.refundReviewRequest.create({
+    data: {
+      id: REFUND_REVIEW_LAUNDRY_DAEUN_ID,
+      escrowId: laundryDaeun.id,
+      consumerId: daeun.id,
+      businessId: laundry.id,
+      status: 'merchant_response_requested',
+      refundableAmount: 110,
+      merchantRespondBy: new Date('2026-05-21T09:00:00.000Z'),
+      businessClosureStatus: 'not_checked',
+      consumerReason: '장기 출장으로 남은 세탁권 환불이 필요합니다.',
+      merchantNotice: '소비자가 남은 세탁권 환불 검토를 요청했습니다.',
+      photoDataUrlsJson: JSON.stringify(['demo://refund/laundry-daeun-receipt.png']),
+      requestedAt: new Date('2026-05-15T04:10:00.000Z'),
+    },
+  });
+
+  // ─── 추가 Escrow: 정상어학원 (월정액 수강권 2명) ───
+  const academyYuna = await prisma.escrow.create({
+    data: {
+      id: ESCROW_ACADEMY_YUNA_ID,
+      consumerId: yuna.id,
+      businessId: academy.id,
+      productId: academyCourse.id,
+      consumerAddress: yuna.xrplAddress,
+      businessAddress: academy.xrplAddress,
+      totalAmount: 900,
+      monthlyAmount: 150,
+      months: 6,
+      escrowType: 'monthly',
+      currency: 'RLUSD',
+      issuer: 'rDemoIssuerRLUSD000000000001',
+      status: 'active',
+    },
+  });
+
+  for (let m = 1; m <= 6; m++) {
+    const finishDate = new Date('2026-03-15');
+    finishDate.setMonth(finishDate.getMonth() + m);
+    const cancelDate = new Date(finishDate);
+    cancelDate.setMonth(cancelDate.getMonth() + 1);
+
+    await prisma.escrowEntry.create({
+      data: {
+        id: `${academyYuna.id}-entry-${m}`,
+        escrowId: academyYuna.id,
+        month: m,
+        sequence: 9200 + m,
+        amount: '150',
+        finishAfter: isoToRippleTime(finishDate.toISOString()),
+        cancelAfter: isoToRippleTime(cancelDate.toISOString()),
+        status: m === 1 ? 'released' : 'pending',
+        txHash: m === 1 ? `DEMO_TX_HASH_ACADEMY_YUNA_MONTH_${m}_${Date.now()}` : null,
+      },
+    });
+  }
+
+  const academyHajun = await prisma.escrow.create({
+    data: {
+      id: ESCROW_ACADEMY_HAJUN_ID,
+      consumerId: hajun.id,
+      businessId: academy.id,
+      productId: academyCourse.id,
+      consumerAddress: hajun.xrplAddress,
+      businessAddress: academy.xrplAddress,
+      totalAmount: 900,
+      monthlyAmount: 150,
+      months: 6,
+      escrowType: 'monthly',
+      currency: 'RLUSD',
+      issuer: 'rDemoIssuerRLUSD000000000001',
+      status: 'completed',
+    },
+  });
+
+  for (let m = 1; m <= 6; m++) {
+    const finishDate = new Date('2025-10-01');
+    finishDate.setMonth(finishDate.getMonth() + m);
+    const cancelDate = new Date(finishDate);
+    cancelDate.setMonth(cancelDate.getMonth() + 1);
+
+    await prisma.escrowEntry.create({
+      data: {
+        id: `${academyHajun.id}-entry-${m}`,
+        escrowId: academyHajun.id,
+        month: m,
+        sequence: 9300 + m,
+        amount: '150',
+        finishAfter: isoToRippleTime(finishDate.toISOString()),
+        cancelAfter: isoToRippleTime(cancelDate.toISOString()),
+        status: 'released',
+        txHash: `DEMO_TX_HASH_ACADEMY_HAJUN_MONTH_${m}_${Date.now()}`,
+      },
+    });
+  }
+
   console.log('Seed complete!');
   console.log(`  Consumer: ${minsu.name} (${minsu.phone})`);
   console.log(`  Consumer: ${seoyeon.name} (${seoyeon.phone})`);
+  console.log(`  Consumer: ${jihun.name} (${jihun.phone})`);
+  console.log(`  Consumer: ${yuna.name} (${yuna.phone})`);
+  console.log(`  Consumer: ${hajun.name} (${hajun.phone})`);
+  console.log(`  Consumer: ${daeun.name} (${daeun.phone})`);
   console.log(`  Business: ${cafe.name} (${cafe.phone})`);
   console.log(`  Business: ${gym.name} (${gym.phone})`);
   console.log(`  Business: ${salon.name} (${salon.phone})`);
@@ -596,6 +1079,13 @@ async function main() {
   console.log(`  Escrow (prepaid cancelled): ${escrow3.id} — ${salon.name}, 4 uses, 1 released + 3 refunded`);
   console.log(`  Escrow (prepaid): ${prepaidCafe.id} — ${cafe.name}, 30 RLUSD units, 4 settled charges`);
   console.log(`  Escrow (prepaid): ${prepaidSalon.id} — ${salon.name}, 300 RLUSD, 10 RLUSD units, 1 settled charge + 1 pending approval`);
+  console.log(`  Escrow (active): ${gymYuna.id} — ${gym.name}, 6mo, 2/6 released`);
+  console.log(`  Escrow (refund review): ${gymHajun.id} — ${gym.name}, merchant review pending`);
+  console.log(`  Escrow (prepaid): ${salonDaeun.id} — ${salon.name}, 1 settled color charge`);
+  console.log(`  Escrow (prepaid): ${laundryJihun.id} — ${laundry.name}, 2 settled laundry charges`);
+  console.log(`  Escrow (refund review): ${laundryDaeun.id} — ${laundry.name}, 1 pending charge + refund review`);
+  console.log(`  Escrow (active): ${academyYuna.id} — ${academy.name}, 6mo, 1/6 released`);
+  console.log(`  Escrow (completed): ${academyHajun.id} — ${academy.name}, 6mo fully released`);
 }
 
 main()
