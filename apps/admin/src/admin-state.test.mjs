@@ -209,6 +209,15 @@ test('admin app shell keeps navigation separate from login form', () => {
   assert.doesNotMatch(html, /Refund Operations/);
 });
 
+test('admin refund layout keeps the header compact and filters sticky', () => {
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+  assert.match(css, /\.topbar\s*\{[\s\S]*min-height:\s*88px/);
+  assert.match(css, /\.topbar h1\s*\{[\s\S]*font-size:\s*24px/);
+  assert.match(css, /\.filters\s*\{[\s\S]*position:\s*sticky/);
+  assert.match(css, /\.filters\s*\{[\s\S]*top:\s*16px/);
+});
+
 test('admin login flow checks credentials before rendering any tab', () => {
   const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
   const loadActiveTab = js.slice(js.indexOf('async function loadActiveTab'), js.indexOf('function renderDashboard'));
