@@ -43,6 +43,36 @@ function rippleTimeToIsoDate(value: number) {
 }
 
 describe('static Demo API fixture', () => {
+  it('serves varied demo customers across every bundled business dashboard', async () => {
+    const businessesResponse = await callApi('GET', '/api/business');
+    const businesses = businessesResponse.body as any[];
+
+    expect(businesses.map((business) => business.name)).toEqual([
+      '강남 블루보틀',
+      '파워짐 피트니스',
+      '헤어살롱 루나',
+      '크린토피아 역삼점',
+      '정상어학원',
+    ]);
+
+    const dashboardCases = [
+      ['00000000-0000-4000-a000-000000000010', 2],
+      ['00000000-0000-4000-a000-000000000020', 3],
+      ['00000000-0000-4000-a000-000000000030', 2],
+      ['00000000-0000-4000-a000-000000000040', 2],
+      ['00000000-0000-4000-a000-000000000050', 2],
+    ] as const;
+
+    for (const [businessId, minimumCustomers] of dashboardCases) {
+      const response = await callApi('GET', `/api/business/${businessId}/dashboard`);
+      const dashboard = response.body as any;
+      const customerNames = new Set(dashboard.escrows.map((escrow: any) => escrow.consumer.name));
+
+      expect(response.statusCode).toBe(200);
+      expect(customerNames.size).toBeGreaterThanOrEqual(minimumCustomers);
+    }
+  });
+
   it('matches digit-only demo phone login to the existing hyphenated consumer', async () => {
     const codeResponse = await callApi('POST', '/api/auth/request-code', {
       phone: '01020000001',

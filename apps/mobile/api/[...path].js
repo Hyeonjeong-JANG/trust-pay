@@ -1,12 +1,19 @@
 const CONSUMER_ID = '00000000-0000-4000-a000-000000000001';
 const CONSUMER_SEOYEON_ID = '00000000-0000-4000-a000-000000000002';
+const CONSUMER_JIHUN_ID = '00000000-0000-4000-a000-000000000003';
+const CONSUMER_YUNA_ID = '00000000-0000-4000-a000-000000000004';
+const CONSUMER_HAJUN_ID = '00000000-0000-4000-a000-000000000005';
+const CONSUMER_DAEUN_ID = '00000000-0000-4000-a000-000000000006';
 const BUSINESS_CAFE_ID = '00000000-0000-4000-a000-000000000010';
 const BUSINESS_GYM_ID = '00000000-0000-4000-a000-000000000020';
 const BUSINESS_SALON_ID = '00000000-0000-4000-a000-000000000030';
+const BUSINESS_LAUNDRY_ID = '00000000-0000-4000-a000-000000000040';
 const BUSINESS_ACADEMY_ID = '00000000-0000-4000-a000-000000000050';
 const PRODUCT_CAFE_PASS_ID = '00000000-0000-4000-a000-000000001010';
 const PRODUCT_GYM_MEMBERSHIP_ID = '00000000-0000-4000-a000-000000001020';
 const PRODUCT_SALON_PASS_ID = '00000000-0000-4000-a000-000000001030';
+const PRODUCT_LAUNDRY_PASS_ID = '00000000-0000-4000-a000-000000001040';
+const PRODUCT_ACADEMY_COURSE_ID = '00000000-0000-4000-a000-000000001050';
 const MENU_CAFE_AMERICANO_ID = '00000000-0000-4000-a000-000000002011';
 const MENU_CAFE_BRUNCH_ID = '00000000-0000-4000-a000-000000002012';
 const MENU_CAFE_DRIP_BAG_ID = '00000000-0000-4000-a000-000000002013';
@@ -14,6 +21,9 @@ const MENU_CAFE_OFFICE_BOX_ID = '00000000-0000-4000-a000-000000002014';
 const MENU_SALON_CUT_ID = '00000000-0000-4000-a000-000000002031';
 const MENU_SALON_CLINIC_ID = '00000000-0000-4000-a000-000000002032';
 const MENU_SALON_COLOR_ID = '00000000-0000-4000-a000-000000002033';
+const MENU_LAUNDRY_SHIRTS_ID = '00000000-0000-4000-a000-000000002041';
+const MENU_LAUNDRY_DRY_CLEANING_ID = '00000000-0000-4000-a000-000000002042';
+const MENU_LAUNDRY_BEDDING_ID = '00000000-0000-4000-a000-000000002043';
 const CHARGE_CAFE_COMPLETED_AMERICANO_ID = '00000000-0000-4000-a000-000000003011';
 const CHARGE_CAFE_COMPLETED_BRUNCH_ID = '00000000-0000-4000-a000-000000003012';
 const CHARGE_CAFE_COMPLETED_DRIP_BAG_ID = '00000000-0000-4000-a000-000000003013';
@@ -23,6 +33,10 @@ const CHARGE_CAFE_ACTIVE_AMERICANO_1_ID = '00000000-0000-4000-a000-000000003021'
 const CHARGE_CAFE_ACTIVE_BRUNCH_1_ID = '00000000-0000-4000-a000-000000003022';
 const CHARGE_CAFE_ACTIVE_AMERICANO_2_ID = '00000000-0000-4000-a000-000000003023';
 const CHARGE_CAFE_ACTIVE_BRUNCH_2_ID = '00000000-0000-4000-a000-000000003024';
+const CHARGE_SALON_DAEUN_COLOR_ID = '00000000-0000-4000-a000-000000003033';
+const CHARGE_LAUNDRY_JIHUN_SHIRTS_ID = '00000000-0000-4000-a000-000000003041';
+const CHARGE_LAUNDRY_JIHUN_DRY_CLEANING_ID = '00000000-0000-4000-a000-000000003042';
+const CHARGE_LAUNDRY_DAEUN_BEDDING_ID = '00000000-0000-4000-a000-000000003043';
 
 const consumers = [
   {
@@ -38,6 +52,34 @@ const consumers = [
     phone: '010-2000-0002',
     email: 'seoyeon@demo.com',
     xrplAddress: 'rDemoConsumer2345678901BCDEFG',
+  },
+  {
+    id: CONSUMER_JIHUN_ID,
+    name: '박지훈',
+    phone: '010-2000-0003',
+    email: 'jihun@demo.com',
+    xrplAddress: 'rDemoConsumerJihun000000003',
+  },
+  {
+    id: CONSUMER_YUNA_ID,
+    name: '최유나',
+    phone: '010-2000-0004',
+    email: 'yuna@demo.com',
+    xrplAddress: 'rDemoConsumerYuna0000000004',
+  },
+  {
+    id: CONSUMER_HAJUN_ID,
+    name: '오하준',
+    phone: '010-2000-0005',
+    email: 'hajun@demo.com',
+    xrplAddress: 'rDemoConsumerHajun000000005',
+  },
+  {
+    id: CONSUMER_DAEUN_ID,
+    name: '정다은',
+    phone: '010-2000-0006',
+    email: 'daeun@demo.com',
+    xrplAddress: 'rDemoConsumerDaeun000000006',
   },
 ];
 
@@ -108,6 +150,16 @@ const businesses = [
     isActive: true,
   },
   {
+    id: BUSINESS_LAUNDRY_ID,
+    name: '크린토피아 역삼점',
+    category: '세탁소',
+    address: '서울시 강남구 역삼로 50',
+    phone: '010-1000-0004',
+    email: 'laundry@demo.com',
+    xrplAddress: 'rDemoBusiness4LaundryDEF12345',
+    isActive: true,
+  },
+  {
     id: BUSINESS_ACADEMY_ID,
     name: '정상어학원',
     category: '학원',
@@ -170,6 +222,38 @@ const products = [
       { id: MENU_SALON_CLINIC_ID, productId: PRODUCT_SALON_PASS_ID, name: '클리닉', amount: 50, isActive: true },
       { id: MENU_SALON_COLOR_ID, productId: PRODUCT_SALON_PASS_ID, name: '염색', amount: 80, isActive: true },
     ],
+  },
+  {
+    id: PRODUCT_LAUNDRY_PASS_ID,
+    businessId: BUSINESS_LAUNDRY_ID,
+    name: '세탁 정기 이용권',
+    description: '와이셔츠, 드라이클리닝, 침구 세탁을 10 RLUSD 단위로 차감합니다',
+    escrowType: 'prepaid',
+    totalAmount: 120,
+    monthlyAmount: 10,
+    months: 12,
+    unitPrice: 10,
+    validityMonths: 4,
+    isActive: true,
+    menuItems: [
+      { id: MENU_LAUNDRY_SHIRTS_ID, productId: PRODUCT_LAUNDRY_PASS_ID, name: '와이셔츠 5벌', amount: 10, isActive: true },
+      { id: MENU_LAUNDRY_DRY_CLEANING_ID, productId: PRODUCT_LAUNDRY_PASS_ID, name: '드라이클리닝', amount: 30, isActive: true },
+      { id: MENU_LAUNDRY_BEDDING_ID, productId: PRODUCT_LAUNDRY_PASS_ID, name: '침구 세탁', amount: 40, isActive: true },
+    ],
+  },
+  {
+    id: PRODUCT_ACADEMY_COURSE_ID,
+    businessId: BUSINESS_ACADEMY_ID,
+    name: '영어 회화 6개월 과정',
+    description: '매월 150 RLUSD가 정산되는 학원 수강권',
+    escrowType: 'monthly',
+    totalAmount: 900,
+    monthlyAmount: 150,
+    months: 6,
+    unitPrice: null,
+    validityMonths: null,
+    isActive: true,
+    menuItems: [],
   },
 ];
 
@@ -363,6 +447,63 @@ let chargeRequests = [
     txHash: null,
     menuItem: { id: MENU_SALON_CLINIC_ID, productId: PRODUCT_SALON_PASS_ID, name: '클리닉', amount: 50, isActive: true },
   },
+  makeSettledChargeRequest({
+    id: CHARGE_SALON_DAEUN_COLOR_ID,
+    escrowId: '00000000-0000-4000-a000-000000000800',
+    consumerId: CONSUMER_DAEUN_ID,
+    businessId: BUSINESS_SALON_ID,
+    productId: PRODUCT_SALON_PASS_ID,
+    menuItemId: MENU_SALON_COLOR_ID,
+    menuName: '염색',
+    amount: 80,
+    entries: entryIds('00000000-0000-4000-a000-000000000800', 1, 8),
+    approvedAt: '2026-05-12T06:20:00Z',
+    txHash: 'DEMO_TX_HASH_SALON_DAEUN_COLOR',
+  }),
+  makeSettledChargeRequest({
+    id: CHARGE_LAUNDRY_JIHUN_SHIRTS_ID,
+    escrowId: '00000000-0000-4000-a000-000000000900',
+    consumerId: CONSUMER_JIHUN_ID,
+    businessId: BUSINESS_LAUNDRY_ID,
+    productId: PRODUCT_LAUNDRY_PASS_ID,
+    menuItemId: MENU_LAUNDRY_SHIRTS_ID,
+    menuName: '와이셔츠 5벌',
+    amount: 10,
+    entries: entryIds('00000000-0000-4000-a000-000000000900', 1, 1),
+    approvedAt: '2026-05-06T02:30:00Z',
+    txHash: 'DEMO_TX_HASH_LAUNDRY_JIHUN_SHIRTS',
+  }),
+  makeSettledChargeRequest({
+    id: CHARGE_LAUNDRY_JIHUN_DRY_CLEANING_ID,
+    escrowId: '00000000-0000-4000-a000-000000000900',
+    consumerId: CONSUMER_JIHUN_ID,
+    businessId: BUSINESS_LAUNDRY_ID,
+    productId: PRODUCT_LAUNDRY_PASS_ID,
+    menuItemId: MENU_LAUNDRY_DRY_CLEANING_ID,
+    menuName: '드라이클리닝',
+    amount: 30,
+    entries: entryIds('00000000-0000-4000-a000-000000000900', 2, 4),
+    approvedAt: '2026-05-13T03:15:00Z',
+    txHash: 'DEMO_TX_HASH_LAUNDRY_JIHUN_DRY',
+  }),
+  {
+    id: CHARGE_LAUNDRY_DAEUN_BEDDING_ID,
+    escrowId: '00000000-0000-4000-a000-000000000901',
+    consumerId: CONSUMER_DAEUN_ID,
+    businessId: BUSINESS_LAUNDRY_ID,
+    productId: PRODUCT_LAUNDRY_PASS_ID,
+    menuItemId: MENU_LAUNDRY_BEDDING_ID,
+    menuName: '침구 세탁',
+    amount: 40,
+    status: 'pending_approval',
+    entryIds: JSON.stringify(entryIds('00000000-0000-4000-a000-000000000901', 2, 5)),
+    requestedAt: new Date('2026-05-15T04:00:00Z').toISOString(),
+    approvedAt: null,
+    settledAt: null,
+    rejectedAt: null,
+    txHash: null,
+    menuItem: { id: MENU_LAUNDRY_BEDDING_ID, productId: PRODUCT_LAUNDRY_PASS_ID, name: '침구 세탁', amount: 40, isActive: true },
+  },
 ];
 
 let paymentRequests = [];
@@ -475,6 +616,101 @@ let escrows = [
       ...Array.from({ length: 3 }, () => 'released'),
       ...Array.from({ length: 27 }, () => 'pending'),
     ],
+  }),
+  makeEscrow({
+    id: '00000000-0000-4000-a000-000000000600',
+    consumerId: CONSUMER_YUNA_ID,
+    businessId: BUSINESS_GYM_ID,
+    productId: PRODUCT_GYM_MEMBERSHIP_ID,
+    totalAmount: 600,
+    monthlyAmount: 100,
+    months: 6,
+    status: 'active',
+    entryStatuses: ['released', 'released', 'pending', 'pending', 'pending', 'pending'],
+  }),
+  makeEscrow({
+    id: '00000000-0000-4000-a000-000000000700',
+    consumerId: CONSUMER_HAJUN_ID,
+    businessId: BUSINESS_GYM_ID,
+    productId: PRODUCT_GYM_MEMBERSHIP_ID,
+    totalAmount: 600,
+    monthlyAmount: 100,
+    months: 6,
+    status: 'active',
+    entryStatuses: ['released', 'pending', 'pending', 'pending', 'pending', 'pending'],
+  }),
+  makeEscrow({
+    id: '00000000-0000-4000-a000-000000000800',
+    consumerId: CONSUMER_DAEUN_ID,
+    businessId: BUSINESS_SALON_ID,
+    productId: PRODUCT_SALON_PASS_ID,
+    totalAmount: 300,
+    monthlyAmount: 10,
+    months: 30,
+    escrowType: 'prepaid',
+    unitPrice: 10,
+    validityMonths: 6,
+    status: 'active',
+    entryStatuses: [
+      ...Array.from({ length: 8 }, () => 'released'),
+      ...Array.from({ length: 22 }, () => 'pending'),
+    ],
+  }),
+  makeEscrow({
+    id: '00000000-0000-4000-a000-000000000900',
+    consumerId: CONSUMER_JIHUN_ID,
+    businessId: BUSINESS_LAUNDRY_ID,
+    productId: PRODUCT_LAUNDRY_PASS_ID,
+    totalAmount: 120,
+    monthlyAmount: 10,
+    months: 12,
+    escrowType: 'prepaid',
+    unitPrice: 10,
+    validityMonths: 4,
+    status: 'active',
+    entryStatuses: [
+      ...Array.from({ length: 4 }, () => 'released'),
+      ...Array.from({ length: 8 }, () => 'pending'),
+    ],
+  }),
+  makeEscrow({
+    id: '00000000-0000-4000-a000-000000000901',
+    consumerId: CONSUMER_DAEUN_ID,
+    businessId: BUSINESS_LAUNDRY_ID,
+    productId: PRODUCT_LAUNDRY_PASS_ID,
+    totalAmount: 120,
+    monthlyAmount: 10,
+    months: 12,
+    escrowType: 'prepaid',
+    unitPrice: 10,
+    validityMonths: 4,
+    status: 'active',
+    entryStatuses: [
+      'released',
+      ...Array.from({ length: 11 }, () => 'pending'),
+    ],
+  }),
+  makeEscrow({
+    id: '00000000-0000-4000-a000-000000000902',
+    consumerId: CONSUMER_YUNA_ID,
+    businessId: BUSINESS_ACADEMY_ID,
+    productId: PRODUCT_ACADEMY_COURSE_ID,
+    totalAmount: 900,
+    monthlyAmount: 150,
+    months: 6,
+    status: 'active',
+    entryStatuses: ['released', 'pending', 'pending', 'pending', 'pending', 'pending'],
+  }),
+  makeEscrow({
+    id: '00000000-0000-4000-a000-000000000903',
+    consumerId: CONSUMER_HAJUN_ID,
+    businessId: BUSINESS_ACADEMY_ID,
+    productId: PRODUCT_ACADEMY_COURSE_ID,
+    totalAmount: 900,
+    monthlyAmount: 150,
+    months: 6,
+    status: 'completed',
+    entryStatuses: Array.from({ length: 6 }, () => 'released'),
   }),
 ];
 
