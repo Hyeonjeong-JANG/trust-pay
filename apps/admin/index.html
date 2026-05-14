@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TrustPay 관리자</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main id="login-view" class="login-view">
+      <section class="login-card">
+        <div class="brand-mark">TP</div>
+        <div class="eyebrow">TrustPay Admin</div>
+        <h1>관리자 콘솔 로그인</h1>
+        <p>환불/분쟁, 가맹점, 소비자, 거래 현황을 관리하려면 로그인하세요.</p>
+        <form id="secret-form" class="login-panel">
+          <div class="credential-grid">
+            <label for="admin-id">관리자 아이디</label>
+            <input id="admin-id" type="text" autocomplete="username" placeholder="admin" />
+            <label for="admin-secret">관리자 비밀번호</label>
+            <input id="admin-secret" type="password" autocomplete="current-password" placeholder="admin1234" />
+          </div>
+          <div class="secret-row">
+            <button type="submit" class="primary">로그인</button>
+          </div>
+          <div id="login-status-line" class="status-line">로컬 기본 계정은 admin / admin1234 입니다.</div>
+        </form>
+      </section>
+    </main>
+    <main id="admin-view" class="app-shell" hidden>
+      <aside class="sidebar">
+        <div class="brand-block">
+          <div class="brand-mark">TP</div>
+          <div>
+            <strong>TrustPay</strong>
+            <span>관리자 콘솔</span>
+          </div>
+        </div>
+        <nav id="admin-tabs" class="side-nav" aria-label="관리자 메뉴"></nav>
+      </aside>
+      <section class="content-shell">
+        <header class="topbar">
+          <div>
+            <div class="eyebrow">TrustPay Admin</div>
+            <h1 id="content-title">대시보드</h1>
+            <p id="content-desc">오늘 처리해야 할 운영 지표를 확인합니다.</p>
+          </div>
+          <div id="status-line" class="status-line">로그인 대기</div>
+        </header>
+        <section id="content-body" class="content-body">
+          <div class="empty detail-empty">관리자 아이디와 비밀번호를 입력하세요.</div>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

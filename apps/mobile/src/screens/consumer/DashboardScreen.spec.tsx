@@ -68,7 +68,7 @@ describe('ConsumerDashboardScreen', () => {
     const { api } = require('../../api/client');
     api.getConsumerEscrows.mockResolvedValue([]);
 
-    const { findByText, queryByText } = renderWithProviders(
+    const { findAllByText, findByText, queryByText } = renderWithProviders(
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
@@ -173,18 +173,17 @@ describe('ConsumerDashboardScreen', () => {
       },
     ]);
 
-    const { findByText } = renderWithProviders(
+    const { findByText, queryByText } = renderWithProviders(
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
     expect(await findByText('테스트카페')).toBeTruthy();
     expect(await findByText('월정액 정산')).toBeTruthy();
-    expect(await findByText('1/3개월 릴리즈됨')).toBeTruthy();
-    expect(await findByText('대기 보호금 ₩135,000,000')).toBeTruthy();
-    expect(await findByText('100,000.00 RLUSD')).toBeTruthy();
+    expect(await findByText('정산 ₩67,500,000 · 잔여 ₩135,000,000')).toBeTruthy();
+    expect(queryByText(/대기 보호금/)).toBeNull();
   });
 
-  it('should render prepaid escrow progress by usage count', async () => {
+  it('should render prepaid escrow progress by used and remaining amounts', async () => {
     const { api } = require('../../api/client');
     api.getConsumerEscrows.mockResolvedValue([
       {
@@ -199,19 +198,38 @@ describe('ConsumerDashboardScreen', () => {
           ...Array.from({ length: 8 }, (_, index) => ({ id: `r-${index}`, amount: '5', status: 'released' })),
           ...Array.from({ length: 22 }, (_, index) => ({ id: `p-${index}`, amount: '5', status: 'pending' })),
         ],
+        chargeRequests: [
+          { id: 'charge-1', menuName: '아메리카노', amount: 20, status: 'settled' },
+          { id: 'charge-2', menuName: '브런치', amount: 17, status: 'settled' },
+        ],
+      },
+      {
+        id: 'e-prepaid-second',
+        totalAmount: 300,
+        monthlyAmount: 10,
+        months: 30,
+        escrowType: 'prepaid',
+        status: 'active',
+        business: { name: '헤어살롱 루나' },
+        entries: [{ id: 'p-1', amount: '10', status: 'pending' }],
+        chargeRequests: [],
       },
     ]);
 
-    const { findByText } = renderWithProviders(
+    const { findAllByText, findByText, queryByText } = renderWithProviders(
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
     expect(await findByText('강남 블루보틀')).toBeTruthy();
-    expect(await findByText('이용권 차감')).toBeTruthy();
+    expect((await findAllByText('이용권 차감')).length).toBeGreaterThan(0);
     expect(await findByText('₩202,500')).toBeTruthy();
-    expect(await findByText('8/30회 사용됨')).toBeTruthy();
-    expect(await findByText('대기 보호금 ₩148,500')).toBeTruthy();
-    expect(await findByText('110.00 RLUSD')).toBeTruthy();
+    expect(await findByText('사용 ₩49,950 · 잔액 ₩152,550')).toBeTruthy();
+    expect(await findAllByText('승인된 실제 사용금액 기준으로 잔액이 줄어듭니다')).toHaveLength(1);
+    expect(queryByText(/회 사용됨/)).toBeNull();
+    expect(queryByText(/대기 보호금/)).toBeNull();
+    expect(queryByText(/남은 금액/)).toBeNull();
+    expect(queryByText('사용 금액')).toBeNull();
+    expect(queryByText('남은 잔액')).toBeNull();
   });
 
   it('should surface pending charge approvals on escrow cards', async () => {
@@ -241,6 +259,37 @@ describe('ConsumerDashboardScreen', () => {
     expect(await findByText('승인 대기 1건')).toBeTruthy();
   });
 
+  it('should surface refund review status on consumer escrow cards', async () => {
+    const { api } = require('../../api/client');
+    api.getConsumerEscrows.mockResolvedValue([
+      {
+        id: 'e-refund-review',
+        totalAmount: 150,
+        monthlyAmount: 5,
+        months: 30,
+        escrowType: 'prepaid',
+        status: 'active',
+        business: { name: '강남 블루보틀' },
+        entries: [{ id: 'p-1', amount: '5', status: 'pending' }],
+        refundReviewRequests: [
+          {
+            id: 'refund-review-1',
+            status: 'platform_review',
+            refundableAmount: 10,
+            requestedAt: '2026-05-14T00:00:00.000Z',
+          },
+        ],
+      },
+    ]);
+
+    const { findByText } = renderWithProviders(
+      <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
+    );
+
+    expect(await findByText('강남 블루보틀')).toBeTruthy();
+    expect(await findByText('환불 검토 중: TrustPay 검토 중')).toBeTruthy();
+  });
+
   it('should surface a push-style on-site charge approval and approve it from home', async () => {
     const { api } = require('../../api/client');
     api.getConsumerEscrows.mockResolvedValue([
@@ -259,7 +308,7 @@ describe('ConsumerDashboardScreen', () => {
       },
     ]);
 
-    const { findByText, invalidateQueries } = renderWithProviders(
+    const { findByPlaceholderText, findByText, invalidateQueries } = renderWithProviders(
       <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
     );
 
@@ -269,6 +318,10 @@ describe('ConsumerDashboardScreen', () => {
     expect(await findByText('50.00 RLUSD')).toBeTruthy();
     expect(await findByText(/보호 금액권 잔액에서 해당 이용금액만 정산됩니다/)).toBeTruthy();
     fireEvent.press(await findByText('승인하고 정산'));
+    expect(api.approveChargeRequest).not.toHaveBeenCalled();
+    expect(await findByText('결제 승인 인증')).toBeTruthy();
+    fireEvent.changeText(await findByPlaceholderText('간편비밀번호 6자리'), '123456');
+    fireEvent.press(await findByText('간편비밀번호로 승인'));
 
     await waitFor(() => {
       expect(api.approveChargeRequest).toHaveBeenCalledWith('charge-1');

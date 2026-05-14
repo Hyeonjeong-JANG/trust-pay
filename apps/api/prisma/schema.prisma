@@ -8,33 +8,39 @@ datasource db {
 }
 
 model Business {
-  id             String            @id @default(uuid())
-  name           String
-  category       String
-  address        String
-  phone          String?
-  email          String?
-  xrplAddress    String            @unique
-  xrplSecret     String
-  isActive       Boolean           @default(true)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  escrows        Escrow[]          @relation("BusinessEscrows")
-  products       BusinessProduct[]
-  chargeRequests ChargeRequest[]   @relation("BusinessChargeRequests")
+  id                   String                @id @default(uuid())
+  name                 String
+  category             String
+  address              String
+  phone                String?
+  email                String?
+  registrationNumber   String
+  registrationVerificationStatus String @default("demo_verified")
+  registrationVerificationSource String @default("demo")
+  registrationVerifiedAt DateTime?
+  xrplAddress          String                @unique
+  xrplSecret           String
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  escrows              Escrow[]              @relation("BusinessEscrows")
+  products             BusinessProduct[]
+  chargeRequests       ChargeRequest[]       @relation("BusinessChargeRequests")
+  refundReviewRequests RefundReviewRequest[] @relation("BusinessRefundReviewRequests")
 }
 
 model Consumer {
-  id             String          @id @default(uuid())
-  name           String
-  phone          String?
-  email          String?
-  xrplAddress    String          @unique
-  xrplSecret     String
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  escrows        Escrow[]        @relation("ConsumerEscrows")
-  chargeRequests ChargeRequest[] @relation("ConsumerChargeRequests")
+  id                   String                @id @default(uuid())
+  name                 String
+  phone                String?
+  email                String?
+  xrplAddress          String                @unique
+  xrplSecret           String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  escrows              Escrow[]              @relation("ConsumerEscrows")
+  chargeRequests       ChargeRequest[]       @relation("ConsumerChargeRequests")
+  refundReviewRequests RefundReviewRequest[] @relation("ConsumerRefundReviewRequests")
 }
 
 model BusinessProduct {
@@ -70,28 +76,56 @@ model ProductMenuItem {
 }
 
 model Escrow {
-  id              String           @id @default(uuid())
-  consumerId      String
-  businessId      String
-  productId       String?
-  consumerAddress String
-  businessAddress String
-  totalAmount     Float
-  monthlyAmount   Float
-  months          Int
-  escrowType      String           @default("monthly")
-  unitPrice       Float?
-  validityMonths  Int?
-  currency        String           @default("RLUSD")
-  issuer          String
-  status          String           @default("active")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  consumer        Consumer         @relation("ConsumerEscrows", fields: [consumerId], references: [id])
-  business        Business         @relation("BusinessEscrows", fields: [businessId], references: [id])
-  product         BusinessProduct? @relation(fields: [productId], references: [id])
-  entries         EscrowEntry[]
-  chargeRequests  ChargeRequest[]
+  id                   String                @id @default(uuid())
+  consumerId           String
+  businessId           String
+  productId            String?
+  consumerAddress      String
+  businessAddress      String
+  totalAmount          Float
+  monthlyAmount        Float
+  months               Int
+  escrowType           String                @default("monthly")
+  unitPrice            Float?
+  validityMonths       Int?
+  currency             String                @default("RLUSD")
+  issuer               String
+  status               String                @default("active")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  consumer             Consumer              @relation("ConsumerEscrows", fields: [consumerId], references: [id])
+  business             Business              @relation("BusinessEscrows", fields: [businessId], references: [id])
+  product              BusinessProduct?      @relation(fields: [productId], references: [id])
+  entries              EscrowEntry[]
+  chargeRequests       ChargeRequest[]
+  refundReviewRequests RefundReviewRequest[]
+}
+
+model RefundReviewRequest {
+  id                       String    @id @default(uuid())
+  escrowId                 String
+  consumerId               String
+  businessId               String
+  status                   String    @default("merchant_review")
+  refundableAmount         Float
+  merchantRespondBy        DateTime
+  businessClosureStatus    String    @default("not_checked")
+  businessClosureSource    String?
+  businessClosureCheckedAt DateTime?
+  investigationReason      String?
+  consumerReason           String?
+  merchantNotice           String?
+  merchantResponse         String?
+  merchantRespondedAt      DateTime?
+  adminResolutionReason    String?
+  photoDataUrlsJson        String?
+  requestedAt              DateTime  @default(now())
+  resolvedAt               DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  escrow                   Escrow    @relation(fields: [escrowId], references: [id])
+  consumer                 Consumer  @relation("ConsumerRefundReviewRequests", fields: [consumerId], references: [id])
+  business                 Business  @relation("BusinessRefundReviewRequests", fields: [businessId], references: [id])
 }
 
 model EscrowEntry {

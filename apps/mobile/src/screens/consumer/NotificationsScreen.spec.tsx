@@ -7,13 +7,15 @@ import { NotificationsScreen } from './NotificationsScreen';
 jest.mock('../../api/client', () => ({
   api: {
     getConsumerEscrows: jest.fn(),
+    getBusinessDashboard: jest.fn(),
   },
 }));
 
 // Mock auth store
+const mockAuthState = { role: 'consumer' as 'consumer' | 'business', userId: 'consumer-1', name: '테스트' };
 jest.mock('../../store/auth', () => ({
   useAuthStore: (selector: any) =>
-    selector({ role: 'consumer', userId: 'consumer-1', name: '테스트' }),
+    selector(mockAuthState),
 }));
 
 // Mock app store
@@ -39,6 +41,8 @@ describe('NotificationsScreen', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockAuthState.role = 'consumer';
+    mockAuthState.userId = 'consumer-1';
   });
 
   afterEach(() => {
@@ -95,5 +99,67 @@ describe('NotificationsScreen', () => {
     expect(await findByText('릴리즈 완료')).toBeTruthy();
     expect(await findByText(/계좌 승인 결제 후 파워짐 헬스장 보호 원장에 600 RLUSD가 잠겼습니다/)).toBeTruthy();
     expect(await findByText(/EscrowFinish로 100 RLUSD가 릴리즈되었습니다/)).toBeTruthy();
+  });
+
+  it('should render business refund review notifications from dashboard data', async () => {
+    const { api } = require('../../api/client');
+    mockAuthState.role = 'business';
+    mockAuthState.userId = 'business-1';
+    api.getBusinessDashboard.mockResolvedValue({
+      business: { id: 'business-1', name: '파워짐' },
+      escrows: [
+        {
+          id: 'e-refund',
+          consumer: { name: '김민수' },
+          entries: [],
+          refundReviewRequests: [
+            {
+              id: 'refund-review-1',
+              status: 'merchant_response_requested',
+              refundableAmount: 10,
+              merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부와 이용권 처리 방안을 답변해주세요.',
+              requestedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const { findByText } = renderWithProviders(<NotificationsScreen />);
+
+    expect(await findByText('환불 검토 요청')).toBeTruthy();
+    expect(await findByText(/김민수님이 ₩13,500 환불 검토를 요청했습니다/)).toBeTruthy();
+    expect(await findByText(/고객이 장기 휴업을 주장했습니다/)).toBeTruthy();
+  });
+
+  it('should render platform-review refund notifications without consumer evidence for businesses', async () => {
+    const { api } = require('../../api/client');
+    mockAuthState.role = 'business';
+    mockAuthState.userId = 'business-1';
+    api.getBusinessDashboard.mockResolvedValue({
+      business: { id: 'business-1', name: '파워짐' },
+      escrows: [
+        {
+          id: 'e-refund-platform',
+          consumer: { name: '김민수' },
+          entries: [],
+          refundReviewRequests: [
+            {
+              id: 'refund-review-platform',
+              status: 'platform_review',
+              refundableAmount: 10,
+              consumerReason: '2주 넘게 문을 열지 않아 환불 검토를 요청합니다.',
+              requestedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const { findByText, queryByText } = renderWithProviders(<NotificationsScreen />);
+
+    expect(await findByText('환불 검토 요청')).toBeTruthy();
+    expect(await findByText(/김민수님이 ₩13,500 환불 검토를 요청했습니다/)).toBeTruthy();
+    expect(queryByText(/2주 넘게 문을 열지 않아/)).toBeNull();
   });
 });

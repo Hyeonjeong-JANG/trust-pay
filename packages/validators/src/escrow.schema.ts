@@ -87,6 +87,36 @@ export const createChargeRequestSchema = z.union([
   }),
 ]);
 
+export const requestRefundReviewSchema = z.object({
+  reason: z.string().trim().min(10, 'Refund reason must be at least 10 characters').max(500, 'Refund reason must be at most 500 characters'),
+  photoDataUrls: z
+    .array(
+      z
+        .string()
+        .startsWith('data:image/', 'Refund review photos must be image data URLs')
+        .max(2_800_000, 'Refund review photo exceeds 2MB'),
+    )
+    .max(3, 'Refund review supports up to 3 photos')
+    .default([]),
+});
+
+export const adminRefundReviewListSchema = z.object({
+  status: z.string().trim().min(1).optional(),
+});
+
+export const adminRequestMerchantResponseSchema = z.object({
+  merchantNotice: z.string().trim().min(10, 'Merchant notice must be at least 10 characters').max(500, 'Merchant notice must be at most 500 characters'),
+});
+
+export const adminResolveRefundReviewSchema = z.object({
+  decision: z.enum(['approve', 'reject', 'investigate']),
+  reason: z.string().trim().min(5, 'Resolution reason must be at least 5 characters').max(500, 'Resolution reason must be at most 500 characters'),
+});
+
+export const merchantRefundReviewResponseSchema = z.object({
+  response: z.string().trim().min(10, 'Merchant response must be at least 10 characters').max(1000, 'Merchant response must be at most 1000 characters'),
+});
+
 export const cancelEscrowSchema = z.object({
   escrowId: z.string().uuid(),
 });
@@ -97,6 +127,11 @@ export const businessRegistrationSchema = z.object({
   address: z.string().min(1).max(200),
   phone: z.string().optional(),
   email: z.string().email().optional(),
+  registrationNumber: z.string().transform((value) => value.replace(/\D/g, '')).pipe(z.string().regex(/^\d{10}$/, 'Business registration number must be 10 digits')),
+});
+
+export const verifyBusinessRegistrationNumberSchema = z.object({
+  registrationNumber: z.string().transform((value) => value.replace(/\D/g, '')).pipe(z.string().regex(/^\d{10}$/, 'Business registration number must be 10 digits')),
 });
 
 export const consumerRegistrationSchema = z.object({
@@ -127,8 +162,14 @@ export const verifyCodeSchema = loginIdentifierSchema.and(
 export type CreateEscrowInput = z.infer<typeof createEscrowSchema>;
 export type FinishEscrowInput = z.infer<typeof finishEscrowSchema>;
 export type CreateChargeRequestInput = z.infer<typeof createChargeRequestSchema>;
+export type RequestRefundReviewInput = z.infer<typeof requestRefundReviewSchema>;
+export type AdminRefundReviewListInput = z.infer<typeof adminRefundReviewListSchema>;
+export type AdminRequestMerchantResponseInput = z.infer<typeof adminRequestMerchantResponseSchema>;
+export type AdminResolveRefundReviewInput = z.infer<typeof adminResolveRefundReviewSchema>;
+export type MerchantRefundReviewResponseInput = z.infer<typeof merchantRefundReviewResponseSchema>;
 export type CancelEscrowInput = z.infer<typeof cancelEscrowSchema>;
 export type BusinessRegistrationInput = z.infer<typeof businessRegistrationSchema>;
+export type VerifyBusinessRegistrationNumberInput = z.infer<typeof verifyBusinessRegistrationNumberSchema>;
 export type ConsumerRegistrationInput = z.infer<typeof consumerRegistrationSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RequestCodeInput = z.infer<typeof requestCodeSchema>;

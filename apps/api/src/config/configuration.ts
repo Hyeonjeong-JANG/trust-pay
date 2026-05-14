@@ -24,4 +24,8 @@ export default () => ({
   authDemoOtp: process.env.AUTH_DEMO_OTP === 'true',
   escrowFastMode: process.env.ESCROW_FAST_MODE === 'true',
   encryptionKey: defaultEncryptionKey(),
+  nts: {
+    statusUrl: process.env.NTS_BUSINESS_STATUS_URL || 'https://api.odcloud.kr/api/nts-businessman/v1/status',
+    serviceKey: process.env.NTS_BUSINESS_STATUS_SERVICE_KEY || '',
+  },
 });

@@ -29,6 +29,11 @@ function renderWithProviders(ui: React.ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
+async function enterApprovalPin(screen: { findByPlaceholderText: (text: string) => Promise<any>; findByText: (text: string) => Promise<any> }) {
+  fireEvent.changeText(await screen.findByPlaceholderText('간편비밀번호 6자리'), '123456');
+  fireEvent.press(await screen.findByText('간편비밀번호로 승인'));
+}
+
 describe('PaymentScreen', () => {
   beforeEach(() => {
     const { api } = require('../../api/client');
@@ -74,7 +79,7 @@ describe('PaymentScreen', () => {
 
   it('should convert KRW input to decimal RLUSD before creating an escrow', async () => {
     const { api } = require('../../api/client');
-    const { getByPlaceholderText, getByText } = renderWithProviders(
+    const { findByPlaceholderText, findByText, getByPlaceholderText, getByText } = renderWithProviders(
       <PaymentScreen
         navigation={{ navigate: jest.fn() } as any}
         route={{ params: { businessId: 'b-1', businessName: '파워짐 헬스장' } } as any}
@@ -84,6 +89,8 @@ describe('PaymentScreen', () => {
     fireEvent.changeText(getByPlaceholderText('예: 810,000'), '1000');
     fireEvent.changeText(getByPlaceholderText('예: 6'), '1');
     fireEvent.press(getByText('계좌 승인 결제 요청'));
+    expect(api.createEscrow).not.toHaveBeenCalled();
+    await enterApprovalPin({ findByPlaceholderText, findByText });
 
     await waitFor(() => expect(api.createEscrow).toHaveBeenCalled());
     const payload = api.createEscrow.mock.calls[0][0];
@@ -93,7 +100,7 @@ describe('PaymentScreen', () => {
 
   it('should normalize prepaid decimal RLUSD total from the KRW unit count', async () => {
     const { api } = require('../../api/client');
-    const { getByPlaceholderText, getByText } = renderWithProviders(
+    const { findByPlaceholderText, findByText, getByPlaceholderText, getByText } = renderWithProviders(
       <PaymentScreen
         navigation={{ navigate: jest.fn() } as any}
         route={{ params: { businessId: 'b-1', businessName: '강남 블루보틀', businessCategory: '카페' } } as any}
@@ -104,6 +111,8 @@ describe('PaymentScreen', () => {
     fireEvent.changeText(getByPlaceholderText('예: 6,750'), '1000');
     fireEvent.changeText(getByPlaceholderText('예: 3'), '3');
     fireEvent.press(getByText('계좌 승인 결제 요청'));
+    expect(api.createEscrow).not.toHaveBeenCalled();
+    await enterApprovalPin({ findByPlaceholderText, findByText });
 
     await waitFor(() => expect(api.createEscrow).toHaveBeenCalled());
     const payload = api.createEscrow.mock.calls[0][0];
@@ -184,7 +193,7 @@ describe('PaymentScreen', () => {
     ]);
 
     const navigate = jest.fn();
-    const { findByText, getByText, queryByText } = renderWithProviders(
+    const { findByPlaceholderText, findByText, getByText, queryByText } = renderWithProviders(
       <PaymentScreen
         navigation={{ navigate } as any}
         route={{ params: { businessId: 'b-1', businessName: '헤어살롱 루나', businessCategory: '미용실' } } as any}
@@ -196,6 +205,8 @@ describe('PaymentScreen', () => {
     expect(await findByText('클리닉 ₩67,500')).toBeTruthy();
     expect(queryByText(/단위 보호/)).toBeNull();
     fireEvent.press(getByText('계좌 승인 결제 요청'));
+    expect(api.createEscrow).not.toHaveBeenCalled();
+    await enterApprovalPin({ findByPlaceholderText, findByText });
 
     await waitFor(() => {
       expect(api.createEscrow).toHaveBeenCalledWith({
@@ -214,7 +225,7 @@ describe('PaymentScreen', () => {
   it('should create escrow directly from a merchant QR payment request', async () => {
     const { api } = require('../../api/client');
     const navigate = jest.fn();
-    const { findByText, getByText, queryByText } = renderWithProviders(
+    const { findByPlaceholderText, findByText, getByText, queryByText } = renderWithProviders(
       <PaymentScreen
         navigation={{ navigate } as any}
         route={{
@@ -248,6 +259,8 @@ describe('PaymentScreen', () => {
     expect(queryByText('실제 충전 금액 ₩810,000')).toBeNull();
     expect(await findByText('매월 ₩135,000 정산')).toBeTruthy();
     fireEvent.press(getByText('계좌 승인 결제 요청'));
+    expect(api.createEscrow).not.toHaveBeenCalled();
+    await enterApprovalPin({ findByPlaceholderText, findByText });
 
     await waitFor(() => {
       expect(api.createEscrow).toHaveBeenCalledWith({
@@ -263,7 +276,7 @@ describe('PaymentScreen', () => {
   it('should carry voucher QR validity dates into the created prepaid escrow', async () => {
     const { api } = require('../../api/client');
     const navigate = jest.fn();
-    const { findByText, getByText, queryByText } = renderWithProviders(
+    const { findByPlaceholderText, findByText, getByText, queryByText } = renderWithProviders(
       <PaymentScreen
         navigation={{ navigate } as any}
         route={{
@@ -300,6 +313,8 @@ describe('PaymentScreen', () => {
     expect(queryByText('보호 단위')).toBeNull();
     expect(queryByText(/Token Escrow 단위/)).toBeNull();
     fireEvent.press(getByText('계좌 승인 결제 요청'));
+    expect(api.createEscrow).not.toHaveBeenCalled();
+    await enterApprovalPin({ findByPlaceholderText, findByText });
 
     await waitFor(() => {
       expect(api.createEscrow).toHaveBeenCalledWith({

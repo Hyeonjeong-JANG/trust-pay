@@ -96,6 +96,13 @@ export function LoginScreen() {
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const [isNewConsumer, setIsNewConsumer] = useState(false);
+  const [isNewBusiness, setIsNewBusiness] = useState(false);
+  const [businessName, setBusinessName] = useState('');
+  const [businessCategory, setBusinessCategory] = useState('');
+  const [businessAddress, setBusinessAddress] = useState('');
+  const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState('');
+  const [isBusinessNumberVerified, setBusinessNumberVerified] = useState(false);
+  const [businessVerificationLabel, setBusinessVerificationLabel] = useState('데모 국세청 인증 완료');
 
   const authPayload = () => authPayloadFromIdentifier(identifier, role);
 
@@ -103,12 +110,18 @@ export function LoginScreen() {
     setCode('');
     setCodeSent(false);
     setIsNewConsumer(false);
+    setIsNewBusiness(false);
+    setBusinessNumberVerified(false);
+    setBusinessVerificationLabel('데모 국세청 인증 완료');
   };
+
+  const businessRegistrationDigits = businessRegistrationNumber.replace(/\D/g, '');
 
   const requestCodeMutation = useMutation({
     mutationFn: () => api.requestCode(authPayload()),
     onSuccess: (data) => {
       setIsNewConsumer(role === 'consumer' && data.isNewUser === true);
+      setIsNewBusiness(role === 'business' && data.isNewUser === true);
       setCodeSent(true);
     },
     onError: (err: Error) => {
@@ -118,8 +131,38 @@ export function LoginScreen() {
     },
   });
 
+  const verifyBusinessRegistrationMutation = useMutation({
+    mutationFn: () => api.verifyBusinessRegistrationNumber({ registrationNumber: businessRegistrationDigits }),
+    onSuccess: (data) => {
+      if (data.status === 'unavailable') {
+        setBusinessNumberVerified(false);
+        Alert.alert('사업자등록번호 인증 실패', data.message);
+        return;
+      }
+      setBusinessNumberVerified(true);
+      setBusinessVerificationLabel(data.status === 'verified' ? '국세청 인증 완료' : '데모 국세청 인증 완료');
+    },
+    onError: (err: Error) => {
+      const apiErr = err as import('../api/client').ApiError;
+      Alert.alert('사업자등록번호 인증 실패', apiErr.userMessage ?? err.message);
+    },
+  });
+
   const verifyCodeMutation = useMutation({
-    mutationFn: () => api.verifyCode({ ...authPayload(), code }),
+    mutationFn: async () => {
+      if (role === 'business' && isNewBusiness) {
+        const payload = authPayload();
+        await api.registerBusiness({
+          name: businessName.trim(),
+          category: businessCategory.trim(),
+          address: businessAddress.trim(),
+          phone: 'phone' in payload ? payload.phone : undefined,
+          email: 'email' in payload ? payload.email : undefined,
+          registrationNumber: businessRegistrationDigits,
+        });
+      }
+      return api.verifyCode({ ...authPayload(), code });
+    },
     onSuccess: (data) => {
       setAuth(data.role, data.userId, data.name, data.token);
     },
@@ -140,7 +183,14 @@ export function LoginScreen() {
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedIdentifier);
   const canSubmit = isEmailIdentifier ? isEmailValid : isPhoneValid;
   const canVerify = canSubmit && /^\d{6}$/.test(code);
-  const isPending = requestCodeMutation.isPending || verifyCodeMutation.isPending;
+  const canSubmitBusinessSignup = !isNewBusiness || (
+    businessName.trim().length > 0
+    && businessCategory.trim().length > 0
+    && businessAddress.trim().length > 0
+    && businessRegistrationDigits.length === 10
+    && isBusinessNumberVerified
+  );
+  const isPending = requestCodeMutation.isPending || verifyCodeMutation.isPending || verifyBusinessRegistrationMutation.isPending;
 
   const handleSubmit = () => {
     if (codeSent) {
@@ -231,11 +281,61 @@ export function LoginScreen() {
             </View>
           )}
 
+          {codeSent && isNewBusiness && (
+            <View style={styles.signupNotice}>
+              <Text style={styles.signupNoticeTitle}>사업자 가입 정보</Text>
+              <Text style={styles.signupNoticeText}>국세청 사업자등록번호 인증 후 TrustPay 사업자 계정이 생성됩니다.</Text>
+              <TextInput
+                style={styles.input}
+                value={businessName}
+                onChangeText={setBusinessName}
+                placeholder="상호명"
+                placeholderTextColor={colors.gray400}
+              />
+              <TextInput
+                style={styles.input}
+                value={businessCategory}
+                onChangeText={setBusinessCategory}
+                placeholder="업종"
+                placeholderTextColor={colors.gray400}
+              />
+              <TextInput
+                style={styles.input}
+                value={businessAddress}
+                onChangeText={setBusinessAddress}
+                placeholder="사업장 주소"
+                placeholderTextColor={colors.gray400}
+              />
+              <TextInput
+                style={styles.input}
+                value={businessRegistrationNumber}
+                onChangeText={(value) => {
+                  setBusinessRegistrationNumber(value.replace(/\D/g, '').slice(0, 10));
+                  setBusinessNumberVerified(false);
+                  setBusinessVerificationLabel('데모 국세청 인증 완료');
+                }}
+                placeholder="사업자등록번호 10자리"
+                placeholderTextColor={colors.gray400}
+                keyboardType="number-pad"
+                maxLength={10}
+              />
+              <TouchableOpacity
+                style={[styles.verifyBusinessButton, (businessRegistrationDigits.length !== 10 || verifyBusinessRegistrationMutation.isPending) && styles.buttonDisabled]}
+                onPress={() => verifyBusinessRegistrationMutation.mutate()}
+                disabled={businessRegistrationDigits.length !== 10 || verifyBusinessRegistrationMutation.isPending}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.verifyBusinessButtonText}>국세청 사업자등록번호 인증</Text>
+              </TouchableOpacity>
+              {isBusinessNumberVerified && <Text style={styles.businessVerifiedText}>{businessVerificationLabel}</Text>}
+            </View>
+          )}
+
           <PrimaryActionButton
-            label={codeSent ? (isNewConsumer ? '가입하고 시작' : '로그인') : '인증코드 받기'}
+            label={codeSent ? (isNewConsumer ? '가입하고 시작' : isNewBusiness ? '가입하고 로그인' : '로그인') : '인증코드 받기'}
             loadingLabel={requestCodeMutation.isPending ? '인증코드 요청 중...' : '로그인 중...'}
             onPress={handleSubmit}
-            disabled={(codeSent ? !canVerify : !canSubmit) || isPending}
+            disabled={(codeSent ? (!canVerify || !canSubmitBusinessSignup) : !canSubmit) || isPending}
             loading={isPending}
           />
         </View>
@@ -243,7 +343,7 @@ export function LoginScreen() {
         <Text style={styles.hint}>
           {role === 'consumer'
             ? '첫 로그인 시 XRPL 지갑 + RLUSD 트러스트라인이 자동 생성됩니다'
-            : '사업자 계정은 관리자가 사전 등록해야 합니다'}
+            : '사업자는 국세청 사업자등록번호 인증 후 가입할 수 있습니다'}
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -363,6 +463,24 @@ const styles = StyleSheet.create({
     fontSize: font.size.sm,
     color: colors.gray700,
     lineHeight: 20,
+  },
+  verifyBusinessButton: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  verifyBusinessButtonText: {
+    color: colors.primary,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+  },
+  businessVerifiedText: {
+    color: colors.success,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    marginTop: spacing.sm,
   },
   button: {
     backgroundColor: colors.primary,

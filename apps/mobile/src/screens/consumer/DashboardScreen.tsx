@@ -12,16 +12,42 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
+import { ApprovalAuthModal } from '../../components/ApprovalAuthModal';
 import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
 import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { ChargeRequest, EscrowEntry } from '@prepaid-shield/shared-types';
+import type { ChargeRequest, EscrowEntry, RefundReviewRequest } from '@prepaid-shield/shared-types';
 import type { ConsumerTabProps } from '../../navigation/types';
 import type { EscrowRecord, EscrowStatus } from '@prepaid-shield/shared-types';
 type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
 type PendingChargeApproval = ChargeRequest & { escrowId: string; businessName: string };
+
+function sumEntryAmounts(entries: EscrowEntry[], status: EscrowEntry['status']): number {
+  return entries
+    .filter((entry) => entry.status === status)
+    .reduce((sum, entry) => sum + Number(entry.amount), 0);
+}
+
+function getPrepaidAmounts(escrow: EscrowWithBusiness) {
+  const totalAmount = Number(escrow.totalAmount);
+  const settledChargeAmount = escrow.chargeRequests
+    ?.filter((request) => request.status === 'settled')
+    .reduce((sum, request) => sum + Number(request.amount), 0) ?? 0;
+  const releasedEntryAmount = sumEntryAmounts(escrow.entries, 'released');
+  const refundedEntryAmount = sumEntryAmounts(escrow.entries, 'refunded');
+  const usedAmount = settledChargeAmount > 0 ? settledChargeAmount : releasedEntryAmount;
+  return {
+    usedAmount,
+    remainingAmount: Math.max(totalAmount - usedAmount - refundedEntryAmount, 0),
+  };
+}
+
+function getLatestRefundReview(requests?: RefundReviewRequest[]): RefundReviewRequest | null {
+  if (!requests?.length) return null;
+  return [...requests].sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())[0] ?? null;
+}
 
 const STATUS_KO: Record<string, string> = {
   active: '진행중',
@@ -33,6 +59,16 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   active: { bg: colors.escrow.activeBg, text: colors.escrow.active },
   completed: { bg: colors.escrow.completedBg, text: colors.escrow.completed },
   cancelled: { bg: colors.escrow.cancelledBg, text: colors.escrow.cancelled },
+};
+
+const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
+  platform_review: 'TrustPay 검토 중',
+  merchant_response_requested: '사업자 응답 대기',
+  merchant_responded: '사업자 응답 완료',
+  platform_investigation: 'TrustPay 조사 중',
+  platform_approved: 'TrustPay 환불 승인',
+  refunded: '환불 완료',
+  rejected: '환불 검토 거절',
 };
 
 type StatusFilter = 'all' | EscrowStatus;
@@ -50,6 +86,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
+  const [chargeApprovalToAuthenticate, setChargeApprovalToAuthenticate] = useState<PendingChargeApproval | null>(null);
 
   const { data: escrows, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['consumerEscrows', userId],
@@ -116,6 +153,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
 
   const hasSearchQuery = searchQuery.trim() !== '';
   const isFiltered = hasSearchQuery || statusFilter !== 'all';
+  const hasPrepaidInFiltered = filteredEscrows.some((escrow) => escrow.escrowType === 'prepaid');
   const emptyTitle = hasSearchQuery
     ? '검색 결과가 없습니다'
     : statusFilter === 'active'
@@ -199,7 +237,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
                 <View style={styles.approvalActions}>
                   <TouchableOpacity
                     style={[styles.approvalPrimaryButton, approvalActionPending && styles.buttonDisabled]}
-                    onPress={() => approveChargeMutation.mutate({ requestId: pendingChargeApproval.id, escrowId: pendingChargeApproval.escrowId })}
+                    onPress={() => setChargeApprovalToAuthenticate(pendingChargeApproval)}
                     disabled={approvalActionPending}
                     activeOpacity={0.85}
                   >
@@ -269,6 +307,9 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
                 <Text style={styles.resultCount}>{filteredEscrows.length}건</Text>
               )}
             </View>
+            {hasPrepaidInFiltered && (
+              <Text style={styles.sectionHint}>승인된 실제 사용금액 기준으로 잔액이 줄어듭니다</Text>
+            )}
           </>
         }
         renderItem={({ item }: { item: EscrowWithBusiness }) => {
@@ -277,13 +318,22 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
           const pendingEntries = item.entries.filter((e: EscrowEntry) => e.status === 'pending');
           const fallbackMonthly = item.months > 0 ? item.totalAmount / item.months : 0;
           const totalEntries = item.entries.length || item.months;
-          const pendingAmount = pendingEntries.reduce(
+          const prepaidAmounts = isPrepaid ? getPrepaidAmounts(item) : null;
+          const monthlyReleasedAmount = isPrepaid
+            ? 0
+            : item.entries
+                .filter((entry: EscrowEntry) => entry.status === 'released')
+                .reduce((sum, entry) => sum + Number(entry.amount ?? fallbackMonthly), 0);
+          const monthlyPendingAmount = pendingEntries.reduce(
             (sum, entry) => sum + Number(entry.amount ?? fallbackMonthly),
             0,
           );
           const pendingChargeCount = item.chargeRequests?.filter((request) => request.status === 'pending_approval').length ?? 0;
+          const latestRefundReview = getLatestRefundReview(item.refundReviewRequests);
           const statusStyle = STATUS_STYLE[item.status] ?? STATUS_STYLE.cancelled;
-          const progressPct = totalEntries > 0 ? (released / totalEntries) * 100 : 0;
+          const progressPct = isPrepaid
+            ? Number(item.totalAmount) > 0 ? ((prepaidAmounts?.usedAmount ?? 0) / Number(item.totalAmount)) * 100 : 0
+            : totalEntries > 0 ? (released / totalEntries) * 100 : 0;
           return (
             <TouchableOpacity
               style={styles.card}
@@ -303,26 +353,22 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
               </View>
               <Text style={styles.amount}>{formatKrwFromRlusd(item.totalAmount)}</Text>
               <Text style={styles.amountSub}>{formatRlusd(item.totalAmount)}</Text>
-              {/* 진행률 바 */}
               <View style={styles.progressBarBg}>
                 <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
               </View>
-              <Text style={styles.progress}>
-                {isPrepaid
-                  ? `${released}/${totalEntries}회 사용됨`
-                  : `${released}/${item.months}개월 릴리즈됨`}
-              </Text>
-              {pendingAmount > 0 && (
-                <>
-                  <Text style={styles.pendingProtect}>
-                    대기 보호금 {formatKrwFromRlusd(pendingAmount)}
-                  </Text>
-                  <Text style={styles.pendingProtectSub}>{formatRlusd(pendingAmount)}</Text>
-                </>
+              {isPrepaid ? (
+                <Text style={styles.progress}>사용 {formatKrwFromRlusd(prepaidAmounts?.usedAmount ?? 0)} · 잔액 {formatKrwFromRlusd(prepaidAmounts?.remainingAmount ?? 0)}</Text>
+              ) : (
+                <Text style={styles.progress}>정산 {formatKrwFromRlusd(monthlyReleasedAmount)} · 잔여 {formatKrwFromRlusd(monthlyPendingAmount)}</Text>
               )}
               {pendingChargeCount > 0 && (
                 <Text style={styles.pendingApproval}>
                   승인 대기 {pendingChargeCount}건
+                </Text>
+              )}
+              {latestRefundReview && (
+                <Text style={styles.refundReviewBadge}>
+                  환불 검토 중: {REFUND_REVIEW_STATUS_KO[latestRefundReview.status] ?? latestRefundReview.status}
                 </Text>
               )}
             </TouchableOpacity>
@@ -350,6 +396,19 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
       >
         <Text style={styles.fabText}>QR 스캔 결제</Text>
       </TouchableOpacity>
+      <ApprovalAuthModal
+        visible={!!chargeApprovalToAuthenticate}
+        title="결제 승인 인증"
+        description="이용금액 차감을 승인하려면 본인 인증이 필요합니다."
+        onCancel={() => setChargeApprovalToAuthenticate(null)}
+        onAuthenticated={() => {
+          const request = chargeApprovalToAuthenticate;
+          if (!request) return;
+
+          setChargeApprovalToAuthenticate(null);
+          approveChargeMutation.mutate({ requestId: request.id, escrowId: request.escrowId });
+        }}
+      />
     </View>
   );
 }
@@ -532,7 +591,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
     marginTop: spacing.sm,
   },
   sectionTitle: {
@@ -544,6 +602,13 @@ const styles = StyleSheet.create({
     fontSize: font.size.sm,
     color: colors.gray400,
     fontWeight: font.weight.medium,
+  },
+  sectionHint: {
+    fontSize: font.size.xs,
+    color: colors.gray500,
+    lineHeight: 17,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
   card: {
     backgroundColor: colors.white,
@@ -603,20 +668,15 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     marginTop: spacing.xs,
   },
-  pendingProtect: {
-    fontSize: font.size.sm,
-    color: colors.primary,
-    fontWeight: font.weight.semibold,
-    marginTop: spacing.xs,
-  },
-  pendingProtectSub: {
-    fontSize: font.size.xs,
-    color: colors.gray400,
-    marginTop: 1,
-  },
   pendingApproval: {
     fontSize: font.size.sm,
     color: colors.danger,
+    fontWeight: font.weight.semibold,
+    marginTop: spacing.xs,
+  },
+  refundReviewBadge: {
+    fontSize: font.size.sm,
+    color: colors.warning,
     fontWeight: font.weight.semibold,
     marginTop: spacing.xs,
   },

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
+  Modal,
+  TextInput,
+  ScrollView,
+  Image,
   Platform,
   RefreshControl,
 } from 'react-native';
@@ -14,13 +17,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
+import { ApprovalAuthModal } from '../../components/ApprovalAuthModal';
 import { ErrorView } from '../../components/ErrorView';
 import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { ChargeRequest, EscrowEntry } from '@prepaid-shield/shared-types';
+import type { ChargeRequest, EscrowEntry, RefundReviewRequest, CreateRefundReviewRequest } from '@prepaid-shield/shared-types';
 import type { ScreenProps } from '../../navigation/types';
 import type { EscrowRecord } from '@prepaid-shield/shared-types';
-type EscrowWithRelations = EscrowRecord & { business?: { name: string }; consumer?: { name: string } };
+type EscrowWithRelations = EscrowRecord & { business?: { name: string }; consumer?: { name: string }; refundReviewRequests?: RefundReviewRequest[] };
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   pending: { bg: colors.entry.pendingBg, text: colors.entry.pending },
@@ -48,6 +52,26 @@ const STATUS_KO: Record<string, string> = {
   cancelled: '취소됨',
 };
 
+const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
+  platform_review: 'TrustPay 검토 중',
+  merchant_response_requested: '사업자 응답 대기',
+  merchant_responded: '사업자 응답 완료',
+  merchant_review: '사업자 응답 대기',
+  merchant_disputed: '사업자 이의제기',
+  platform_investigation: 'TrustPay 조사 중',
+  closure_suspected: '영업중단 의심 · TrustPay 조사',
+  closure_confirmed: '폐업 확인 · TrustPay 검토',
+  auto_approved: '무응답 자동 승인',
+  platform_approved: 'TrustPay 환불 승인',
+  refunded: '환불 완료',
+  rejected: '환불 검토 거절',
+};
+const REFUND_REVIEW_CONFIRM_MESSAGE = '즉시 에스크로를 취소하지 않습니다. 실제 결제액, 보너스 혜택, 사용분, 약관상 공제액을 확인한 뒤 환불 가능 금액을 산정합니다.';
+const MIN_REFUND_REASON_LENGTH = 10;
+const MAX_REFUND_REASON_LENGTH = 500;
+const MAX_REFUND_PHOTOS = 3;
+const MAX_REFUND_PHOTO_BYTES = 2 * 1024 * 1024;
+
 function rippleTimeToDate(rippleTime: number): string {
   const RIPPLE_EPOCH = 946684800;
   return new Date((rippleTime + RIPPLE_EPOCH) * 1000).toLocaleDateString('ko-KR');
@@ -72,8 +96,26 @@ function getPrepaidUsageRange(escrow: EscrowWithRelations): string | null {
   return getEntryUsageRange(escrow.entries);
 }
 
+function getLatestRefundReview(requests?: RefundReviewRequest[]): RefundReviewRequest | null {
+  if (!requests?.length) return null;
+  return [...requests].sort((a, b) => {
+    const left = new Date(a.requestedAt).getTime();
+    const right = new Date(b.requestedAt).getTime();
+    return right - left;
+  })[0];
+}
+
 function isChargeRequest(item: EscrowEntry | ChargeRequest): item is ChargeRequest {
   return 'menuName' in item;
+}
+
+function readPhotoDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('사진 파일을 읽을 수 없습니다.'));
+    reader.readAsDataURL(file);
+  });
 }
 
 function sumEntries(entries: EscrowEntry[], status: string): number {
@@ -85,6 +127,11 @@ function sumEntries(entries: EscrowEntry[], status: string): number {
 export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   const { id } = route.params;
   const queryClient = useQueryClient();
+  const [chargeRequestToAuthenticate, setChargeRequestToAuthenticate] = useState<ChargeRequest | null>(null);
+  const [isRefundReviewModalVisible, setRefundReviewModalVisible] = useState(false);
+  const [refundReviewReason, setRefundReviewReason] = useState('');
+  const [refundReviewPhotos, setRefundReviewPhotos] = useState<string[]>([]);
+  const [refundReviewError, setRefundReviewError] = useState<string | null>(null);
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['escrow', id],
@@ -120,18 +167,71 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
     },
   });
 
+  const refundReviewMutation = useMutation({
+    mutationFn: (payload: CreateRefundReviewRequest) => api.requestRefundReview(id, payload),
+    onSuccess: () => {
+      setRefundReviewModalVisible(false);
+      setRefundReviewReason('');
+      setRefundReviewPhotos([]);
+      setRefundReviewError(null);
+      queryClient.invalidateQueries({ queryKey: ['escrow', id] });
+      queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
+      showSuccessToast('환불 검토 요청 접수', '사업자 응답 기한과 폐업 여부를 확인한 뒤 환불 가능 금액을 안내합니다.');
+    },
+    onError: (err: Error) => {
+      const apiErr = err as ApiError;
+      showErrorToast('환불 검토 요청 실패', apiErr.userMessage ?? err.message);
+    },
+  });
+
   const handleRefundReviewRequest = () => {
-    Alert.alert(
-      '환불 검토 요청',
-      '즉시 에스크로를 취소하지 않습니다. 실제 결제액, 보너스 혜택, 사용분, 약관상 공제액을 확인한 뒤 환불 가능 금액을 산정합니다.',
-      [
-        { text: '닫기', style: 'cancel' },
-        {
-          text: '요청 접수',
-          onPress: () => showSuccessToast('환불 검토 요청 접수', '약관과 사용 내역을 확인한 뒤 환불 가능 금액을 안내합니다.'),
-        },
-      ],
-    );
+    setRefundReviewReason('');
+    setRefundReviewPhotos([]);
+    setRefundReviewError(null);
+    setRefundReviewModalVisible(true);
+  };
+
+  const submitRefundReviewRequest = () => {
+    const reason = refundReviewReason.trim();
+    if (reason.length < MIN_REFUND_REASON_LENGTH) {
+      setRefundReviewError('환불 사유를 10자 이상 입력해주세요.');
+      return;
+    }
+    refundReviewMutation.mutate({ reason, photoDataUrls: refundReviewPhotos });
+  };
+
+  const addRefundReviewPhotos = () => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      setRefundReviewError('사진 첨부는 웹에서 지원합니다.');
+      return;
+    }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = async () => {
+      const files = Array.from(input.files ?? []);
+      if (refundReviewPhotos.length + files.length > MAX_REFUND_PHOTOS) {
+        setRefundReviewError(`사진은 최대 ${MAX_REFUND_PHOTOS}장까지 첨부할 수 있습니다.`);
+        return;
+      }
+      if (files.some((file) => !file.type.startsWith('image/'))) {
+        setRefundReviewError('이미지 파일만 첨부할 수 있습니다.');
+        return;
+      }
+      if (files.some((file) => file.size > MAX_REFUND_PHOTO_BYTES)) {
+        setRefundReviewError('사진은 장당 2MB 이하만 첨부할 수 있습니다.');
+        return;
+      }
+      try {
+        const dataUrls = await Promise.all(files.map(readPhotoDataUrl));
+        setRefundReviewPhotos((current) => [...current, ...dataUrls].slice(0, MAX_REFUND_PHOTOS));
+        setRefundReviewError(null);
+      } catch (err) {
+        setRefundReviewError(err instanceof Error ? err.message : '사진 파일을 읽을 수 없습니다.');
+      }
+    };
+    input.click();
   };
 
   if (isLoading || (!escrow && !isError)) {
@@ -152,6 +252,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   const isPrepaid = escrow.escrowType === 'prepaid';
   const pendingChargeRequests = escrow.chargeRequests?.filter((request) => request.status === 'pending_approval') ?? [];
   const chargeHistory = escrow.chargeRequests?.filter((request) => request.status !== 'pending_approval') ?? [];
+  const latestRefundReview = getLatestRefundReview(escrow.refundReviewRequests);
   const totalEntries = escrow.entries.length || escrow.months;
   const escrowStyle = STATUS_STYLE[escrow.status] ?? STATUS_STYLE.cancelled;
   const usageRange = isPrepaid ? getPrepaidUsageRange(escrow) : getEntryUsageRange(escrow.entries);
@@ -272,7 +373,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                     <View style={styles.chargeRequestActions}>
                       <TouchableOpacity
                         style={[styles.approveButton, approveChargeMutation.isPending && styles.buttonDisabled]}
-                        onPress={() => approveChargeMutation.mutate(request.id)}
+                        onPress={() => setChargeRequestToAuthenticate(request)}
                         disabled={approveChargeMutation.isPending || rejectChargeMutation.isPending}
                         activeOpacity={0.8}
                       >
@@ -371,21 +472,132 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
         }
         ListFooterComponent={
           escrow.status === 'active' && pending > 0 ? (
-            <View style={styles.refundReviewCard}>
-              <Text style={styles.refundReviewDesc}>
-                실제 결제액, 보너스 혜택, 사용분 공제 후 환불 가능 금액을 산정합니다.
-              </Text>
-              <TouchableOpacity
-                style={styles.refundReviewButton}
-                onPress={handleRefundReviewRequest}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.refundReviewButtonText}>환불 검토 요청</Text>
-              </TouchableOpacity>
-            </View>
+            latestRefundReview ? (
+              <View style={styles.refundReviewCard}>
+                <Text style={styles.refundReviewTitle}>환불 검토 요청 접수됨</Text>
+                <Text style={styles.refundReviewStatus}>{REFUND_REVIEW_STATUS_KO[latestRefundReview.status] ?? latestRefundReview.status}</Text>
+                <Text style={styles.refundReviewDesc}>
+                  환불 검토 금액 {formatKrwFromRlusd(latestRefundReview.refundableAmount)} · 사업자 응답 기한 {isoToDate(latestRefundReview.merchantRespondBy) ?? '-'}
+                </Text>
+                {!!latestRefundReview.investigationReason && (
+                  <Text style={styles.refundReviewReason}>{latestRefundReview.investigationReason}</Text>
+                )}
+                {!!latestRefundReview.consumerReason && (
+                  <View style={styles.consumerReasonBox}>
+                    <Text style={styles.consumerReasonLabel}>요청 사유</Text>
+                    <Text style={styles.consumerReasonText}>{latestRefundReview.consumerReason}</Text>
+                  </View>
+                )}
+                {!!latestRefundReview.photoDataUrls?.length && (
+                  <View style={styles.attachedPhotoSummary}>
+                    <Text style={styles.attachedPhotoCount}>첨부 사진 {latestRefundReview.photoDataUrls.length}장</Text>
+                    <View style={styles.attachedPhotoRow}>
+                      {latestRefundReview.photoDataUrls.map((uri, index) => (
+                        <Image key={`${uri.slice(0, 32)}-${index}`} source={{ uri }} style={styles.attachedPhotoThumb} />
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View style={styles.refundReviewCard}>
+                <Text style={styles.refundReviewDesc}>
+                  실제 결제액, 보너스 혜택, 사용분 공제 후 환불 가능 금액을 산정합니다.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.refundReviewButton, refundReviewMutation.isPending && styles.buttonDisabled]}
+                  onPress={handleRefundReviewRequest}
+                  disabled={refundReviewMutation.isPending}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.refundReviewButtonText}>{refundReviewMutation.isPending ? '요청 접수 중...' : '환불 검토 요청'}</Text>
+                </TouchableOpacity>
+              </View>
+            )
           ) : null
         }
         contentContainerStyle={styles.listContent}
+      />
+      <Modal visible={isRefundReviewModalVisible} transparent animationType="fade" onRequestClose={() => setRefundReviewModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.refundModalCard}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalEyebrow}>TrustPay 환불 검토</Text>
+              <Text style={styles.modalTitle}>환불 검토 접수</Text>
+              <Text style={styles.modalDescription}>{REFUND_REVIEW_CONFIRM_MESSAGE}</Text>
+              <Text style={styles.modalLabel}>환불 요청 사유</Text>
+              <TextInput
+                style={styles.reasonInput}
+                value={refundReviewReason}
+                onChangeText={(value) => {
+                  setRefundReviewReason(value.slice(0, MAX_REFUND_REASON_LENGTH));
+                  if (refundReviewError) setRefundReviewError(null);
+                }}
+                placeholder="환불 요청 사유를 입력해주세요"
+                placeholderTextColor={colors.gray400}
+                multiline
+                maxLength={MAX_REFUND_REASON_LENGTH}
+                textAlignVertical="top"
+              />
+              <Text style={styles.reasonCounter}>{refundReviewReason.trim().length}/{MAX_REFUND_REASON_LENGTH}</Text>
+              <View style={styles.photoHeaderRow}>
+                <View>
+                  <Text style={styles.modalLabel}>사진 첨부</Text>
+                  <Text style={styles.photoHelp}>선택 · 최대 {MAX_REFUND_PHOTOS}장 · 장당 2MB 이하</Text>
+                </View>
+                <TouchableOpacity style={styles.photoAddButton} onPress={addRefundReviewPhotos} activeOpacity={0.8}>
+                  <Text style={styles.photoAddText}>사진 선택</Text>
+                </TouchableOpacity>
+              </View>
+              {refundReviewPhotos.length > 0 && (
+                <View style={styles.photoPreviewRow}>
+                  {refundReviewPhotos.map((uri, index) => (
+                    <View key={`${uri.slice(0, 32)}-${index}`} style={styles.photoPreviewItem}>
+                      <Image source={{ uri }} style={styles.photoPreviewImage} />
+                      <TouchableOpacity
+                        style={styles.photoRemoveButton}
+                        onPress={() => setRefundReviewPhotos((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.photoRemoveText}>삭제</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+              {refundReviewError && <Text style={styles.modalError}>{refundReviewError}</Text>}
+              <TouchableOpacity
+                style={[styles.modalPrimaryButton, refundReviewMutation.isPending && styles.buttonDisabled]}
+                onPress={submitRefundReviewRequest}
+                disabled={refundReviewMutation.isPending}
+                activeOpacity={0.84}
+              >
+                <Text style={styles.modalPrimaryText}>{refundReviewMutation.isPending ? '접수 중...' : '검토 요청 접수'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setRefundReviewModalVisible(false)}
+                disabled={refundReviewMutation.isPending}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.modalCancelText}>닫기</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      <ApprovalAuthModal
+        visible={!!chargeRequestToAuthenticate}
+        title="결제 승인 인증"
+        description="이용금액 차감을 승인하려면 본인 인증이 필요합니다."
+        onCancel={() => setChargeRequestToAuthenticate(null)}
+        onAuthenticated={() => {
+          const request = chargeRequestToAuthenticate;
+          if (!request) return;
+
+          setChargeRequestToAuthenticate(null);
+          approveChargeMutation.mutate(request.id);
+        }}
       />
     </View>
   );
@@ -651,6 +863,63 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: spacing.md,
   },
+  refundReviewTitle: {
+    fontSize: font.size.md,
+    color: colors.gray900,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.xs,
+  },
+  refundReviewStatus: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.warningLight,
+    borderRadius: radius.full,
+    color: colors.warning,
+    fontSize: font.size.xs,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  refundReviewReason: {
+    backgroundColor: colors.gray50,
+    borderRadius: radius.sm,
+    color: colors.gray600,
+    fontSize: font.size.sm,
+    lineHeight: 20,
+    padding: spacing.md,
+  },
+  consumerReasonBox: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.sm,
+    marginTop: spacing.sm,
+    padding: spacing.md,
+  },
+  consumerReasonLabel: {
+    color: colors.primary,
+    fontSize: font.size.xs,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.xs,
+  },
+  consumerReasonText: {
+    color: colors.gray700,
+    fontSize: font.size.sm,
+    lineHeight: 20,
+  },
+  attachedPhotoSummary: { marginTop: spacing.sm },
+  attachedPhotoCount: {
+    color: colors.gray600,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    marginBottom: spacing.xs,
+  },
+  attachedPhotoRow: { flexDirection: 'row', gap: spacing.xs },
+  attachedPhotoThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.sm,
+    backgroundColor: colors.gray100,
+  },
   refundReviewButton: {
     backgroundColor: colors.primary,
     paddingVertical: spacing.lg,
@@ -659,4 +928,117 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.5 },
   refundReviewButtonText: { color: colors.white, fontSize: font.size.md, fontWeight: font.weight.semibold },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.48)',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  refundModalCard: {
+    alignSelf: 'center',
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    maxHeight: '92%',
+    maxWidth: 560,
+    padding: spacing.xl,
+    width: '100%',
+    ...shadow.lg,
+  },
+  modalEyebrow: {
+    color: colors.primary,
+    fontSize: font.size.xs,
+    fontWeight: font.weight.bold,
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  modalTitle: {
+    color: colors.gray900,
+    fontSize: font.size.xl,
+    fontWeight: font.weight.bold,
+    textAlign: 'center',
+  },
+  modalDescription: {
+    color: colors.gray600,
+    fontSize: font.size.sm,
+    lineHeight: 20,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  modalLabel: {
+    color: colors.gray800,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.bold,
+    marginTop: spacing.lg,
+  },
+  reasonInput: {
+    backgroundColor: colors.gray50,
+    borderColor: colors.gray200,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    color: colors.gray900,
+    fontSize: font.size.md,
+    lineHeight: 22,
+    marginTop: spacing.sm,
+    minHeight: 116,
+    padding: spacing.md,
+  },
+  reasonCounter: {
+    color: colors.gray400,
+    fontSize: font.size.xs,
+    marginTop: spacing.xs,
+    textAlign: 'right',
+  },
+  photoHeaderRow: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  photoHelp: { color: colors.gray400, fontSize: font.size.xs, marginTop: 2 },
+  photoAddButton: {
+    backgroundColor: colors.gray100,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  photoAddText: { color: colors.gray700, fontSize: font.size.sm, fontWeight: font.weight.semibold },
+  photoPreviewRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  photoPreviewItem: { width: 78 },
+  photoPreviewImage: {
+    backgroundColor: colors.gray100,
+    borderRadius: radius.md,
+    height: 70,
+    width: 78,
+  },
+  photoRemoveButton: {
+    alignItems: 'center',
+    backgroundColor: colors.gray100,
+    borderRadius: radius.full,
+    marginTop: spacing.xs,
+    paddingVertical: 4,
+  },
+  photoRemoveText: { color: colors.gray600, fontSize: font.size.xs, fontWeight: font.weight.semibold },
+  modalError: {
+    color: colors.danger,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    marginTop: spacing.md,
+    textAlign: 'center',
+  },
+  modalPrimaryButton: {
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    marginTop: spacing.lg,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  modalPrimaryText: { color: colors.white, fontSize: font.size.md, fontWeight: font.weight.bold },
+  modalCancelButton: {
+    alignItems: 'center',
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  modalCancelText: { color: colors.gray500, fontSize: font.size.sm, fontWeight: font.weight.semibold },
 });

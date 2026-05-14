@@ -138,6 +138,22 @@ describe('AuthService', () => {
       });
     });
 
+    it('should mark a business OTP request as new when no account matches', async () => {
+      prisma.business.findFirst.mockResolvedValue(null);
+
+      const result = await service.requestCode({
+        phone: '02-1234-5678',
+        role: 'business',
+      });
+
+      expect(result).toEqual({
+        delivery: 'demo',
+        code: '123456',
+        expiresInSeconds: 300,
+        isNewUser: true,
+      });
+    });
+
     it('should treat hyphenated and digit-only phone numbers as the same consumer', async () => {
       prisma.consumer.findFirst.mockResolvedValue({
         id: 'minsu-1',

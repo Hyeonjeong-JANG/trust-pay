@@ -5,9 +5,11 @@ import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { useAppStore } from '../../store/app';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { EscrowRecord } from '@prepaid-shield/shared-types';
+import { formatKrwFromRlusd } from '../../utils/money';
+import type { BusinessDashboard, ChargeRequest, EscrowRecord, RefundReviewRequest } from '@prepaid-shield/shared-types';
 
 type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
+type EscrowWithConsumer = EscrowRecord & { consumer?: { name: string } };
 
 interface NotificationItem {
   id: string;
@@ -17,6 +19,19 @@ interface NotificationItem {
   timestamp: number;
   isUnread: boolean;
 }
+
+const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'platform_review',
+  'merchant_response_requested',
+  'merchant_responded',
+  'merchant_review',
+  'merchant_disputed',
+  'platform_investigation',
+  'auto_approved',
+  'platform_approved',
+  'refunded',
+  'rejected',
+]);
 
 const RIPPLE_EPOCH = 946684800;
 
@@ -36,13 +51,20 @@ function formatRelativeTime(ts: number): string {
 
 export function NotificationsScreen() {
   const userId = useAuthStore((s) => s.userId);
+  const role = useAuthStore((s) => s.role);
   const lastViewed = useAppStore((s) => s.notificationsLastViewed);
   const setNotificationsLastViewed = useAppStore((s) => s.setNotificationsLastViewed);
 
   const { data: escrows } = useQuery({
     queryKey: ['consumerEscrows', userId],
     queryFn: () => api.getConsumerEscrows(userId!),
-    enabled: !!userId,
+    enabled: role === 'consumer' && !!userId,
+  });
+
+  const { data: businessDashboard } = useQuery({
+    queryKey: ['businessDashboard', userId],
+    queryFn: () => api.getBusinessDashboard(userId!),
+    enabled: role === 'business' && !!userId,
   });
 
   useEffect(() => {
@@ -50,6 +72,66 @@ export function NotificationsScreen() {
   }, [setNotificationsLastViewed]);
 
   const notifications = useMemo((): NotificationItem[] => {
+    if (role === 'business') {
+      if (!businessDashboard) return [];
+      const items: NotificationItem[] = [];
+      for (const escrow of (businessDashboard as BusinessDashboard).escrows as EscrowWithConsumer[]) {
+        const consumerName = escrow.consumer?.name ?? '손님';
+        const createdTs = new Date(escrow.createdAt ?? Date.now()).getTime();
+        if (escrow.status === 'active') {
+          items.push({
+            id: `${escrow.id}-business-created`,
+            icon: '📝',
+            title: '보호 결제 승인',
+            description: `${consumerName}님이 ${formatKrwFromRlusd(escrow.totalAmount)} 보호 결제를 승인했습니다.`,
+            timestamp: createdTs,
+            isUnread: createdTs > lastViewed,
+          });
+        }
+
+        for (const request of escrow.chargeRequests ?? []) {
+          const charge = request as ChargeRequest;
+          const ts = new Date(charge.settledAt ?? charge.rejectedAt ?? charge.approvedAt ?? charge.requestedAt ?? Date.now()).getTime();
+          if (charge.status === 'settled') {
+            items.push({
+              id: `${charge.id}-business-charge-settled`,
+              icon: '✅',
+              title: '차감 정산 완료',
+              description: `${consumerName}님이 ${charge.menuName} ${formatKrwFromRlusd(charge.amount)} 차감을 승인했습니다.`,
+              timestamp: ts,
+              isUnread: ts > lastViewed,
+            });
+          }
+          if (charge.status === 'rejected') {
+            items.push({
+              id: `${charge.id}-business-charge-rejected`,
+              icon: '↩️',
+              title: '차감 요청 거절',
+              description: `${consumerName}님이 ${charge.menuName} ${formatKrwFromRlusd(charge.amount)} 차감 요청을 거절했습니다.`,
+              timestamp: ts,
+              isUnread: ts > lastViewed,
+            });
+          }
+        }
+
+        for (const request of escrow.refundReviewRequests ?? []) {
+          const refund = request as RefundReviewRequest;
+          if (!MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(refund.status)) continue;
+          const requestedTs = new Date(refund.requestedAt ?? Date.now()).getTime();
+          items.push({
+            id: `${refund.id}-business-refund-review`,
+            icon: '🔎',
+            title: '환불 검토 요청',
+            description: `${consumerName}님이 ${formatKrwFromRlusd(refund.refundableAmount)} 환불 검토를 요청했습니다. ${refund.merchantNotice ?? ''}`.trim(),
+            timestamp: requestedTs,
+            isUnread: requestedTs > lastViewed,
+          });
+        }
+      }
+      items.sort((a, b) => b.timestamp - a.timestamp);
+      return items;
+    }
+
     if (!escrows) return [];
     const items: NotificationItem[] = [];
 
@@ -110,7 +192,7 @@ export function NotificationsScreen() {
 
     items.sort((a, b) => b.timestamp - a.timestamp);
     return items;
-  }, [escrows, lastViewed]);
+  }, [businessDashboard, escrows, lastViewed, role]);
 
   return (
     <View style={s.container}>

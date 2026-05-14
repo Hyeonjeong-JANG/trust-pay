@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Param, Body, UsePipes, UseGuards, Req } from '@nestjs/common';
 import { BusinessService } from './business.service';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
-import { businessRegistrationSchema } from '@prepaid-shield/validators';
+import { businessRegistrationSchema, verifyBusinessRegistrationNumberSchema, type BusinessRegistrationInput, type VerifyBusinessRegistrationNumberInput } from '@prepaid-shield/validators';
 import { AuthGuard } from '../common/auth.guard';
 import type { SessionUser } from '../common/session-token';
 
@@ -12,9 +12,15 @@ export class BusinessController {
   @Post()
   @UsePipes(new ZodValidationPipe(businessRegistrationSchema))
   register(
-    @Body() dto: { name: string; category: string; address: string; phone?: string; email?: string },
+    @Body() dto: BusinessRegistrationInput,
   ) {
     return this.businessService.register(dto);
+  }
+
+  @Post('verify-registration-number')
+  @UsePipes(new ZodValidationPipe(verifyBusinessRegistrationNumberSchema))
+  verifyRegistrationNumber(@Body() dto: VerifyBusinessRegistrationNumberInput) {
+    return this.businessService.verifyRegistrationNumber(dto.registrationNumber);
   }
 
   @Get()

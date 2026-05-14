@@ -7,6 +7,7 @@ jest.mock('../../api/client', () => ({
   api: {
     getEscrow: jest.fn(),
     createChargeRequest: jest.fn(),
+    respondToRefundReviewRequest: jest.fn(),
   },
 }));
 
@@ -180,5 +181,158 @@ describe('BusinessEscrowDetailScreen', () => {
         amount: 50,
       });
     });
+  });
+
+  it('should show admin-requested refund review details to the merchant', async () => {
+    const { api } = require('../../api/client');
+    api.getEscrow.mockResolvedValue({
+      id: 'e-prepaid-refund-detail',
+      status: 'active',
+      escrowType: 'prepaid',
+      totalAmount: 150,
+      monthlyAmount: 5,
+      unitPrice: 5,
+      months: 30,
+      business: { name: '강남 블루보틀' },
+      consumer: { name: '이서연' },
+      entries: [
+        { id: 'en-1', month: 1, amount: '5', status: 'pending', finishAfter: 830607775, cancelAfter: 837000000 },
+      ],
+      chargeRequests: [],
+      refundReviewRequests: [
+        {
+          id: 'refund-review-1',
+          status: 'merchant_response_requested',
+          refundableAmount: 10,
+          merchantRespondBy: '2026-05-18T00:00:00.000Z',
+          merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부와 이용권 처리 방안을 답변해주세요.',
+          requestedAt: '2026-05-14T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const { findByText } = renderWithProviders(
+      <BusinessEscrowDetailScreen route={{ params: { id: 'e-prepaid-refund-detail' } } as any} navigation={{} as any} />,
+    );
+
+    expect(await findByText('환불 검토 요청 접수됨')).toBeTruthy();
+    expect(await findByText('사업자 응답 대기')).toBeTruthy();
+    expect(await findByText(/환불 검토 금액 ₩13,500/)).toBeTruthy();
+    expect(await findByText(/사업자 응답 기한 2026\. 5\. 18\./)).toBeTruthy();
+    expect(await findByText(/고객이 장기 휴업을 주장했습니다/)).toBeTruthy();
+  });
+
+  it('should submit a merchant refund review response', async () => {
+    const { api } = require('../../api/client');
+    api.getEscrow.mockResolvedValue({
+      id: 'e-prepaid-refund-response',
+      status: 'active',
+      escrowType: 'prepaid',
+      totalAmount: 150,
+      monthlyAmount: 5,
+      unitPrice: 5,
+      months: 30,
+      business: { name: '강남 블루보틀' },
+      consumer: { name: '이서연' },
+      entries: [{ id: 'en-1', month: 1, amount: '5', status: 'pending', finishAfter: 830607775, cancelAfter: 837000000 }],
+      chargeRequests: [],
+      refundReviewRequests: [
+        {
+          id: 'refund-review-response',
+          status: 'merchant_response_requested',
+          refundableAmount: 10,
+          merchantRespondBy: '2026-05-18T00:00:00.000Z',
+          merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부와 이용권 처리 방안을 답변해주세요.',
+          requestedAt: '2026-05-14T00:00:00.000Z',
+        },
+      ],
+    });
+    api.respondToRefundReviewRequest.mockResolvedValue({ id: 'refund-review-response', status: 'merchant_responded' });
+
+    const { findByPlaceholderText, findByText } = renderWithProviders(
+      <BusinessEscrowDetailScreen route={{ params: { id: 'e-prepaid-refund-response' } } as any} navigation={{} as any} />,
+    );
+
+    fireEvent.changeText(await findByPlaceholderText('TrustPay에 전달할 소명 내용을 입력해주세요'), '현재 리모델링 중이며 다음 주부터 이용 가능합니다. 미사용분 환불 협의 가능합니다.');
+    fireEvent.press(await findByText('소명 제출'));
+
+    await waitFor(() => expect(api.respondToRefundReviewRequest).toHaveBeenCalledWith('refund-review-response', {
+      response: '현재 리모델링 중이며 다음 주부터 이용 가능합니다. 미사용분 환불 협의 가능합니다.',
+    }));
+  });
+
+  it('should surface platform-review refund status without consumer evidence in merchant detail', async () => {
+    const { api } = require('../../api/client');
+    api.getEscrow.mockResolvedValue({
+      id: 'e-prepaid-platform-review',
+      status: 'active',
+      escrowType: 'prepaid',
+      totalAmount: 150,
+      monthlyAmount: 5,
+      unitPrice: 5,
+      months: 30,
+      business: { name: '강남 블루보틀' },
+      consumer: { name: '이서연' },
+      entries: [{ id: 'en-1', month: 1, amount: '5', status: 'pending', finishAfter: 830607775, cancelAfter: 837000000 }],
+      chargeRequests: [],
+      refundReviewRequests: [
+        {
+          id: 'refund-review-platform',
+          status: 'platform_review',
+          refundableAmount: 10,
+          merchantRespondBy: '2026-05-18T00:00:00.000Z',
+          consumerReason: '2주 넘게 안 열고 전화도 받지 않아 환불 검토를 요청합니다.',
+          photoDataUrls: ['data:image/png;base64,ZmFrZQ=='],
+          requestedAt: '2026-05-14T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const { findByText, queryByText } = renderWithProviders(
+      <BusinessEscrowDetailScreen route={{ params: { id: 'e-prepaid-platform-review' } } as any} navigation={{} as any} />,
+    );
+
+    expect(await findByText(/강남 블루보틀/)).toBeTruthy();
+    expect(await findByText('환불 검토 요청 접수됨')).toBeTruthy();
+    expect(await findByText('TrustPay 검토 중')).toBeTruthy();
+    expect(queryByText(/2주 넘게 안 열고 전화도 안/)).toBeNull();
+    expect(queryByText('첨부 사진 1장')).toBeNull();
+  });
+
+  it('should surface merchant-review refund status without consumer evidence in merchant detail', async () => {
+    const { api } = require('../../api/client');
+    api.getEscrow.mockResolvedValue({
+      id: 'e-prepaid-merchant-review',
+      status: 'active',
+      escrowType: 'prepaid',
+      totalAmount: 150,
+      monthlyAmount: 5,
+      unitPrice: 5,
+      months: 30,
+      business: { name: '강남 블루보틀' },
+      consumer: { name: '김민수' },
+      entries: [{ id: 'en-1', month: 1, amount: '5', status: 'pending', finishAfter: 830607775, cancelAfter: 837000000 }],
+      chargeRequests: [],
+      refundReviewRequests: [
+        {
+          id: 'refund-review-merchant',
+          status: 'merchant_review',
+          refundableAmount: 10,
+          merchantRespondBy: '2026-05-18T00:00:00.000Z',
+          consumerReason: '2주 넘게 문을 열지 않아 환불 검토를 요청합니다.',
+          photoDataUrls: ['data:image/png;base64,ZmFrZQ=='],
+          requestedAt: '2026-05-14T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const { findByText, queryByText } = renderWithProviders(
+      <BusinessEscrowDetailScreen route={{ params: { id: 'e-prepaid-merchant-review' } } as any} navigation={{} as any} />,
+    );
+
+    expect(await findByText('환불 검토 요청 접수됨')).toBeTruthy();
+    expect(await findByText('사업자 응답 대기')).toBeTruthy();
+    expect(queryByText(/2주 넘게 문을 열지 않아/)).toBeNull();
+    expect(queryByText('첨부 사진 1장')).toBeNull();
   });
 });

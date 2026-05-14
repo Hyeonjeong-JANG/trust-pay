@@ -17,6 +17,14 @@ jest.mock('../../utils/toast', () => ({
 jest.mock('../../api/client', () => ({
   api: {
     getBalance: jest.fn().mockResolvedValue({ xrplAddress: 'rBusiness123456', balance: '1200' }),
+    getBusiness: jest.fn().mockResolvedValue({
+      id: 'business-1',
+      name: '파워짐 피트니스',
+      category: '헬스장',
+      address: '서울시 서초구 서초대로 100',
+      registrationNumber: '1234567890',
+      registrationVerificationStatus: 'demo_verified',
+    }),
   },
 }));
 
@@ -65,6 +73,9 @@ describe('BusinessProfileScreen', () => {
     );
 
     expect(await findByText('가게관리')).toBeTruthy();
+    expect(await findByText('사업자 정보')).toBeTruthy();
+    expect(await findByText('123-45-67890')).toBeTruthy();
+    expect(await findByText('국세청 데모 인증 완료')).toBeTruthy();
     expect(await findByText('1,200 RLUSD')).toBeTruthy();
     expect(await findByText('차감 메뉴 등록')).toBeTruthy();
 

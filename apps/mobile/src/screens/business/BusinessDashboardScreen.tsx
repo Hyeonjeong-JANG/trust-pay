@@ -20,7 +20,7 @@ import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, BusinessSummaryRowSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
 import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { EscrowRecord, EscrowEntry } from '@prepaid-shield/shared-types';
+import type { EscrowRecord, EscrowEntry, RefundReviewRequest } from '@prepaid-shield/shared-types';
 import type { BusinessTabProps } from '../../navigation/types';
 
 type StatusFilter = 'all' | 'active' | 'completed' | 'cancelled';
@@ -31,7 +31,53 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
   { key: 'cancelled', label: '취소됨' },
 ];
 
+const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'platform_review',
+  'merchant_response_requested',
+  'merchant_responded',
+  'merchant_review',
+  'merchant_disputed',
+  'platform_investigation',
+  'auto_approved',
+  'platform_approved',
+  'refunded',
+  'rejected',
+]);
+
+const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
+  platform_review: 'TrustPay 검토 중',
+  merchant_response_requested: '사업자 응답 대기',
+  merchant_responded: '사업자 응답 완료',
+  merchant_review: '사업자 응답 대기',
+  merchant_disputed: '사업자 이의제기',
+  platform_investigation: 'TrustPay 조사 중',
+  auto_approved: '무응답 자동 승인',
+  platform_approved: 'TrustPay 환불 승인',
+  refunded: '환불 완료',
+  rejected: '환불 검토 거절',
+};
+
 type EscrowWithConsumer = EscrowRecord & { consumer?: { id: string; name: string } };
+
+function sumEntryAmounts(entries: EscrowEntry[], status: EscrowEntry['status']): number {
+  return entries
+    .filter((entry) => entry.status === status)
+    .reduce((sum, entry) => sum + Number(entry.amount), 0);
+}
+
+function getPrepaidAmounts(escrow: EscrowWithConsumer) {
+  const totalAmount = Number(escrow.totalAmount);
+  const settledChargeAmount = escrow.chargeRequests
+    ?.filter((request) => request.status === 'settled')
+    .reduce((sum, request) => sum + Number(request.amount), 0) ?? 0;
+  const releasedEntryAmount = sumEntryAmounts(escrow.entries ?? [], 'released');
+  const refundedEntryAmount = sumEntryAmounts(escrow.entries ?? [], 'refunded');
+  const usedAmount = settledChargeAmount > 0 ? settledChargeAmount : releasedEntryAmount;
+  return {
+    usedAmount,
+    remainingAmount: Math.max(totalAmount - usedAmount - refundedEntryAmount, 0),
+  };
+}
 
 export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashboard'>) {
   const userId = useAuthStore((s) => s.userId);
@@ -106,6 +152,12 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
     : statusFilter === 'all'
       ? '에스크로'
       : `${FILTER_OPTIONS.find((option) => option.key === statusFilter)?.label ?? '진행중'} 에스크로`;
+  const refundReviewItems = ((dashboard?.escrows ?? []) as EscrowWithConsumer[])
+    .flatMap((escrow) => (escrow.refundReviewRequests ?? [])
+      .filter((request: RefundReviewRequest) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
+      .map((request: RefundReviewRequest) => ({ escrow, request })))
+    .sort((a, b) => new Date(b.request.requestedAt).getTime() - new Date(a.request.requestedAt).getTime());
+  const latestRefundReviewItem = refundReviewItems[0];
 
   if (isLoading) {
     return (
@@ -176,6 +228,31 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
               </View>
             </View>
 
+            {latestRefundReviewItem && (
+              <View style={styles.refundReviewCard}>
+                <View style={styles.refundReviewHeader}>
+                  <View>
+                    <Text style={styles.refundReviewEyebrow}>환불 검토 요청</Text>
+                    <Text style={styles.refundReviewTitle}>{refundReviewItems.length}건 대기</Text>
+                    <Text style={styles.refundReviewStatus}>{REFUND_REVIEW_STATUS_KO[latestRefundReviewItem.request.status] ?? latestRefundReviewItem.request.status}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.refundReviewAction}
+                    onPress={() => navigation.navigate('BusinessEscrowDetail', { id: latestRefundReviewItem.escrow.id })}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.refundReviewActionText}>요청 확인</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.refundReviewSummary}>
+                  {latestRefundReviewItem.escrow.consumer?.name ?? '손님'} · 환불 가능 {formatKrwFromRlusd(latestRefundReviewItem.request.refundableAmount)}
+                </Text>
+                {!!latestRefundReviewItem.request.merchantNotice && (
+                  <Text style={styles.refundReviewReason} numberOfLines={2}>{latestRefundReviewItem.request.merchantNotice}</Text>
+                )}
+              </View>
+            )}
+
             <TouchableOpacity
               style={styles.createPaymentCard}
               onPress={() => navigation.navigate('BusinessCreatePayment')}
@@ -236,7 +313,13 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
           const pendingEntries = item.entries?.filter((e: EscrowEntry) => e.status === 'pending') ?? [];
           const releasedCount = (item.entries?.length ?? 0) - pendingEntries.length;
           const totalEntries = item.entries?.length || item.months;
-          const progressPct = totalEntries > 0 ? (releasedCount / totalEntries) * 100 : 0;
+          const prepaidAmounts = isPrepaid ? getPrepaidAmounts(item) : null;
+          const progressPct = isPrepaid
+            ? Number(item.totalAmount) > 0 ? ((prepaidAmounts?.usedAmount ?? 0) / Number(item.totalAmount)) * 100 : 0
+            : totalEntries > 0 ? (releasedCount / totalEntries) * 100 : 0;
+          const latestRefundReview = (item.refundReviewRequests ?? [])
+            .filter((request: RefundReviewRequest) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
+            .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())[0];
           return (
             <View style={styles.card}>
               <TouchableOpacity
@@ -252,9 +335,15 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
                   <View style={styles.cardInfo}>
                     <Text style={styles.cardTitle}>{item.consumer?.name ?? '소비자'}</Text>
                     <Text style={styles.cardSub}>
-                      {formatKrwFromRlusd(item.monthlyAmount)}/{isPrepaid ? '회' : '월'} · {pendingEntries.length}건 대기
+                      {isPrepaid
+                        ? `사용 ${formatKrwFromRlusd(prepaidAmounts?.usedAmount ?? 0)} · 잔액 ${formatKrwFromRlusd(prepaidAmounts?.remainingAmount ?? 0)}`
+                        : `${formatKrwFromRlusd(item.monthlyAmount)}/월 · ${pendingEntries.length}건 대기`}
                     </Text>
-                    <Text style={styles.cardSubRlusd}>{formatRlusd(item.monthlyAmount)}</Text>
+                    <Text style={styles.cardSubRlusd}>
+                      {isPrepaid
+                        ? `${formatRlusd(prepaidAmounts?.usedAmount ?? 0)} 사용 · ${formatRlusd(prepaidAmounts?.remainingAmount ?? 0)} 잔액`
+                        : formatRlusd(item.monthlyAmount)}
+                    </Text>
                   </View>
                   <View style={styles.cardAmountBlock}>
                     <Text style={styles.cardAmount}>{formatKrwFromRlusd(item.totalAmount)}</Text>
@@ -264,6 +353,11 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
                 <View style={styles.progressBarBg}>
                   <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
                 </View>
+                {latestRefundReview && (
+                  <Text style={styles.refundReviewBadge}>
+                    환불 검토 중: {REFUND_REVIEW_STATUS_KO[latestRefundReview.status] ?? latestRefundReview.status}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           );
@@ -324,6 +418,49 @@ const styles = StyleSheet.create({
   },
   summarySub: { fontSize: font.size.xs, color: colors.gray400, marginTop: 2 },
   summaryLabel: { fontSize: font.size.xs, color: colors.gray500, marginTop: spacing.xs },
+  refundReviewCard: {
+    backgroundColor: colors.warningLight,
+    borderRadius: radius.lg,
+    marginBottom: spacing.xl,
+    padding: spacing.lg,
+  },
+  refundReviewHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  refundReviewEyebrow: {
+    color: colors.warning,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.bold,
+    marginBottom: 2,
+  },
+  refundReviewTitle: {
+    color: colors.gray900,
+    fontSize: font.size.lg,
+    fontWeight: font.weight.bold,
+  },
+  refundReviewStatus: { color: colors.gray700, fontSize: font.size.sm, marginTop: 2 },
+  refundReviewAction: {
+    backgroundColor: colors.white,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  refundReviewActionText: { color: colors.warning, fontSize: font.size.sm, fontWeight: font.weight.bold },
+  refundReviewSummary: {
+    color: colors.gray800,
+    fontSize: font.size.md,
+    fontWeight: font.weight.semibold,
+    marginTop: spacing.md,
+  },
+  refundReviewReason: {
+    color: colors.gray600,
+    fontSize: font.size.sm,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+  },
   createPaymentCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -402,6 +539,12 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   cardAmountSub: { fontSize: font.size.xs, color: colors.gray400, marginTop: 1 },
+  refundReviewBadge: {
+    color: colors.warning,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    marginTop: spacing.sm,
+  },
   progressBarBg: {
     height: 4,
     backgroundColor: colors.gray200,

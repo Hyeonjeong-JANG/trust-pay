@@ -13,14 +13,14 @@ import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import { HistoryCardSkeleton, SkeletonBox } from '../../components/Skeleton';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { EscrowRecord, EscrowEntry } from '@prepaid-shield/shared-types';
+import type { EscrowRecord, EscrowEntry, RefundReviewRequest } from '@prepaid-shield/shared-types';
 import type { ConsumerTabProps } from '../../navigation/types';
 
 type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
 
 interface HistoryItem {
   id: string;
-  type: 'created' | 'released' | 'refunded';
+  type: 'created' | 'released' | 'refunded' | 'refund_review';
   date: Date;
   amount: number;
   businessName: string;
@@ -34,6 +34,7 @@ const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; 
   created: { icon: '📝', label: '보호 결제 시작', color: colors.primary, bg: colors.primaryLight },
   released: { icon: '✅', label: '릴리즈 완료', color: colors.success, bg: colors.successLight },
   refunded: { icon: '↩️', label: '환불됨', color: colors.gray500, bg: colors.gray100 },
+  refund_review: { icon: '🛡️', label: '환불 검토 요청 접수', color: colors.warning, bg: colors.warningLight },
 };
 
 export function HistoryScreen(_props: ConsumerTabProps<'History'>) {
@@ -76,6 +77,17 @@ export function HistoryScreen(_props: ConsumerTabProps<'History'>) {
             escrowId: escrow.id,
           });
         }
+      }
+
+      for (const request of (escrow.refundReviewRequests ?? []) as RefundReviewRequest[]) {
+        items.push({
+          id: request.id,
+          type: 'refund_review',
+          date: new Date(request.requestedAt),
+          amount: request.refundableAmount,
+          businessName: bizName,
+          escrowId: escrow.id,
+        });
       }
     }
 
@@ -155,7 +167,7 @@ export function HistoryScreen(_props: ConsumerTabProps<'History'>) {
               </View>
               <View style={styles.cardRight}>
                 <Text style={[styles.cardAmount, { color: config.color }]}>
-                  {hi.type === 'refunded' ? '+' : hi.type === 'created' ? '-' : '+'}{hi.amount.toLocaleString()}
+                  {hi.type === 'created' ? '-' : hi.type === 'refund_review' ? '' : '+'}{hi.amount.toLocaleString()}
                 </Text>
                 <Text style={styles.cardCurrency}>RLUSD</Text>
               </View>

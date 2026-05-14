@@ -1,8 +1,40 @@
-import type { LoginResponse, RequestCodeResponse, EscrowRecord, BusinessDashboard, Business, BalanceResponse, EscrowType, BusinessProduct, ChargeRequest, CreateChargeRequest, CreatePaymentRequest, PaymentRequest } from '@prepaid-shield/shared-types';
+import type { LoginResponse, RequestCodeResponse, EscrowRecord, BusinessDashboard, Business, BalanceResponse, EscrowType, BusinessProduct, ChargeRequest, CreateChargeRequest, CreatePaymentRequest, PaymentRequest, RefundReviewRequest, CreateRefundReviewRequest, BusinessRegistrationRequest, BusinessRegistrationVerificationResponse } from '@prepaid-shield/shared-types';
 import { useAuthStore } from '../store/auth';
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const CONFIGURED_API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 const REQUEST_TIMEOUT_MS = 30_000;
+
+function isLocalWebHost(hostname?: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
+}
+
+function isPrivateIpv4(hostname: string): boolean {
+  const parts = hostname.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  return parts[0] === 10
+    || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
+    || (parts[0] === 192 && parts[1] === 168);
+}
+
+export function resolveApiBase(configuredBase = CONFIGURED_API_BASE, hostname?: string): string {
+  const runtimeHostname = hostname ?? (typeof window !== 'undefined' ? window.location.hostname : undefined);
+  if (configuredBase === '/api' && isLocalWebHost(runtimeHostname)) {
+    return 'http://localhost:3000';
+  }
+
+  if (isLocalWebHost(runtimeHostname)) {
+    try {
+      const configuredUrl = new URL(configuredBase);
+      if (isPrivateIpv4(configuredUrl.hostname)) {
+        return `${configuredUrl.protocol}//localhost${configuredUrl.port ? `:${configuredUrl.port}` : ''}`;
+      }
+    } catch {
+      return configuredBase;
+    }
+  }
+
+  return configuredBase;
+}
 
 export type ApiErrorCode =
   | 'NETWORK'
@@ -82,7 +114,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetch(`${resolveApiBase()}${path}`, {
       headers: { 'Content-Type': 'application/json', ...authHeaders },
       signal: controller.signal,
       ...options,
@@ -147,8 +179,18 @@ export const api = {
   rejectChargeRequest: (requestId: string) =>
     request<ChargeRequest>(`/escrow/charge-requests/${requestId}/reject`, { method: 'POST' }),
 
+  requestRefundReview: (escrowId: string, data: CreateRefundReviewRequest) =>
+    request<RefundReviewRequest>(`/escrow/${escrowId}/refund-review-requests`, { method: 'POST', body: JSON.stringify(data) }),
+
+  respondToRefundReviewRequest: (requestId: string, data: { response: string }) =>
+    request<RefundReviewRequest>(`/escrow/refund-review-requests/${requestId}/merchant-response`, { method: 'POST', body: JSON.stringify(data) }),
+
   // Business
   getBusinesses: () => request<Business[]>('/business'),
+  registerBusiness: (data: BusinessRegistrationRequest) =>
+    request<Business>('/business', { method: 'POST', body: JSON.stringify(data) }),
+  verifyBusinessRegistrationNumber: (data: { registrationNumber: string }) =>
+    request<BusinessRegistrationVerificationResponse>('/business/verify-registration-number', { method: 'POST', body: JSON.stringify(data) }),
   getBusiness: (id: string) => request<Business>(`/business/${id}`),
   getBusinessProducts: (id: string) => request<BusinessProduct[]>(`/business/${id}/products`),
   getBusinessDashboard: (id: string) => request<BusinessDashboard>(`/business/${id}/dashboard`),

@@ -11,16 +11,17 @@ import {
   Platform,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { ConsumerTabProps } from '../../navigation/types';
 
-export function ProfileScreen(_props: ConsumerTabProps<'Profile'>) {
+export function ProfileScreen(_props: { route?: unknown; navigation?: unknown }) {
   const userId = useAuthStore((s) => s.userId);
   const name = useAuthStore((s) => s.name);
   const role = useAuthStore((s) => s.role);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+  const queryClient = useQueryClient();
 
   const { data: balanceData, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['balance', userId],
@@ -34,6 +35,11 @@ export function ProfileScreen(_props: ConsumerTabProps<'Profile'>) {
       await Clipboard.setStringAsync(balanceData.xrplAddress);
       Alert.alert('복사됨', 'XRPL 주소가 클립보드에 복사되었습니다.');
     }
+  };
+
+  const logout = () => {
+    queryClient.clear();
+    clearAuth();
   };
 
   return (
@@ -112,6 +118,13 @@ export function ProfileScreen(_props: ConsumerTabProps<'Profile'>) {
             <Text style={styles.infoValue}>Token Escrow (XLS-85)</Text>
           </View>
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>계정</Text>
+        <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.75}>
+          <Text style={styles.logoutButtonText}>로그아웃</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -208,5 +221,14 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.semibold,
     fontSize: font.size.sm,
   },
+  logoutButton: {
+    minHeight: 48,
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.sm,
+  },
+  logoutButtonText: { color: colors.danger, fontWeight: font.weight.semibold, fontSize: font.size.md },
   errorText: { fontSize: font.size.md, color: colors.gray400, textAlign: 'center' },
 });

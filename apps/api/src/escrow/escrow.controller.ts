@@ -12,7 +12,7 @@ import { EscrowService } from './escrow.service';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import { FinishEscrowDto } from './dto/finish-escrow.dto';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
-import { createChargeRequestSchema, createEscrowSchema, finishEscrowSchema, type CreateChargeRequestInput } from '@prepaid-shield/validators';
+import { createChargeRequestSchema, createEscrowSchema, finishEscrowSchema, merchantRefundReviewResponseSchema, requestRefundReviewSchema, type CreateChargeRequestInput, type MerchantRefundReviewResponseInput, type RequestRefundReviewInput } from '@prepaid-shield/validators';
 import { AuthGuard } from '../common/auth.guard';
 
 @Controller('escrow')
@@ -53,6 +53,24 @@ export class EscrowController {
   @Post('charge-requests/:requestId/reject')
   rejectChargeRequest(@Param('requestId') requestId: string, @Req() req: any) {
     return this.escrowService.rejectChargeRequest(requestId, req.user);
+  }
+
+  @Post(':id/refund-review-requests')
+  requestRefundReview(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(requestRefundReviewSchema)) dto: RequestRefundReviewInput,
+    @Req() req: any,
+  ) {
+    return this.escrowService.requestRefundReview(id, req.user, dto);
+  }
+
+  @Post('refund-review-requests/:requestId/merchant-response')
+  respondToRefundReviewRequest(
+    @Param('requestId') requestId: string,
+    @Body(new ZodValidationPipe(merchantRefundReviewResponseSchema)) dto: MerchantRefundReviewResponseInput,
+    @Req() req: any,
+  ) {
+    return this.escrowService.respondToRefundReviewRequest(requestId, req.user, dto);
   }
 
   @Get(':id')

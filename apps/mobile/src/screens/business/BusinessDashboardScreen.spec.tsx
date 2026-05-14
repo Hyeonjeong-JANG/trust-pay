@@ -170,8 +170,8 @@ describe('BusinessDashboardScreen', () => {
   it('should keep prepaid charge controls out of dashboard cards', async () => {
     const { api } = require('../../api/client');
     api.getBusinessDashboard.mockResolvedValue({
-      totalReceived: 40,
-      totalPending: 110,
+      totalReceived: 25,
+      totalPending: 125,
       escrows: [
         {
           id: 'e-prepaid',
@@ -195,15 +195,21 @@ describe('BusinessDashboardScreen', () => {
             { id: 'en-2', month: 10, amount: '5', status: 'pending', finishAfter: 830607775 },
             { id: 'en-3', month: 11, amount: '5', status: 'pending', finishAfter: 830607775 },
           ],
+          chargeRequests: [
+            { id: 'charge-1', menuName: '아메리카노', amount: 10, status: 'settled' },
+            { id: 'charge-2', menuName: '브런치 세트', amount: 15, status: 'settled' },
+          ],
         },
       ],
     });
 
-    const { findAllByText, findByText, queryByText, queryByPlaceholderText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+    const { findByText, queryByText, queryByPlaceholderText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
     expect(await findByText(/이미 보호 원장에 잠긴 금액권에서 실제 사용금액 차감 요청을 보냅니다/)).toBeTruthy();
-    expect(await findByText(/₩6,750\/회/)).toBeTruthy();
-    expect((await findAllByText('5.00 RLUSD')).length).toBeGreaterThan(0);
+    expect(await findByText('사용 ₩33,750 · 잔액 ₩168,750')).toBeTruthy();
+    expect(await findByText('25.00 RLUSD 사용 · 125.00 RLUSD 잔액')).toBeTruthy();
+    expect(queryByText(/\/회/)).toBeNull();
+    expect(queryByText(/건 대기/)).toBeNull();
     expect(queryByText('차감 메뉴 등록')).toBeNull();
     expect(queryByText('차감 항목 선택')).toBeNull();
     expect(queryByText('직접 입력')).toBeNull();
@@ -211,6 +217,122 @@ describe('BusinessDashboardScreen', () => {
     expect(queryByText('고객 이용분 승인 요청')).toBeNull();
     expect(queryByPlaceholderText('예: 수건 대여')).toBeNull();
     expect(queryByPlaceholderText('예: 67,500')).toBeNull();
+  });
+
+  it('should surface admin-requested refund review responses on the merchant dashboard', async () => {
+    const { api } = require('../../api/client');
+    const navigation = { navigate: jest.fn() };
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 25,
+      totalPending: 125,
+      escrows: [
+        {
+          id: 'e-refund',
+          status: 'active',
+          escrowType: 'prepaid',
+          totalAmount: 150,
+          monthlyAmount: 5,
+          months: 30,
+          consumer: { id: 'consumer-2', name: '이서연' },
+          entries: [
+            { id: 'en-1', month: 1, amount: '5', status: 'pending', finishAfter: 830607775 },
+          ],
+          chargeRequests: [],
+          refundReviewRequests: [
+            {
+              id: 'refund-review-1',
+              status: 'merchant_response_requested',
+              refundableAmount: 10,
+              merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부와 이용권 처리 방안을 답변해주세요.',
+              requestedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const { findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={navigation as any} />);
+
+    expect(await findByText('환불 검토 요청')).toBeTruthy();
+    expect(await findByText('1건 대기')).toBeTruthy();
+    expect(await findByText(/이서연 · 환불 가능 ₩13,500/)).toBeTruthy();
+    expect(await findByText(/고객이 장기 휴업을 주장했습니다/)).toBeTruthy();
+    fireEvent.press(await findByText('요청 확인'));
+    expect(navigation.navigate).toHaveBeenCalledWith('BusinessEscrowDetail', { id: 'e-refund' });
+  });
+
+  it('should surface platform-review refund status on the merchant dashboard without consumer evidence', async () => {
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 25,
+      totalPending: 125,
+      escrows: [
+        {
+          id: 'e-platform-review',
+          status: 'active',
+          escrowType: 'prepaid',
+          totalAmount: 150,
+          monthlyAmount: 5,
+          months: 30,
+          consumer: { id: 'consumer-2', name: '이서연' },
+          entries: [],
+          chargeRequests: [],
+          refundReviewRequests: [
+            {
+              id: 'refund-review-platform',
+              status: 'platform_review',
+              refundableAmount: 10,
+              consumerReason: '2주 넘게 안 열고 전화도 받지 않아 환불 검토를 요청합니다.',
+              requestedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+    expect(await findByText('이서연')).toBeTruthy();
+    expect(await findByText('환불 검토 요청')).toBeTruthy();
+    expect(await findByText('TrustPay 검토 중')).toBeTruthy();
+    expect(await findByText('환불 검토 중: TrustPay 검토 중')).toBeTruthy();
+    expect(queryByText(/2주 넘게 안 열고 전화도 받지 않아/)).toBeNull();
+  });
+
+  it('should surface merchant-review refund status on merchant escrow list cards', async () => {
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 25,
+      totalPending: 125,
+      escrows: [
+        {
+          id: 'e-merchant-review',
+          status: 'active',
+          escrowType: 'prepaid',
+          totalAmount: 150,
+          monthlyAmount: 5,
+          months: 30,
+          consumer: { id: 'consumer-2', name: '김민수' },
+          entries: [],
+          chargeRequests: [],
+          refundReviewRequests: [
+            {
+              id: 'refund-review-merchant',
+              status: 'merchant_review',
+              refundableAmount: 10,
+              consumerReason: '2주 넘게 문을 열지 않아 환불 검토를 요청합니다.',
+              requestedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+    expect(await findByText('김민수')).toBeTruthy();
+    expect(await findByText('환불 검토 중: 사업자 응답 대기')).toBeTruthy();
+    expect(queryByText(/2주 넘게 문을 열지 않아/)).toBeNull();
   });
 
   it('should not expose monthly auto-settlement copy inside each dashboard card', async () => {

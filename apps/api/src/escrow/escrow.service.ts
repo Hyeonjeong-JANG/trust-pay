@@ -1,13 +1,15 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { BusinessClosureService } from '../business/business-closure.service';
 import { PartialPrepaidEscrowCreationError, XrplService } from '../xrpl/xrpl.service';
 import { CryptoService } from '../common/crypto.service';
 import { Wallet } from 'xrpl';
 import type { EscrowResult } from '@prepaid-shield/xrpl-client';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import type { SessionUser } from '../common/session-token';
-import type { CreateChargeRequestInput } from '@prepaid-shield/validators';
+import { requestRefundReviewSchema, type CreateChargeRequestInput, type MerchantRefundReviewResponseInput, type RequestRefundReviewInput } from '@prepaid-shield/validators';
+import type { BusinessClosureStatus, RefundReviewStatus } from '@prepaid-shield/shared-types';
 
 const MAX_PREPAID_ESCROW_ENTRIES = 50;
 const RESERVED_CHARGE_STATUSES = new Set(['pending_approval']);
@@ -15,6 +17,48 @@ const INTEGER_RATIO_EPSILON = 1e-4;
 const MAX_DECIMAL_ROUNDING_RATIO_EPSILON = 0.05;
 const DECIMAL_ROUNDING_HALF_UNIT = 0.5e-6;
 const RLUSD_DECIMAL_PLACES = 6;
+const ACTIVE_REFUND_REVIEW_STATUSES = [
+  'platform_review',
+  'merchant_response_requested',
+  'merchant_responded',
+  'merchant_review',
+  'merchant_disputed',
+  'platform_investigation',
+  'closure_suspected',
+  'closure_confirmed',
+  'auto_approved',
+  'platform_approved',
+];
+const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'platform_review',
+  'merchant_response_requested',
+  'merchant_responded',
+  'merchant_review',
+  'merchant_disputed',
+  'platform_investigation',
+  'auto_approved',
+  'platform_approved',
+  'refunded',
+  'rejected',
+]);
+
+function parseRefundReviewPhotoDataUrls(value?: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function validateRefundReviewInput(input: RequestRefundReviewInput): RequestRefundReviewInput {
+  const result = requestRefundReviewSchema.safeParse(input);
+  if (!result.success) {
+    throw new BadRequestException(result.error.issues[0]?.message ?? '환불 검토 요청 사유를 확인해주세요');
+  }
+  return result.data;
+}
 
 function getWholeRatio(total: number, unit: number): number | null {
   if (!Number.isFinite(total) || !Number.isFinite(unit) || unit <= 0) return null;
@@ -34,6 +78,17 @@ function roundRlusdAmount(amount: number): number {
 
 function formatRlusdAmount(amount: number): string {
   return String(roundRlusdAmount(amount));
+}
+
+function addBusinessDays(value: Date, days: number): Date {
+  const result = new Date(value);
+  let remaining = days;
+  while (remaining > 0) {
+    result.setDate(result.getDate() + 1);
+    const day = result.getDay();
+    if (day !== 0 && day !== 6) remaining -= 1;
+  }
+  return result;
 }
 
 function selectEntriesCoveringAmount<T extends { id: string; amount: string | number }>(
@@ -70,6 +125,7 @@ export class EscrowService {
     private xrplService: XrplService,
     private configService: ConfigService,
     private crypto: CryptoService,
+    private businessClosureService: BusinessClosureService,
   ) {}
 
   async create(dto: CreateEscrowDto, user: SessionUser) {
@@ -227,11 +283,12 @@ export class EscrowService {
         consumer: true,
         product: { include: { menuItems: true } },
         chargeRequests: { include: { menuItem: true } },
+        refundReviewRequests: { orderBy: { requestedAt: 'desc' } },
       },
     });
     if (!escrow) throw new NotFoundException('Escrow not found');
     this.assertEscrowAccess(escrow, user);
-    return this.stripSecrets(escrow);
+    return this.stripSecrets(escrow, user);
   }
 
   async finishEntry(escrowId: string, entryMonth: number, user: SessionUser) {
@@ -480,6 +537,85 @@ export class EscrowService {
     return { cancelled: pendingEntries.length };
   }
 
+  async requestRefundReview(escrowId: string, user: SessionUser, dto: RequestRefundReviewInput) {
+    const input = validateRefundReviewInput(dto);
+    const escrow = await this.prisma.escrow.findUnique({
+      where: { id: escrowId },
+      include: { entries: true, business: true, consumer: true },
+    });
+    if (!escrow) throw new NotFoundException('Escrow not found');
+    if (user.role !== 'consumer' || user.userId !== escrow.consumerId) {
+      throw new ForbiddenException('해당 소비자만 환불 검토를 요청할 수 있습니다');
+    }
+    if (escrow.status !== 'active') {
+      throw new BadRequestException('진행 중인 에스크로만 환불 검토를 요청할 수 있습니다');
+    }
+
+    const existing = await this.prisma.refundReviewRequest.findFirst({
+      where: {
+        escrowId,
+        status: { in: ACTIVE_REFUND_REVIEW_STATUSES },
+      },
+      orderBy: { requestedAt: 'desc' },
+      include: { escrow: { include: { business: true, consumer: true } } },
+    });
+    if (existing) return this.stripRefundReviewRequestSecrets(existing);
+
+    const refundableAmount = roundRlusdAmount(
+      escrow.entries
+        .filter((entry) => entry.status === 'pending')
+        .reduce((sum, entry) => sum + Number(entry.amount), 0),
+    );
+    if (refundableAmount <= 0) {
+      throw new BadRequestException('환불 검토 가능한 미사용 잔액이 없습니다');
+    }
+
+    const closureCheck = await this.businessClosureService.checkBusinessStatus(escrow.business.registrationNumber);
+    const policy = this.getRefundReviewPolicy(closureCheck.status);
+    const now = new Date();
+    const created = await this.prisma.refundReviewRequest.create({
+      data: {
+        escrowId,
+        consumerId: escrow.consumerId,
+        businessId: escrow.businessId,
+        status: policy.status,
+        refundableAmount,
+        merchantRespondBy: addBusinessDays(now, policy.slaBusinessDays),
+        businessClosureStatus: closureCheck.status,
+        businessClosureSource: closureCheck.source,
+        businessClosureCheckedAt: closureCheck.checkedAt,
+        investigationReason: policy.reason,
+        consumerReason: input.reason,
+        photoDataUrlsJson: JSON.stringify(input.photoDataUrls),
+      },
+      include: { escrow: { include: { business: true, consumer: true } } },
+    });
+
+    return this.stripRefundReviewRequestSecrets(created);
+  }
+
+  async respondToRefundReviewRequest(requestId: string, user: SessionUser, dto: MerchantRefundReviewResponseInput) {
+    const review = await this.prisma.refundReviewRequest.findUnique({ where: { id: requestId } });
+    if (!review) throw new NotFoundException('Refund review not found');
+    if (user.role !== 'business' || user.userId !== review.businessId) {
+      throw new ForbiddenException('해당 사업자만 환불 검토 소명을 제출할 수 있습니다');
+    }
+    if (review.status !== 'merchant_response_requested') {
+      throw new BadRequestException('사업자 소명 요청 상태에서만 응답할 수 있습니다');
+    }
+
+    const updated = await this.prisma.refundReviewRequest.update({
+      where: { id: requestId },
+      data: {
+        status: 'merchant_responded',
+        merchantResponse: dto.response,
+        merchantRespondedAt: new Date(),
+      },
+      include: { escrow: { include: { business: true, consumer: true } } },
+    });
+    return this.stripRefundReviewRequestForMerchant(updated);
+  }
+
   async findByConsumer(consumerId: string, user: SessionUser) {
     if (user.role !== 'consumer' || user.userId !== consumerId) {
       throw new ForbiddenException('본인 에스크로 목록만 조회할 수 있습니다');
@@ -487,9 +623,15 @@ export class EscrowService {
 
     const escrows = await this.prisma.escrow.findMany({
       where: { consumerId },
-      include: { entries: true, business: true, product: { include: { menuItems: true } }, chargeRequests: { include: { menuItem: true } } },
+      include: {
+        entries: true,
+        business: true,
+        product: { include: { menuItems: true } },
+        chargeRequests: { include: { menuItem: true } },
+        refundReviewRequests: { orderBy: { requestedAt: 'desc' } },
+      },
     });
-    return escrows.map((e) => this.stripSecrets(e));
+    return escrows.map((e) => this.stripSecrets(e, user));
   }
 
   async findChargeRequestsByEscrow(escrowId: string, user: SessionUser) {
@@ -512,7 +654,7 @@ export class EscrowService {
     }
   }
 
-  private stripSecrets(escrow: any) {
+  private stripSecrets(escrow: any, user?: SessionUser) {
     if (escrow.business) {
       const { xrplSecret: _, ...business } = escrow.business;
       escrow = { ...escrow, business };
@@ -520,6 +662,14 @@ export class EscrowService {
     if (escrow.consumer) {
       const { xrplSecret: _, ...consumer } = escrow.consumer;
       escrow = { ...escrow, consumer };
+    }
+    if (escrow.refundReviewRequests) {
+      const refundReviewRequests = user?.role === 'business'
+        ? escrow.refundReviewRequests
+          .filter((request: any) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
+          .map((request: any) => this.stripRefundReviewRequestForMerchant(request))
+        : escrow.refundReviewRequests.map((request: any) => this.stripRefundReviewRequestSecrets(request));
+      escrow = { ...escrow, refundReviewRequests };
     }
     return escrow;
   }
@@ -529,6 +679,62 @@ export class EscrowService {
       return { ...chargeRequest, escrow: this.stripSecrets(chargeRequest.escrow) };
     }
     return chargeRequest;
+  }
+
+  private stripRefundReviewRequestSecrets(refundReviewRequest: any) {
+    if ('photoDataUrlsJson' in refundReviewRequest) {
+      const { photoDataUrlsJson, ...rest } = refundReviewRequest;
+      refundReviewRequest = { ...rest, photoDataUrls: parseRefundReviewPhotoDataUrls(photoDataUrlsJson) };
+    }
+    if (refundReviewRequest.escrow) {
+      return { ...refundReviewRequest, escrow: this.stripSecrets(refundReviewRequest.escrow) };
+    }
+    return refundReviewRequest;
+  }
+
+  private stripRefundReviewRequestForMerchant(refundReviewRequest: any) {
+    const { photoDataUrlsJson: _photos, consumerReason: _consumerReason, photoDataUrls: _photoDataUrls, ...rest } = refundReviewRequest;
+    return rest;
+  }
+
+  private getRefundReviewPolicy(closureStatus: BusinessClosureStatus): {
+    status: RefundReviewStatus;
+    slaBusinessDays: number;
+    reason: string;
+  } {
+    if (closureStatus === 'closed') {
+      return {
+        status: 'platform_review',
+        slaBusinessDays: 0,
+        reason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 검토로 전환합니다.',
+      };
+    }
+    if (closureStatus === 'suspended') {
+      return {
+        status: 'platform_review',
+        slaBusinessDays: 1,
+        reason: '국세청 사업자 상태가 휴업으로 확인되어 TrustPay 조사 대상입니다.',
+      };
+    }
+    if (closureStatus === 'not_configured') {
+      return {
+        status: 'platform_review',
+        slaBusinessDays: 3,
+        reason: '사업자 인증 정보 재확인이 필요해 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.',
+      };
+    }
+    if (closureStatus === 'unavailable') {
+      return {
+        status: 'platform_review',
+        slaBusinessDays: 3,
+        reason: '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.',
+      };
+    }
+    return {
+      status: 'platform_review',
+      slaBusinessDays: 3,
+      reason: 'TrustPay가 요청 내용을 먼저 검토한 뒤 필요한 경우 사업자 소명을 요청합니다.',
+    };
   }
 
   private parseChargeEntryIds(entryIds: string): string[] {

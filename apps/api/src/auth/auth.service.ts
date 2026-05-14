@@ -83,7 +83,7 @@ export class AuthService {
     });
     const isNewUser = dto.role === 'consumer'
       ? !(await this.findConsumer(dto))
-      : false;
+      : !(await this.findBusiness(dto));
 
     return {
       delivery: 'demo' as const,
