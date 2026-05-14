@@ -1,7 +1,8 @@
-import { escapeHtml, getApiBase, getStatusLabel, safeDataImageSrc, summarizeReview, visibleQueueStatuses } from './admin-state.js';
+import { buildAdminAuthHeaders, escapeHtml, getAdminRequestErrorMessage, getApiBase, getStatusLabel, safeDataImageSrc, summarizeReview, visibleQueueStatuses } from './admin-state.js';
 
 const state = {
   apiBase: getApiBase(window.TRUSTPAY_ADMIN_API_BASE || '/api', window.location.hostname),
+  adminId: sessionStorage.getItem('trustpay-admin-id') || '',
   adminSecret: sessionStorage.getItem('trustpay-admin-secret') || '',
   reviews: [],
   selectedId: null,
@@ -11,7 +12,7 @@ const state = {
 const $ = (selector) => document.querySelector(selector);
 
 function authHeaders() {
-  return { 'Content-Type': 'application/json', 'X-Admin-Secret': state.adminSecret };
+  return buildAdminAuthHeaders(state.adminId, state.adminSecret);
 }
 
 async function adminRequest(path, options = {}) {
@@ -128,8 +129,8 @@ function renderDetail(review) {
 }
 
 async function loadReviews() {
-  if (!state.adminSecret) {
-    setStatus('관리자 비밀번호를 입력하세요.', 'warn');
+  if (!state.adminId || !state.adminSecret) {
+    setStatus('관리자 아이디와 비밀번호를 입력하세요.', 'warn');
     return;
   }
   try {
@@ -139,7 +140,7 @@ async function loadReviews() {
     renderQueue();
     setStatus(`${getStatusLabel(state.status)} ${state.reviews.length}건`, 'ok');
   } catch (err) {
-    setStatus(err.message, 'error');
+    setStatus(getAdminRequestErrorMessage(err), 'error');
   }
 }
 
@@ -177,12 +178,15 @@ function boot() {
   renderFilters();
   $('#secret-form').addEventListener('submit', (event) => {
     event.preventDefault();
+    state.adminId = $('#admin-id').value.trim();
     state.adminSecret = $('#admin-secret').value.trim();
+    sessionStorage.setItem('trustpay-admin-id', state.adminId);
     sessionStorage.setItem('trustpay-admin-secret', state.adminSecret);
     loadReviews();
   });
+  $('#admin-id').value = state.adminId;
   $('#admin-secret').value = state.adminSecret;
-  if (state.adminSecret) loadReviews();
+  if (state.adminId && state.adminSecret) loadReviews();
 }
 
 boot();

@@ -3,31 +3,35 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>TrustPay Admin</title>
+    <title>TrustPay 관리자</title>
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
     <main class="shell">
       <header class="masthead">
         <div>
-          <div class="eyebrow">TrustPay Refund Operations</div>
-          <h1>분쟁은 가게보다 먼저 운영자에게 온다.</h1>
-          <p>환불 요청 원문과 사진은 TrustPay 운영자가 먼저 검토하고, 필요한 범위만 사업자 소명 요청으로 전환합니다.</p>
+          <div class="eyebrow">TrustPay Admin</div>
+          <h1>환불 검토 관리</h1>
+          <p>소비자 환불 요청을 확인하고 사업자 소명 요청, 승인, 거절 처리를 진행합니다.</p>
         </div>
         <form id="secret-form" class="login-panel">
-          <label for="admin-secret">관리자 비밀번호</label>
-          <div class="secret-row">
-            <input id="admin-secret" type="password" autocomplete="current-password" placeholder="demo-admin-secret" />
-            <button type="submit" class="primary">큐 열기</button>
+          <div class="credential-grid">
+            <label for="admin-id">관리자 아이디</label>
+            <input id="admin-id" type="text" autocomplete="username" placeholder="admin" />
+            <label for="admin-secret">관리자 비밀번호</label>
+            <input id="admin-secret" type="password" autocomplete="current-password" placeholder="admin1234" />
           </div>
-          <div id="status-line" class="status-line">관리자 인증 대기</div>
+          <div class="secret-row">
+            <button type="submit" class="primary">로그인</button>
+          </div>
+          <div id="status-line" class="status-line">로그인 대기</div>
         </form>
       </header>
       <nav id="filters" class="filters" aria-label="환불 검토 상태 필터"></nav>
       <section class="workbench">
         <aside id="case-list" class="queue" aria-label="환불 검토 목록"></aside>
         <article id="case-detail" class="detail" aria-label="환불 검토 상세">
-          <div class="empty detail-empty">관리자 비밀번호를 입력하고 큐를 여세요.</div>
+          <div class="empty detail-empty">관리자 비밀번호를 입력하세요.</div>
         </article>
       </section>
     </main>

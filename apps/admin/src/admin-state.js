@@ -49,6 +49,14 @@ export function getStatusLabel(status) {
   return STATUS_LABELS[status] ?? status;
 }
 
+export function buildAdminAuthHeaders(adminId, adminSecret) {
+  return {
+    'Content-Type': 'application/json',
+    'X-Admin-Id': adminId,
+    'X-Admin-Secret': adminSecret,
+  };
+}
+
 export function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -61,6 +69,14 @@ export function escapeHtml(value) {
 export function safeDataImageSrc(value) {
   const input = String(value ?? '');
   return /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(input) ? input : '';
+}
+
+export function getAdminRequestErrorMessage(error) {
+  const message = error?.message || String(error ?? '');
+  if (message === 'Failed to fetch' || message.includes('NetworkError')) {
+    return 'API 서버에 연결할 수 없습니다. API 실행 상태와 CORS 설정을 확인하세요.';
+  }
+  return message || '관리자 API 요청에 실패했습니다.';
 }
 
 export function formatKrwFromRlusd(amount) {

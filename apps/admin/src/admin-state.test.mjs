@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeHtml, getApiBase, getStatusLabel, safeDataImageSrc, summarizeReview, visibleQueueStatuses } from './admin-state.js';
+import { readFileSync } from 'node:fs';
+import { buildAdminAuthHeaders, escapeHtml, getAdminRequestErrorMessage, getApiBase, getStatusLabel, safeDataImageSrc, summarizeReview, visibleQueueStatuses } from './admin-state.js';
 
 test('getApiBase resolves local and deployed admin API roots', () => {
   assert.equal(getApiBase('/api', 'localhost'), 'http://localhost:3000');
@@ -59,4 +60,30 @@ test('safeDataImageSrc only permits plain base64 image data URLs', () => {
   assert.equal(safeDataImageSrc('data:image/png;base64,ZmFrZQ=='), 'data:image/png;base64,ZmFrZQ==');
   assert.equal(safeDataImageSrc('data:image/svg+xml,<svg onload=alert(1)>'), '');
   assert.equal(safeDataImageSrc('data:image/png;base64,AAA" onerror="alert(1)'), '');
+});
+
+test('admin shell uses standard console copy and demo admin credentials', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+  assert.match(html, /환불 검토 관리/);
+  assert.match(html, /관리자 아이디/);
+  assert.match(html, /placeholder="admin"/);
+  assert.match(html, /admin1234/);
+  assert.doesNotMatch(html, /분쟁은 가게보다 먼저 운영자에게 온다/);
+  assert.doesNotMatch(html, /Refund Operations/);
+});
+
+test('buildAdminAuthHeaders sends both admin id and password headers', () => {
+  assert.deepEqual(buildAdminAuthHeaders('admin', 'admin1234'), {
+    'Content-Type': 'application/json',
+    'X-Admin-Id': 'admin',
+    'X-Admin-Secret': 'admin1234',
+  });
+});
+
+test('getAdminRequestErrorMessage explains fetch failures in operator terms', () => {
+  assert.equal(
+    getAdminRequestErrorMessage(new Error('Failed to fetch')),
+    'API 서버에 연결할 수 없습니다. API 실행 상태와 CORS 설정을 확인하세요.',
+  );
 });
