@@ -34,6 +34,14 @@ async function adminRequest(path, options = {}) {
 
 function setStatus(message, tone = 'neutral') {
   const el = $('#status-line');
+  if (!el) return;
+  el.textContent = message;
+  el.dataset.tone = tone;
+}
+
+function setLoginStatus(message, tone = 'neutral') {
+  const el = $('#login-status-line');
+  if (!el) return;
   el.textContent = message;
   el.dataset.tone = tone;
 }
@@ -66,8 +74,14 @@ function renderLoading(message) {
 }
 
 function renderLoginRequired() {
-  $('#content-body').innerHTML = '<div class="empty detail-empty">관리자 아이디와 비밀번호를 입력하세요.</div>';
-  setStatus('로그인 대기', 'warn');
+  $('#login-view').hidden = false;
+  $('#admin-view').hidden = true;
+  setLoginStatus('관리자 아이디와 비밀번호를 입력하세요.', 'warn');
+}
+
+function renderAdminShell() {
+  $('#login-view').hidden = true;
+  $('#admin-view').hidden = false;
 }
 
 function setActiveTab(tabId) {
@@ -88,6 +102,7 @@ async function loadActiveTab() {
     renderLoginRequired();
     return;
   }
+  renderAdminShell();
   try {
     if (state.activeTab === 'dashboard') await loadDashboard();
     if (state.activeTab === 'refunds') await loadReviews();
@@ -339,6 +354,7 @@ function renderSettings() {
     sessionStorage.removeItem('trustpay-admin-secret');
     $('#admin-id').value = '';
     $('#admin-secret').value = '';
+    setLoginStatus('로그아웃했습니다.', 'ok');
     renderLoginRequired();
   });
   setStatus('설정 화면', 'neutral');

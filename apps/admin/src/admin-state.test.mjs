@@ -103,14 +103,25 @@ test('safeDataImageSrc only permits plain base64 image data URLs', () => {
   assert.equal(safeDataImageSrc('data:image/png;base64,AAA" onerror="alert(1)'), '');
 });
 
-test('admin shell uses tabbed console copy and demo admin credentials', () => {
+test('admin shell starts with a dedicated centered login view', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+  assert.match(html, /id="login-view"/);
+  assert.match(html, /class="login-view"/);
+  assert.match(html, /id="admin-view"/);
+  assert.match(html, /hidden/);
+  assert.match(html, /관리자 콘솔 로그인/);
+  assert.match(html, /관리자 아이디/);
+  assert.match(html, /placeholder="admin"/);
+  assert.match(html, /admin1234/);
+});
+
+test('admin app shell keeps navigation separate from login form', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
   assert.match(html, /대시보드/);
   assert.match(html, /id="admin-tabs"/);
-  assert.match(html, /관리자 아이디/);
-  assert.match(html, /placeholder="admin"/);
-  assert.match(html, /admin1234/);
+  assert.doesNotMatch(html, /<aside class="sidebar">[\s\S]*<form id="secret-form"/);
   assert.doesNotMatch(html, /분쟁은 가게보다 먼저 운영자에게 온다/);
   assert.doesNotMatch(html, /Refund Operations/);
 });
