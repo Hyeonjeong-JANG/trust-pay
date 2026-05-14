@@ -18,10 +18,10 @@ import { ApprovalAuthModal } from '../../components/ApprovalAuthModal';
 import { ErrorView } from '../../components/ErrorView';
 import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { ChargeRequest, EscrowEntry } from '@prepaid-shield/shared-types';
+import type { ChargeRequest, EscrowEntry, RefundReviewRequest } from '@prepaid-shield/shared-types';
 import type { ScreenProps } from '../../navigation/types';
 import type { EscrowRecord } from '@prepaid-shield/shared-types';
-type EscrowWithRelations = EscrowRecord & { business?: { name: string }; consumer?: { name: string } };
+type EscrowWithRelations = EscrowRecord & { business?: { name: string }; consumer?: { name: string }; refundReviewRequests?: RefundReviewRequest[] };
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   pending: { bg: colors.entry.pendingBg, text: colors.entry.pending },
@@ -49,6 +49,18 @@ const STATUS_KO: Record<string, string> = {
   cancelled: '취소됨',
 };
 
+const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
+  merchant_review: '사업자 응답 대기',
+  merchant_disputed: '사업자 이의제기',
+  platform_investigation: 'TrustPay 조사 중',
+  closure_suspected: '영업중단 의심 · TrustPay 조사',
+  closure_confirmed: '폐업 확인 · TrustPay 검토',
+  auto_approved: '무응답 자동 승인',
+  platform_approved: 'TrustPay 환불 승인',
+  refunded: '환불 완료',
+  rejected: '환불 검토 거절',
+};
+
 function rippleTimeToDate(rippleTime: number): string {
   const RIPPLE_EPOCH = 946684800;
   return new Date((rippleTime + RIPPLE_EPOCH) * 1000).toLocaleDateString('ko-KR');
@@ -71,6 +83,15 @@ function getPrepaidUsageRange(escrow: EscrowWithRelations): string | null {
   const explicitEnd = isoToDate(escrow.validUntil);
   if (explicitStart && explicitEnd) return `${explicitStart} ~ ${explicitEnd}`;
   return getEntryUsageRange(escrow.entries);
+}
+
+function getLatestRefundReview(requests?: RefundReviewRequest[]): RefundReviewRequest | null {
+  if (!requests?.length) return null;
+  return [...requests].sort((a, b) => {
+    const left = new Date(a.requestedAt).getTime();
+    const right = new Date(b.requestedAt).getTime();
+    return right - left;
+  })[0];
 }
 
 function isChargeRequest(item: EscrowEntry | ChargeRequest): item is ChargeRequest {
@@ -122,6 +143,19 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
     },
   });
 
+  const refundReviewMutation = useMutation({
+    mutationFn: () => api.requestRefundReview(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['escrow', id] });
+      queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
+      showSuccessToast('환불 검토 요청 접수', '사업자 응답 기한과 폐업 여부를 확인한 뒤 환불 가능 금액을 안내합니다.');
+    },
+    onError: (err: Error) => {
+      const apiErr = err as ApiError;
+      showErrorToast('환불 검토 요청 실패', apiErr.userMessage ?? err.message);
+    },
+  });
+
   const handleRefundReviewRequest = () => {
     Alert.alert(
       '환불 검토 요청',
@@ -130,7 +164,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
         { text: '닫기', style: 'cancel' },
         {
           text: '요청 접수',
-          onPress: () => showSuccessToast('환불 검토 요청 접수', '약관과 사용 내역을 확인한 뒤 환불 가능 금액을 안내합니다.'),
+          onPress: () => refundReviewMutation.mutate(),
         },
       ],
     );
@@ -154,6 +188,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   const isPrepaid = escrow.escrowType === 'prepaid';
   const pendingChargeRequests = escrow.chargeRequests?.filter((request) => request.status === 'pending_approval') ?? [];
   const chargeHistory = escrow.chargeRequests?.filter((request) => request.status !== 'pending_approval') ?? [];
+  const latestRefundReview = getLatestRefundReview(escrow.refundReviewRequests);
   const totalEntries = escrow.entries.length || escrow.months;
   const escrowStyle = STATUS_STYLE[escrow.status] ?? STATUS_STYLE.cancelled;
   const usageRange = isPrepaid ? getPrepaidUsageRange(escrow) : getEntryUsageRange(escrow.entries);
@@ -373,18 +408,32 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
         }
         ListFooterComponent={
           escrow.status === 'active' && pending > 0 ? (
-            <View style={styles.refundReviewCard}>
-              <Text style={styles.refundReviewDesc}>
-                실제 결제액, 보너스 혜택, 사용분 공제 후 환불 가능 금액을 산정합니다.
-              </Text>
-              <TouchableOpacity
-                style={styles.refundReviewButton}
-                onPress={handleRefundReviewRequest}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.refundReviewButtonText}>환불 검토 요청</Text>
-              </TouchableOpacity>
-            </View>
+            latestRefundReview ? (
+              <View style={styles.refundReviewCard}>
+                <Text style={styles.refundReviewTitle}>환불 검토 요청 접수됨</Text>
+                <Text style={styles.refundReviewStatus}>{REFUND_REVIEW_STATUS_KO[latestRefundReview.status] ?? latestRefundReview.status}</Text>
+                <Text style={styles.refundReviewDesc}>
+                  환불 검토 금액 {formatKrwFromRlusd(latestRefundReview.refundableAmount)} · 사업자 응답 기한 {isoToDate(latestRefundReview.merchantRespondBy) ?? '-'}
+                </Text>
+                {!!latestRefundReview.investigationReason && (
+                  <Text style={styles.refundReviewReason}>{latestRefundReview.investigationReason}</Text>
+                )}
+              </View>
+            ) : (
+              <View style={styles.refundReviewCard}>
+                <Text style={styles.refundReviewDesc}>
+                  실제 결제액, 보너스 혜택, 사용분 공제 후 환불 가능 금액을 산정합니다.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.refundReviewButton, refundReviewMutation.isPending && styles.buttonDisabled]}
+                  onPress={handleRefundReviewRequest}
+                  disabled={refundReviewMutation.isPending}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.refundReviewButtonText}>{refundReviewMutation.isPending ? '요청 접수 중...' : '환불 검토 요청'}</Text>
+                </TouchableOpacity>
+              </View>
+            )
           ) : null
         }
         contentContainerStyle={styles.listContent}
@@ -665,6 +714,32 @@ const styles = StyleSheet.create({
     color: colors.gray600,
     lineHeight: 20,
     marginBottom: spacing.md,
+  },
+  refundReviewTitle: {
+    fontSize: font.size.md,
+    color: colors.gray900,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.xs,
+  },
+  refundReviewStatus: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.warningLight,
+    borderRadius: radius.full,
+    color: colors.warning,
+    fontSize: font.size.xs,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  refundReviewReason: {
+    backgroundColor: colors.gray50,
+    borderRadius: radius.sm,
+    color: colors.gray600,
+    fontSize: font.size.sm,
+    lineHeight: 20,
+    padding: spacing.md,
   },
   refundReviewButton: {
     backgroundColor: colors.primary,

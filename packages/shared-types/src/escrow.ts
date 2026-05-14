@@ -2,6 +2,17 @@ export type EscrowStatus = 'active' | 'completed' | 'cancelled';
 export type EscrowEntryStatus = 'pending' | 'released' | 'refunded';
 export type EscrowType = 'monthly' | 'prepaid';
 export type ChargeRequestStatus = 'pending_approval' | 'settled' | 'rejected' | 'expired';
+export type RefundReviewStatus =
+  | 'merchant_review'
+  | 'merchant_disputed'
+  | 'platform_investigation'
+  | 'closure_suspected'
+  | 'closure_confirmed'
+  | 'auto_approved'
+  | 'platform_approved'
+  | 'refunded'
+  | 'rejected';
+export type BusinessClosureStatus = 'active' | 'suspended' | 'closed' | 'not_configured' | 'unavailable';
 export type UserRole = 'consumer' | 'business';
 
 export interface Business {
@@ -11,6 +22,7 @@ export interface Business {
   address: string;
   phone?: string | null;
   email?: string | null;
+  registrationNumber?: string | null;
   xrplAddress: string;
   isActive: boolean;
 }
@@ -97,8 +109,25 @@ export interface EscrowRecord {
   entries: EscrowEntry[];
   product?: BusinessProduct | null;
   chargeRequests?: ChargeRequest[];
+  refundReviewRequests?: RefundReviewRequest[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface RefundReviewRequest {
+  id: string;
+  escrowId: string;
+  consumerId: string;
+  businessId: string;
+  status: RefundReviewStatus;
+  refundableAmount: number;
+  merchantRespondBy: Date | string;
+  businessClosureStatus: BusinessClosureStatus | 'not_checked';
+  businessClosureSource?: string | null;
+  businessClosureCheckedAt?: Date | string | null;
+  investigationReason?: string | null;
+  requestedAt: Date | string;
+  resolvedAt?: Date | string | null;
 }
 
 export interface CreateEscrowRequest {

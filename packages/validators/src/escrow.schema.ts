@@ -97,6 +97,7 @@ export const businessRegistrationSchema = z.object({
   address: z.string().min(1).max(200),
   phone: z.string().optional(),
   email: z.string().email().optional(),
+  registrationNumber: z.string().regex(/^\d{10}$/, 'Business registration number must be 10 digits').optional(),
 });
 
 export const consumerRegistrationSchema = z.object({

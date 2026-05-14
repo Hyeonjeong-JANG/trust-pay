@@ -12,7 +12,7 @@ export class BusinessController {
   @Post()
   @UsePipes(new ZodValidationPipe(businessRegistrationSchema))
   register(
-    @Body() dto: { name: string; category: string; address: string; phone?: string; email?: string },
+    @Body() dto: { name: string; category: string; address: string; phone?: string; email?: string; registrationNumber?: string },
   ) {
     return this.businessService.register(dto);
   }

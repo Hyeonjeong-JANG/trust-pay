@@ -13,6 +13,7 @@ jest.mock('../../api/client', () => ({
   api: {
     getEscrow: jest.fn(),
     cancelEscrow: jest.fn(),
+    requestRefundReview: jest.fn(),
     approveChargeRequest: jest.fn(),
     rejectChargeRequest: jest.fn(),
   },
@@ -279,6 +280,13 @@ describe('EscrowDetailScreen', () => {
     const { api } = require('../../api/client');
     const { showSuccessToast } = require('../../utils/toast');
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    api.requestRefundReview.mockResolvedValue({
+      id: 'refund-review-1',
+      escrowId: 'e-prepaid-refund',
+      status: 'merchant_review',
+      refundableAmount: 10,
+      merchantRespondBy: '2026-05-18T00:00:00.000Z',
+    });
     api.getEscrow.mockResolvedValue({
       id: 'e-prepaid-refund',
       status: 'active',
@@ -312,8 +320,48 @@ describe('EscrowDetailScreen', () => {
     const actions = alertSpy.mock.calls[0][2] as Array<{ text: string; onPress?: () => void }>;
     actions[1].onPress?.();
 
+    await waitFor(() => expect(api.requestRefundReview).toHaveBeenCalledWith('e-prepaid-refund'));
     expect(api.cancelEscrow).not.toHaveBeenCalled();
-    expect(showSuccessToast).toHaveBeenCalledWith('환불 검토 요청 접수', '약관과 사용 내역을 확인한 뒤 환불 가능 금액을 안내합니다.');
+    expect(showSuccessToast).toHaveBeenCalledWith('환불 검토 요청 접수', '사업자 응답 기한과 폐업 여부를 확인한 뒤 환불 가능 금액을 안내합니다.');
     alertSpy.mockRestore();
+  });
+
+  it('should show the latest refund review status instead of a new request button', async () => {
+    const { api } = require('../../api/client');
+    api.getEscrow.mockResolvedValue({
+      id: 'e-prepaid-refund-status',
+      status: 'active',
+      escrowType: 'prepaid',
+      totalAmount: 300,
+      monthlyAmount: 10,
+      months: 30,
+      unitPrice: 10,
+      validityMonths: 6,
+      business: { name: '헤어살롱 루나' },
+      entries: [
+        { id: 'en-1', month: 1, amount: '10', status: 'released', finishAfter: 830607775, cancelAfter: 837000000 },
+        { id: 'en-2', month: 2, amount: '10', status: 'pending', finishAfter: 830607775, cancelAfter: 837000000 },
+      ],
+      chargeRequests: [],
+      refundReviewRequests: [
+        {
+          id: 'refund-review-1',
+          status: 'closure_confirmed',
+          refundableAmount: 10,
+          merchantRespondBy: '2026-05-14T00:00:00.000Z',
+          requestedAt: '2026-05-14T00:00:00.000Z',
+          investigationReason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 검토로 전환합니다.',
+        },
+      ],
+    });
+
+    const { findByText, queryByText } = renderWithProviders(
+      <EscrowDetailScreen route={{ params: { id: 'e-prepaid-refund-status' } } as any} navigation={{} as any} />,
+    );
+
+    expect(await findByText('환불 검토 요청 접수됨')).toBeTruthy();
+    expect(await findByText('폐업 확인 · TrustPay 검토')).toBeTruthy();
+    expect(await findByText(/국세청 사업자 상태가 폐업으로 확인/)).toBeTruthy();
+    expect(queryByText('환불 검토 요청')).toBeNull();
   });
 });

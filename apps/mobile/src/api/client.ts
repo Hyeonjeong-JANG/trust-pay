@@ -1,4 +1,4 @@
-import type { LoginResponse, RequestCodeResponse, EscrowRecord, BusinessDashboard, Business, BalanceResponse, EscrowType, BusinessProduct, ChargeRequest, CreateChargeRequest, CreatePaymentRequest, PaymentRequest } from '@prepaid-shield/shared-types';
+import type { LoginResponse, RequestCodeResponse, EscrowRecord, BusinessDashboard, Business, BalanceResponse, EscrowType, BusinessProduct, ChargeRequest, CreateChargeRequest, CreatePaymentRequest, PaymentRequest, RefundReviewRequest } from '@prepaid-shield/shared-types';
 import { useAuthStore } from '../store/auth';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
@@ -146,6 +146,9 @@ export const api = {
 
   rejectChargeRequest: (requestId: string) =>
     request<ChargeRequest>(`/escrow/charge-requests/${requestId}/reject`, { method: 'POST' }),
+
+  requestRefundReview: (escrowId: string) =>
+    request<RefundReviewRequest>(`/escrow/${escrowId}/refund-review-requests`, { method: 'POST' }),
 
   // Business
   getBusinesses: () => request<Business[]>('/business'),

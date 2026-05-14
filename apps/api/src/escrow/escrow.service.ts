@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { BusinessClosureService } from '../business/business-closure.service';
 import { PartialPrepaidEscrowCreationError, XrplService } from '../xrpl/xrpl.service';
 import { CryptoService } from '../common/crypto.service';
 import { Wallet } from 'xrpl';
@@ -8,6 +9,7 @@ import type { EscrowResult } from '@prepaid-shield/xrpl-client';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import type { SessionUser } from '../common/session-token';
 import type { CreateChargeRequestInput } from '@prepaid-shield/validators';
+import type { BusinessClosureStatus, RefundReviewStatus } from '@prepaid-shield/shared-types';
 
 const MAX_PREPAID_ESCROW_ENTRIES = 50;
 const RESERVED_CHARGE_STATUSES = new Set(['pending_approval']);
@@ -15,6 +17,15 @@ const INTEGER_RATIO_EPSILON = 1e-4;
 const MAX_DECIMAL_ROUNDING_RATIO_EPSILON = 0.05;
 const DECIMAL_ROUNDING_HALF_UNIT = 0.5e-6;
 const RLUSD_DECIMAL_PLACES = 6;
+const ACTIVE_REFUND_REVIEW_STATUSES = [
+  'merchant_review',
+  'merchant_disputed',
+  'platform_investigation',
+  'closure_suspected',
+  'closure_confirmed',
+  'auto_approved',
+  'platform_approved',
+];
 
 function getWholeRatio(total: number, unit: number): number | null {
   if (!Number.isFinite(total) || !Number.isFinite(unit) || unit <= 0) return null;
@@ -34,6 +45,17 @@ function roundRlusdAmount(amount: number): number {
 
 function formatRlusdAmount(amount: number): string {
   return String(roundRlusdAmount(amount));
+}
+
+function addBusinessDays(value: Date, days: number): Date {
+  const result = new Date(value);
+  let remaining = days;
+  while (remaining > 0) {
+    result.setDate(result.getDate() + 1);
+    const day = result.getDay();
+    if (day !== 0 && day !== 6) remaining -= 1;
+  }
+  return result;
 }
 
 function selectEntriesCoveringAmount<T extends { id: string; amount: string | number }>(
@@ -70,6 +92,7 @@ export class EscrowService {
     private xrplService: XrplService,
     private configService: ConfigService,
     private crypto: CryptoService,
+    private businessClosureService: BusinessClosureService,
   ) {}
 
   async create(dto: CreateEscrowDto, user: SessionUser) {
@@ -227,6 +250,7 @@ export class EscrowService {
         consumer: true,
         product: { include: { menuItems: true } },
         chargeRequests: { include: { menuItem: true } },
+        refundReviewRequests: { orderBy: { requestedAt: 'desc' } },
       },
     });
     if (!escrow) throw new NotFoundException('Escrow not found');
@@ -480,6 +504,60 @@ export class EscrowService {
     return { cancelled: pendingEntries.length };
   }
 
+  async requestRefundReview(escrowId: string, user: SessionUser) {
+    const escrow = await this.prisma.escrow.findUnique({
+      where: { id: escrowId },
+      include: { entries: true, business: true, consumer: true },
+    });
+    if (!escrow) throw new NotFoundException('Escrow not found');
+    if (user.role !== 'consumer' || user.userId !== escrow.consumerId) {
+      throw new ForbiddenException('해당 소비자만 환불 검토를 요청할 수 있습니다');
+    }
+    if (escrow.status !== 'active') {
+      throw new BadRequestException('진행 중인 에스크로만 환불 검토를 요청할 수 있습니다');
+    }
+
+    const existing = await this.prisma.refundReviewRequest.findFirst({
+      where: {
+        escrowId,
+        status: { in: ACTIVE_REFUND_REVIEW_STATUSES },
+      },
+      orderBy: { requestedAt: 'desc' },
+      include: { escrow: { include: { business: true, consumer: true } } },
+    });
+    if (existing) return this.stripRefundReviewRequestSecrets(existing);
+
+    const refundableAmount = roundRlusdAmount(
+      escrow.entries
+        .filter((entry) => entry.status === 'pending')
+        .reduce((sum, entry) => sum + Number(entry.amount), 0),
+    );
+    if (refundableAmount <= 0) {
+      throw new BadRequestException('환불 검토 가능한 미사용 잔액이 없습니다');
+    }
+
+    const closureCheck = await this.businessClosureService.checkBusinessStatus(escrow.business.registrationNumber);
+    const policy = this.getRefundReviewPolicy(closureCheck.status);
+    const now = new Date();
+    const created = await this.prisma.refundReviewRequest.create({
+      data: {
+        escrowId,
+        consumerId: escrow.consumerId,
+        businessId: escrow.businessId,
+        status: policy.status,
+        refundableAmount,
+        merchantRespondBy: addBusinessDays(now, policy.slaBusinessDays),
+        businessClosureStatus: closureCheck.status,
+        businessClosureSource: closureCheck.source,
+        businessClosureCheckedAt: closureCheck.checkedAt,
+        investigationReason: policy.reason,
+      },
+      include: { escrow: { include: { business: true, consumer: true } } },
+    });
+
+    return this.stripRefundReviewRequestSecrets(created);
+  }
+
   async findByConsumer(consumerId: string, user: SessionUser) {
     if (user.role !== 'consumer' || user.userId !== consumerId) {
       throw new ForbiddenException('본인 에스크로 목록만 조회할 수 있습니다');
@@ -487,7 +565,13 @@ export class EscrowService {
 
     const escrows = await this.prisma.escrow.findMany({
       where: { consumerId },
-      include: { entries: true, business: true, product: { include: { menuItems: true } }, chargeRequests: { include: { menuItem: true } } },
+      include: {
+        entries: true,
+        business: true,
+        product: { include: { menuItems: true } },
+        chargeRequests: { include: { menuItem: true } },
+        refundReviewRequests: { orderBy: { requestedAt: 'desc' } },
+      },
     });
     return escrows.map((e) => this.stripSecrets(e));
   }
@@ -529,6 +613,53 @@ export class EscrowService {
       return { ...chargeRequest, escrow: this.stripSecrets(chargeRequest.escrow) };
     }
     return chargeRequest;
+  }
+
+  private stripRefundReviewRequestSecrets(refundReviewRequest: any) {
+    if (refundReviewRequest.escrow) {
+      return { ...refundReviewRequest, escrow: this.stripSecrets(refundReviewRequest.escrow) };
+    }
+    return refundReviewRequest;
+  }
+
+  private getRefundReviewPolicy(closureStatus: BusinessClosureStatus): {
+    status: RefundReviewStatus;
+    slaBusinessDays: number;
+    reason: string;
+  } {
+    if (closureStatus === 'closed') {
+      return {
+        status: 'closure_confirmed',
+        slaBusinessDays: 0,
+        reason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 검토로 전환합니다.',
+      };
+    }
+    if (closureStatus === 'suspended') {
+      return {
+        status: 'platform_investigation',
+        slaBusinessDays: 1,
+        reason: '국세청 사업자 상태가 휴업으로 확인되어 TrustPay 조사 대상입니다.',
+      };
+    }
+    if (closureStatus === 'not_configured') {
+      return {
+        status: 'merchant_review',
+        slaBusinessDays: 3,
+        reason: '사업자등록번호가 없어 SLA와 TrustPay 자체 조사로 진행합니다.',
+      };
+    }
+    if (closureStatus === 'unavailable') {
+      return {
+        status: 'merchant_review',
+        slaBusinessDays: 3,
+        reason: '국세청 조회가 일시적으로 불가하여 사업자 응답 SLA를 적용합니다.',
+      };
+    }
+    return {
+      status: 'merchant_review',
+      slaBusinessDays: 3,
+      reason: '사업자 응답 SLA를 적용합니다.',
+    };
   }
 
   private parseChargeEntryIds(entryIds: string): string[] {

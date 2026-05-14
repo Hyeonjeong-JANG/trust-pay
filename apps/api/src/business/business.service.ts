@@ -14,7 +14,7 @@ export class BusinessService {
     private crypto: CryptoService,
   ) {}
 
-  async register(data: { name: string; category: string; address: string; phone?: string; email?: string }) {
+  async register(data: { name: string; category: string; address: string; phone?: string; email?: string; registrationNumber?: string }) {
     // Auto-create XRPL wallet + Trust Line
     const { wallet, address: xrplAddress, secret: xrplSecret } = await this.xrplService.createWallet();
     await this.xrplService.setTrustLine(wallet);
@@ -26,6 +26,7 @@ export class BusinessService {
         address: data.address,
         phone: data.phone,
         email: data.email,
+        registrationNumber: data.registrationNumber,
         xrplAddress,
         xrplSecret: this.crypto.encrypt(xrplSecret),
       },
@@ -57,6 +58,7 @@ export class BusinessService {
             consumer: true,
             product: { include: { menuItems: true } },
             chargeRequests: { include: { menuItem: true } },
+            refundReviewRequests: { orderBy: { requestedAt: 'desc' } },
           },
         },
       },

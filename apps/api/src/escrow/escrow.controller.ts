@@ -55,6 +55,11 @@ export class EscrowController {
     return this.escrowService.rejectChargeRequest(requestId, req.user);
   }
 
+  @Post(':id/refund-review-requests')
+  requestRefundReview(@Param('id') id: string, @Req() req: any) {
+    return this.escrowService.requestRefundReview(id, req.user);
+  }
+
   @Get(':id')
   findById(@Param('id') id: string, @Req() req: any) {
     return this.escrowService.findById(id, req.user);

@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { EscrowService } from './escrow.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto.service';
+import { BusinessClosureService } from '../business/business-closure.service';
 import { PartialPrepaidEscrowCreationError, XrplService } from '../xrpl/xrpl.service';
 import { createEscrowSchema } from '@prepaid-shield/validators';
 
@@ -59,6 +60,7 @@ describe('EscrowService', () => {
   let prisma: any;
   let xrplService: any;
   let configService: any;
+  let businessClosureService: any;
 
   beforeEach(async () => {
     prisma = {
@@ -76,6 +78,10 @@ describe('EscrowService', () => {
         create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+      },
+      refundReviewRequest: {
+        create: jest.fn(),
+        findFirst: jest.fn(),
       },
     };
 
@@ -97,6 +103,14 @@ describe('EscrowService', () => {
       }),
     };
 
+    businessClosureService = {
+      checkBusinessStatus: jest.fn().mockResolvedValue({
+        status: 'active',
+        source: 'nts',
+        checkedAt: new Date('2026-05-14T00:00:00.000Z'),
+      }),
+    };
+
     const module = await Test.createTestingModule({
       providers: [
         EscrowService,
@@ -104,6 +118,7 @@ describe('EscrowService', () => {
         { provide: XrplService, useValue: xrplService },
         { provide: ConfigService, useValue: configService },
         { provide: CryptoService, useValue: { encrypt: jest.fn((v: string) => 'encrypted:' + v), decrypt: jest.fn((v: string) => v.replace('encrypted:', '')) } },
+        { provide: BusinessClosureService, useValue: businessClosureService },
       ],
     }).compile();
 
@@ -521,6 +536,7 @@ describe('EscrowService', () => {
           consumer: true,
           product: { include: { menuItems: true } },
           chargeRequests: { include: { menuItem: true } },
+          refundReviewRequests: { orderBy: { requestedAt: 'desc' } },
         },
       });
     });
@@ -866,6 +882,98 @@ describe('EscrowService', () => {
     });
   });
 
+  describe('refund review requests', () => {
+    const refundableEscrow = {
+      id: 'escrow-refund-1',
+      consumerId: 'consumer-1',
+      businessId: 'business-1',
+      status: 'active',
+      escrowType: 'prepaid',
+      business: { ...mockBusiness, registrationNumber: '1234567890' },
+      entries: [
+        { id: 'entry-used', amount: '10', status: 'released' },
+        { id: 'entry-pending-1', amount: '20', status: 'pending' },
+        { id: 'entry-pending-2', amount: '10', status: 'pending' },
+      ],
+    };
+
+    it('should create a merchant review case with SLA without cancelling ledger entries', async () => {
+      prisma.escrow.findUnique.mockResolvedValue(refundableEscrow);
+      prisma.refundReviewRequest.findFirst.mockResolvedValue(null);
+      prisma.refundReviewRequest.create.mockResolvedValue({
+        id: 'refund-review-1',
+        escrowId: 'escrow-refund-1',
+        status: 'merchant_review',
+        refundableAmount: 30,
+      });
+
+      const result = await service.requestRefundReview('escrow-refund-1', consumerUser);
+
+      expect(businessClosureService.checkBusinessStatus).toHaveBeenCalledWith('1234567890');
+      expect(prisma.refundReviewRequest.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          escrowId: 'escrow-refund-1',
+          consumerId: 'consumer-1',
+          businessId: 'business-1',
+          status: 'merchant_review',
+          refundableAmount: 30,
+          businessClosureStatus: 'active',
+          businessClosureSource: 'nts',
+          investigationReason: '사업자 응답 SLA를 적용합니다.',
+          merchantRespondBy: expect.any(Date),
+        }),
+        include: { escrow: { include: { business: true, consumer: true } } },
+      });
+      expect(xrplService.cancelEscrow).not.toHaveBeenCalled();
+      expect(prisma.escrowEntry.update).not.toHaveBeenCalled();
+      expect(result.status).toBe('merchant_review');
+    });
+
+    it('should escalate to closure confirmed when the NTS check says the business is closed', async () => {
+      businessClosureService.checkBusinessStatus.mockResolvedValue({
+        status: 'closed',
+        source: 'nts',
+        checkedAt: new Date('2026-05-14T00:00:00.000Z'),
+      });
+      prisma.escrow.findUnique.mockResolvedValue(refundableEscrow);
+      prisma.refundReviewRequest.findFirst.mockResolvedValue(null);
+      prisma.refundReviewRequest.create.mockResolvedValue({
+        id: 'refund-review-closed',
+        escrowId: 'escrow-refund-1',
+        status: 'closure_confirmed',
+        refundableAmount: 30,
+      });
+
+      await service.requestRefundReview('escrow-refund-1', consumerUser);
+
+      expect(prisma.refundReviewRequest.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          status: 'closure_confirmed',
+          businessClosureStatus: 'closed',
+          businessClosureSource: 'nts',
+          investigationReason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 검토로 전환합니다.',
+        }),
+        include: { escrow: { include: { business: true, consumer: true } } },
+      });
+    });
+
+    it('should return an existing active refund review instead of creating a duplicate', async () => {
+      const existing = {
+        id: 'refund-review-existing',
+        escrowId: 'escrow-refund-1',
+        status: 'merchant_review',
+      };
+      prisma.escrow.findUnique.mockResolvedValue(refundableEscrow);
+      prisma.refundReviewRequest.findFirst.mockResolvedValue(existing);
+
+      const result = await service.requestRefundReview('escrow-refund-1', consumerUser);
+
+      expect(result).toBe(existing);
+      expect(prisma.refundReviewRequest.create).not.toHaveBeenCalled();
+      expect(businessClosureService.checkBusinessStatus).not.toHaveBeenCalled();
+    });
+  });
+
   describe('cancelEscrow', () => {
     it('should cancel all pending entries and update escrow status', async () => {
       const escrow = {
@@ -943,6 +1051,7 @@ describe('EscrowService', () => {
           business: true,
           product: { include: { menuItems: true } },
           chargeRequests: { include: { menuItem: true } },
+          refundReviewRequests: { orderBy: { requestedAt: 'desc' } },
         },
       });
       expect(result).toEqual(escrows);
