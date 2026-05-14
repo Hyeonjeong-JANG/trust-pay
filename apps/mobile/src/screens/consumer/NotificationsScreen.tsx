@@ -20,14 +20,15 @@ interface NotificationItem {
   isUnread: boolean;
 }
 
-const ACTIVE_REFUND_REVIEW_STATUSES = new Set([
-  'merchant_review',
+const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'merchant_response_requested',
+  'merchant_responded',
   'merchant_disputed',
   'platform_investigation',
-  'closure_suspected',
-  'closure_confirmed',
   'auto_approved',
   'platform_approved',
+  'refunded',
+  'rejected',
 ]);
 
 const RIPPLE_EPOCH = 946684800;
@@ -113,13 +114,13 @@ export function NotificationsScreen() {
 
         for (const request of escrow.refundReviewRequests ?? []) {
           const refund = request as RefundReviewRequest;
-          if (!ACTIVE_REFUND_REVIEW_STATUSES.has(refund.status)) continue;
+          if (!MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(refund.status)) continue;
           const requestedTs = new Date(refund.requestedAt ?? Date.now()).getTime();
           items.push({
             id: `${refund.id}-business-refund-review`,
             icon: '🔎',
             title: '환불 검토 요청',
-            description: `${consumerName}님이 ${formatKrwFromRlusd(refund.refundableAmount)} 환불 검토를 요청했습니다. ${refund.consumerReason ?? ''}`.trim(),
+            description: `${consumerName}님이 ${formatKrwFromRlusd(refund.refundableAmount)} 환불 검토를 요청했습니다. ${refund.merchantNotice ?? ''}`.trim(),
             timestamp: requestedTs,
             isUnread: requestedTs > lastViewed,
           });

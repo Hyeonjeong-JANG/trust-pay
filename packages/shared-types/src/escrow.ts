@@ -3,6 +3,9 @@ export type EscrowEntryStatus = 'pending' | 'released' | 'refunded';
 export type EscrowType = 'monthly' | 'prepaid';
 export type ChargeRequestStatus = 'pending_approval' | 'settled' | 'rejected' | 'expired';
 export type RefundReviewStatus =
+  | 'platform_review'
+  | 'merchant_response_requested'
+  | 'merchant_responded'
   | 'merchant_review'
   | 'merchant_disputed'
   | 'platform_investigation'
@@ -148,6 +151,10 @@ export interface RefundReviewRequest {
   businessClosureCheckedAt?: Date | string | null;
   investigationReason?: string | null;
   consumerReason?: string | null;
+  merchantNotice?: string | null;
+  merchantResponse?: string | null;
+  merchantRespondedAt?: Date | string | null;
+  adminResolutionReason?: string | null;
   photoDataUrls?: string[];
   requestedAt: Date | string;
   resolvedAt?: Date | string | null;

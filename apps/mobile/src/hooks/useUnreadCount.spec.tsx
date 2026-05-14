@@ -74,7 +74,7 @@ describe('useUnreadCount', () => {
           refundReviewRequests: [
             {
               id: 'refund-review-1',
-              status: 'merchant_review',
+              status: 'merchant_response_requested',
               refundableAmount: 10,
               requestedAt: '2026-01-02T00:00:00.000Z',
             },

@@ -82,6 +82,8 @@ describe('EscrowService', () => {
       refundReviewRequest: {
         create: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
       },
     };
 
@@ -545,6 +547,45 @@ describe('EscrowService', () => {
       prisma.escrow.findUnique.mockResolvedValue(null);
       await expect(service.findById('bad-id', consumerUser)).rejects.toThrow(NotFoundException);
     });
+
+    it('should hide platform-review consumer evidence from business viewers', async () => {
+      const escrow = {
+        id: 'escrow-1',
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        entries: [],
+        business: mockBusiness,
+        consumer: mockConsumer,
+        refundReviewRequests: [
+          {
+            id: 'refund-review-platform',
+            status: 'platform_review',
+            consumerReason: '2주 넘게 영업하지 않아 환불을 요청합니다.',
+            photoDataUrlsJson: JSON.stringify(['data:image/png;base64,ZmFrZQ==']),
+          },
+          {
+            id: 'refund-review-visible',
+            status: 'merchant_response_requested',
+            merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부를 답변해주세요.',
+            consumerReason: '원문은 사업자에게 바로 노출하지 않습니다.',
+            photoDataUrlsJson: JSON.stringify(['data:image/png;base64,c2VjcmV0']),
+          },
+        ],
+      };
+      prisma.escrow.findUnique.mockResolvedValue(escrow);
+
+      const result = await service.findById('escrow-1', businessUser);
+
+      expect(result.refundReviewRequests).toHaveLength(1);
+      expect(result.refundReviewRequests[0]).toMatchObject({
+        id: 'refund-review-visible',
+        status: 'merchant_response_requested',
+        merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부를 답변해주세요.',
+      });
+      expect(result.refundReviewRequests[0]).not.toHaveProperty('consumerReason');
+      expect(result.refundReviewRequests[0]).not.toHaveProperty('photoDataUrls');
+      expect(result.refundReviewRequests[0]).not.toHaveProperty('photoDataUrlsJson');
+    });
   });
 
   describe('finishEntry', () => {
@@ -901,13 +942,13 @@ describe('EscrowService', () => {
       photoDataUrls: ['data:image/png;base64,ZmFrZS1pbWFnZQ=='],
     };
 
-    it('should create a merchant review case with SLA without cancelling ledger entries', async () => {
+    it('should create a platform review case without immediately exposing it to the merchant', async () => {
       prisma.escrow.findUnique.mockResolvedValue(refundableEscrow);
       prisma.refundReviewRequest.findFirst.mockResolvedValue(null);
       prisma.refundReviewRequest.create.mockResolvedValue({
         id: 'refund-review-1',
         escrowId: 'escrow-refund-1',
-        status: 'merchant_review',
+        status: 'platform_review',
         refundableAmount: 30,
         consumerReason: refundReviewInput.reason,
         photoDataUrlsJson: JSON.stringify(refundReviewInput.photoDataUrls),
@@ -921,11 +962,11 @@ describe('EscrowService', () => {
           escrowId: 'escrow-refund-1',
           consumerId: 'consumer-1',
           businessId: 'business-1',
-          status: 'merchant_review',
+          status: 'platform_review',
           refundableAmount: 30,
           businessClosureStatus: 'active',
           businessClosureSource: 'nts',
-          investigationReason: '사업자 응답 SLA를 적용합니다.',
+          investigationReason: 'TrustPay가 요청 내용을 먼저 검토한 뒤 필요한 경우 사업자 소명을 요청합니다.',
           consumerReason: refundReviewInput.reason,
           photoDataUrlsJson: JSON.stringify(refundReviewInput.photoDataUrls),
           merchantRespondBy: expect.any(Date),
@@ -934,7 +975,7 @@ describe('EscrowService', () => {
       });
       expect(xrplService.cancelEscrow).not.toHaveBeenCalled();
       expect(prisma.escrowEntry.update).not.toHaveBeenCalled();
-      expect(result.status).toBe('merchant_review');
+      expect(result.status).toBe('platform_review');
       expect(result.photoDataUrls).toEqual(refundReviewInput.photoDataUrls);
     });
 
@@ -945,7 +986,7 @@ describe('EscrowService', () => {
       expect(prisma.escrow.findUnique).not.toHaveBeenCalled();
     });
 
-    it('should escalate to closure confirmed when the NTS check says the business is closed', async () => {
+    it('should keep closed-business cases in platform review with closure context', async () => {
       businessClosureService.checkBusinessStatus.mockResolvedValue({
         status: 'closed',
         source: 'nts',
@@ -964,7 +1005,7 @@ describe('EscrowService', () => {
 
       expect(prisma.refundReviewRequest.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          status: 'closure_confirmed',
+          status: 'platform_review',
           businessClosureStatus: 'closed',
           businessClosureSource: 'nts',
           investigationReason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 검토로 전환합니다.',
@@ -977,7 +1018,7 @@ describe('EscrowService', () => {
       const existing = {
         id: 'refund-review-existing',
         escrowId: 'escrow-refund-1',
-        status: 'merchant_review',
+        status: 'platform_review',
       };
       prisma.escrow.findUnique.mockResolvedValue(refundableEscrow);
       prisma.refundReviewRequest.findFirst.mockResolvedValue(existing);
@@ -1007,6 +1048,34 @@ describe('EscrowService', () => {
         }),
         include: { escrow: { include: { business: true, consumer: true } } },
       });
+    });
+
+    it('should let the owning business submit a requested merchant response', async () => {
+      prisma.refundReviewRequest.findUnique.mockResolvedValue({
+        id: 'refund-review-response',
+        status: 'merchant_response_requested',
+        businessId: 'business-1',
+      });
+      prisma.refundReviewRequest.update.mockResolvedValue({
+        id: 'refund-review-response',
+        status: 'merchant_responded',
+        merchantResponse: '현재 리모델링 중이며 다음 주부터 이용 가능합니다. 미사용분 환불 협의 가능합니다.',
+        photoDataUrlsJson: null,
+      });
+
+      const result = await service.respondToRefundReviewRequest('refund-review-response', businessUser, {
+        response: '현재 리모델링 중이며 다음 주부터 이용 가능합니다. 미사용분 환불 협의 가능합니다.',
+      });
+
+      expect(prisma.refundReviewRequest.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'refund-review-response' },
+        data: expect.objectContaining({
+          status: 'merchant_responded',
+          merchantResponse: '현재 리모델링 중이며 다음 주부터 이용 가능합니다. 미사용분 환불 협의 가능합니다.',
+          merchantRespondedAt: expect.any(Date),
+        }),
+      }));
+      expect(result.status).toBe('merchant_responded');
     });
   });
 

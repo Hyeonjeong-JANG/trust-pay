@@ -5,14 +5,15 @@ import { useAuthStore } from '../store/auth';
 import { useAppStore } from '../store/app';
 import type { BusinessDashboard, ChargeRequest, EscrowRecord, RefundReviewRequest } from '@prepaid-shield/shared-types';
 
-const ACTIVE_REFUND_REVIEW_STATUSES = new Set([
-  'merchant_review',
+const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'merchant_response_requested',
+  'merchant_responded',
   'merchant_disputed',
   'platform_investigation',
-  'closure_suspected',
-  'closure_confirmed',
   'auto_approved',
   'platform_approved',
+  'refunded',
+  'rejected',
 ]);
 
 function getTime(value?: Date | string | null, fallback?: Date | string | null): number {
@@ -54,7 +55,7 @@ export function useUnreadCount(): number {
 
         for (const request of escrow.refundReviewRequests ?? []) {
           const refund = request as RefundReviewRequest;
-          if (!ACTIVE_REFUND_REVIEW_STATUSES.has(refund.status)) continue;
+          if (!MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(refund.status)) continue;
           const requestedTs = getTime(refund.requestedAt);
           if (requestedTs > lastViewed) count++;
         }

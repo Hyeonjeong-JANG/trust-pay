@@ -8,7 +8,7 @@ import { Wallet } from 'xrpl';
 import type { EscrowResult } from '@prepaid-shield/xrpl-client';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import type { SessionUser } from '../common/session-token';
-import { requestRefundReviewSchema, type CreateChargeRequestInput, type RequestRefundReviewInput } from '@prepaid-shield/validators';
+import { requestRefundReviewSchema, type CreateChargeRequestInput, type MerchantRefundReviewResponseInput, type RequestRefundReviewInput } from '@prepaid-shield/validators';
 import type { BusinessClosureStatus, RefundReviewStatus } from '@prepaid-shield/shared-types';
 
 const MAX_PREPAID_ESCROW_ENTRIES = 50;
@@ -18,6 +18,9 @@ const MAX_DECIMAL_ROUNDING_RATIO_EPSILON = 0.05;
 const DECIMAL_ROUNDING_HALF_UNIT = 0.5e-6;
 const RLUSD_DECIMAL_PLACES = 6;
 const ACTIVE_REFUND_REVIEW_STATUSES = [
+  'platform_review',
+  'merchant_response_requested',
+  'merchant_responded',
   'merchant_review',
   'merchant_disputed',
   'platform_investigation',
@@ -26,6 +29,16 @@ const ACTIVE_REFUND_REVIEW_STATUSES = [
   'auto_approved',
   'platform_approved',
 ];
+const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'merchant_response_requested',
+  'merchant_responded',
+  'merchant_disputed',
+  'platform_investigation',
+  'auto_approved',
+  'platform_approved',
+  'refunded',
+  'rejected',
+]);
 
 function parseRefundReviewPhotoDataUrls(value?: string | null): string[] {
   if (!value) return [];
@@ -273,7 +286,7 @@ export class EscrowService {
     });
     if (!escrow) throw new NotFoundException('Escrow not found');
     this.assertEscrowAccess(escrow, user);
-    return this.stripSecrets(escrow);
+    return this.stripSecrets(escrow, user);
   }
 
   async finishEntry(escrowId: string, entryMonth: number, user: SessionUser) {
@@ -579,6 +592,28 @@ export class EscrowService {
     return this.stripRefundReviewRequestSecrets(created);
   }
 
+  async respondToRefundReviewRequest(requestId: string, user: SessionUser, dto: MerchantRefundReviewResponseInput) {
+    const review = await this.prisma.refundReviewRequest.findUnique({ where: { id: requestId } });
+    if (!review) throw new NotFoundException('Refund review not found');
+    if (user.role !== 'business' || user.userId !== review.businessId) {
+      throw new ForbiddenException('해당 사업자만 환불 검토 소명을 제출할 수 있습니다');
+    }
+    if (review.status !== 'merchant_response_requested') {
+      throw new BadRequestException('사업자 소명 요청 상태에서만 응답할 수 있습니다');
+    }
+
+    const updated = await this.prisma.refundReviewRequest.update({
+      where: { id: requestId },
+      data: {
+        status: 'merchant_responded',
+        merchantResponse: dto.response,
+        merchantRespondedAt: new Date(),
+      },
+      include: { escrow: { include: { business: true, consumer: true } } },
+    });
+    return this.stripRefundReviewRequestForMerchant(updated);
+  }
+
   async findByConsumer(consumerId: string, user: SessionUser) {
     if (user.role !== 'consumer' || user.userId !== consumerId) {
       throw new ForbiddenException('본인 에스크로 목록만 조회할 수 있습니다');
@@ -594,7 +629,7 @@ export class EscrowService {
         refundReviewRequests: { orderBy: { requestedAt: 'desc' } },
       },
     });
-    return escrows.map((e) => this.stripSecrets(e));
+    return escrows.map((e) => this.stripSecrets(e, user));
   }
 
   async findChargeRequestsByEscrow(escrowId: string, user: SessionUser) {
@@ -617,7 +652,7 @@ export class EscrowService {
     }
   }
 
-  private stripSecrets(escrow: any) {
+  private stripSecrets(escrow: any, user?: SessionUser) {
     if (escrow.business) {
       const { xrplSecret: _, ...business } = escrow.business;
       escrow = { ...escrow, business };
@@ -627,7 +662,12 @@ export class EscrowService {
       escrow = { ...escrow, consumer };
     }
     if (escrow.refundReviewRequests) {
-      escrow = { ...escrow, refundReviewRequests: escrow.refundReviewRequests.map((request: any) => this.stripRefundReviewRequestSecrets(request)) };
+      const refundReviewRequests = user?.role === 'business'
+        ? escrow.refundReviewRequests
+          .filter((request: any) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
+          .map((request: any) => this.stripRefundReviewRequestForMerchant(request))
+        : escrow.refundReviewRequests.map((request: any) => this.stripRefundReviewRequestSecrets(request));
+      escrow = { ...escrow, refundReviewRequests };
     }
     return escrow;
   }
@@ -650,6 +690,11 @@ export class EscrowService {
     return refundReviewRequest;
   }
 
+  private stripRefundReviewRequestForMerchant(refundReviewRequest: any) {
+    const { photoDataUrlsJson: _photos, consumerReason: _consumerReason, photoDataUrls: _photoDataUrls, ...rest } = refundReviewRequest;
+    return rest;
+  }
+
   private getRefundReviewPolicy(closureStatus: BusinessClosureStatus): {
     status: RefundReviewStatus;
     slaBusinessDays: number;
@@ -657,36 +702,36 @@ export class EscrowService {
   } {
     if (closureStatus === 'closed') {
       return {
-        status: 'closure_confirmed',
+        status: 'platform_review',
         slaBusinessDays: 0,
         reason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 검토로 전환합니다.',
       };
     }
     if (closureStatus === 'suspended') {
       return {
-        status: 'platform_investigation',
+        status: 'platform_review',
         slaBusinessDays: 1,
         reason: '국세청 사업자 상태가 휴업으로 확인되어 TrustPay 조사 대상입니다.',
       };
     }
     if (closureStatus === 'not_configured') {
       return {
-        status: 'merchant_review',
+        status: 'platform_review',
         slaBusinessDays: 3,
         reason: '사업자 인증 정보 재확인이 필요해 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.',
       };
     }
     if (closureStatus === 'unavailable') {
       return {
-        status: 'merchant_review',
+        status: 'platform_review',
         slaBusinessDays: 3,
         reason: '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.',
       };
     }
     return {
-      status: 'merchant_review',
+      status: 'platform_review',
       slaBusinessDays: 3,
-      reason: '사업자 응답 SLA를 적용합니다.',
+      reason: 'TrustPay가 요청 내용을 먼저 검토한 뒤 필요한 경우 사업자 소명을 요청합니다.',
     };
   }
 

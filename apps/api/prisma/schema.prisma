@@ -114,6 +114,10 @@ model RefundReviewRequest {
   businessClosureCheckedAt DateTime?
   investigationReason      String?
   consumerReason           String?
+  merchantNotice           String?
+  merchantResponse         String?
+  merchantRespondedAt      DateTime?
+  adminResolutionReason    String?
   photoDataUrlsJson        String?
   requestedAt              DateTime  @default(now())
   resolvedAt               DateTime?

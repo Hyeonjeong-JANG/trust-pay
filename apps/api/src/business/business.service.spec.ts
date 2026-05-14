@@ -217,7 +217,7 @@ describe('BusinessService', () => {
       expect(result.totalPending).toBe(92.5);
     });
 
-    it('should expose refund review photos without leaking the storage field', async () => {
+    it('should hide platform-review evidence and expose only admin-requested merchant notices', async () => {
       prisma.business.findUnique.mockResolvedValue({
         ...mockBusiness,
         escrows: [
@@ -232,7 +232,16 @@ describe('BusinessService', () => {
             refundReviewRequests: [
               {
                 id: 'refund-review-1',
+                status: 'platform_review',
+                consumerReason: '2주 넘게 영업하지 않아 환불을 요청합니다.',
                 photoDataUrlsJson: JSON.stringify(['data:image/png;base64,ZmFrZQ==']),
+              },
+              {
+                id: 'refund-review-2',
+                status: 'merchant_response_requested',
+                merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부를 답변해주세요.',
+                consumerReason: '원문은 사업자에게 바로 노출하지 않습니다.',
+                photoDataUrlsJson: JSON.stringify(['data:image/png;base64,c2VjcmV0']),
               },
             ],
             consumer: { id: 'c-1', name: '소비자1' },
@@ -243,8 +252,12 @@ describe('BusinessService', () => {
       const result = await service.dashboard('biz-1', businessUser);
       const refundReview = result.escrows[0].refundReviewRequests[0];
 
+      expect(result.escrows[0].refundReviewRequests).toHaveLength(1);
+      expect(refundReview.id).toBe('refund-review-2');
       expect(refundReview).not.toHaveProperty('photoDataUrlsJson');
-      expect(refundReview.photoDataUrls).toEqual(['data:image/png;base64,ZmFrZQ==']);
+      expect(refundReview).not.toHaveProperty('photoDataUrls');
+      expect(refundReview).not.toHaveProperty('consumerReason');
+      expect(refundReview.merchantNotice).toBe('고객이 장기 휴업을 주장했습니다. 영업 가능 여부를 답변해주세요.');
     });
 
     it('should return zero amounts when no escrows', async () => {

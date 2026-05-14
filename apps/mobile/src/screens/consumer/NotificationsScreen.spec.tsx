@@ -115,9 +115,9 @@ describe('NotificationsScreen', () => {
           refundReviewRequests: [
             {
               id: 'refund-review-1',
-              status: 'merchant_review',
+              status: 'merchant_response_requested',
               refundableAmount: 10,
-              consumerReason: '2주 넘게 안 열고 전화도 받지 않아 환불 검토를 요청합니다.',
+              merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부와 이용권 처리 방안을 답변해주세요.',
               requestedAt: new Date().toISOString(),
             },
           ],
@@ -129,6 +129,6 @@ describe('NotificationsScreen', () => {
 
     expect(await findByText('환불 검토 요청')).toBeTruthy();
     expect(await findByText(/김민수님이 ₩13,500 환불 검토를 요청했습니다/)).toBeTruthy();
-    expect(await findByText(/2주 넘게 안 열고 전화도 받지 않아/)).toBeTruthy();
+    expect(await findByText(/고객이 장기 휴업을 주장했습니다/)).toBeTruthy();
   });
 });

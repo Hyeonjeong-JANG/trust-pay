@@ -154,9 +154,9 @@ describe('RealtimeNotificationCenter', () => {
           entries: [],
           refundReviewRequests: [{
             id: 'refund-review-1',
-            status: 'merchant_review',
+            status: 'merchant_response_requested',
             refundableAmount: 10,
-            consumerReason: '2주 넘게 문을 열지 않아 환불 검토를 요청합니다.',
+            merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부와 이용권 처리 방안을 답변해주세요.',
             requestedAt: new Date().toISOString(),
           }],
         }],

@@ -219,7 +219,7 @@ describe('BusinessDashboardScreen', () => {
     expect(queryByPlaceholderText('예: 67,500')).toBeNull();
   });
 
-  it('should surface refund review requests on the merchant dashboard', async () => {
+  it('should surface admin-requested refund review responses on the merchant dashboard', async () => {
     const { api } = require('../../api/client');
     const navigation = { navigate: jest.fn() };
     api.getBusinessDashboard.mockResolvedValue({
@@ -241,9 +241,9 @@ describe('BusinessDashboardScreen', () => {
           refundReviewRequests: [
             {
               id: 'refund-review-1',
-              status: 'merchant_review',
+              status: 'merchant_response_requested',
               refundableAmount: 10,
-              consumerReason: '2주 넘게 안 열고 전화도 받지 않아 환불 검토를 요청합니다.',
+              merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부와 이용권 처리 방안을 답변해주세요.',
               requestedAt: new Date().toISOString(),
             },
           ],
@@ -256,9 +256,45 @@ describe('BusinessDashboardScreen', () => {
     expect(await findByText('환불 검토 요청')).toBeTruthy();
     expect(await findByText('1건 대기')).toBeTruthy();
     expect(await findByText(/이서연 · 환불 가능 ₩13,500/)).toBeTruthy();
-    expect(await findByText(/2주 넘게 안 열고 전화도 받지 않아/)).toBeTruthy();
+    expect(await findByText(/고객이 장기 휴업을 주장했습니다/)).toBeTruthy();
     fireEvent.press(await findByText('요청 확인'));
     expect(navigation.navigate).toHaveBeenCalledWith('BusinessEscrowDetail', { id: 'e-refund' });
+  });
+
+  it('should hide platform-review refund cases from the merchant dashboard', async () => {
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 25,
+      totalPending: 125,
+      escrows: [
+        {
+          id: 'e-platform-review',
+          status: 'active',
+          escrowType: 'prepaid',
+          totalAmount: 150,
+          monthlyAmount: 5,
+          months: 30,
+          consumer: { id: 'consumer-2', name: '이서연' },
+          entries: [],
+          chargeRequests: [],
+          refundReviewRequests: [
+            {
+              id: 'refund-review-platform',
+              status: 'platform_review',
+              refundableAmount: 10,
+              consumerReason: '2주 넘게 안 열고 전화도 받지 않아 환불 검토를 요청합니다.',
+              requestedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+    expect(await findByText('이서연')).toBeTruthy();
+    expect(queryByText('환불 검토 요청')).toBeNull();
+    expect(queryByText(/2주 넘게 안 열고 전화도 받지 않아/)).toBeNull();
   });
 
   it('should not expose monthly auto-settlement copy inside each dashboard card', async () => {

@@ -182,6 +182,9 @@ export const api = {
   requestRefundReview: (escrowId: string, data: CreateRefundReviewRequest) =>
     request<RefundReviewRequest>(`/escrow/${escrowId}/refund-review-requests`, { method: 'POST', body: JSON.stringify(data) }),
 
+  respondToRefundReviewRequest: (requestId: string, data: { response: string }) =>
+    request<RefundReviewRequest>(`/escrow/refund-review-requests/${requestId}/merchant-response`, { method: 'POST', body: JSON.stringify(data) }),
+
   // Business
   getBusinesses: () => request<Business[]>('/business'),
   registerBusiness: (data: BusinessRegistrationRequest) =>

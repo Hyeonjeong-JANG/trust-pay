@@ -21,6 +21,17 @@ function parseRefundReviewPhotoDataUrls(value?: string | null): string[] {
   }
 }
 
+const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'merchant_response_requested',
+  'merchant_responded',
+  'merchant_disputed',
+  'platform_investigation',
+  'auto_approved',
+  'platform_approved',
+  'refunded',
+  'rejected',
+]);
+
 @Injectable()
 export class BusinessService {
   private readonly logger = new Logger(BusinessService.name);
@@ -186,17 +197,16 @@ export class BusinessService {
     if (escrow.refundReviewRequests) {
       escrow = {
         ...escrow,
-        refundReviewRequests: escrow.refundReviewRequests.map((request: any) => this.stripRefundReviewRequestStorage(request)),
+        refundReviewRequests: escrow.refundReviewRequests
+          .filter((request: any) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
+          .map((request: any) => this.stripRefundReviewRequestForMerchant(request)),
       };
     }
     return escrow;
   }
 
-  private stripRefundReviewRequestStorage(refundReviewRequest: any) {
-    if ('photoDataUrlsJson' in refundReviewRequest) {
-      const { photoDataUrlsJson, ...rest } = refundReviewRequest;
-      return { ...rest, photoDataUrls: parseRefundReviewPhotoDataUrls(photoDataUrlsJson) };
-    }
-    return refundReviewRequest;
+  private stripRefundReviewRequestForMerchant(refundReviewRequest: any) {
+    const { photoDataUrlsJson: _photos, consumerReason: _consumerReason, photoDataUrls: _photoDataUrls, ...rest } = refundReviewRequest;
+    return rest;
   }
 }

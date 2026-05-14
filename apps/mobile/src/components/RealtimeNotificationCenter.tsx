@@ -11,14 +11,15 @@ import type { BusinessDashboard, ChargeRequest, EscrowRecord, RefundReviewReques
 type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
 type EscrowWithConsumer = EscrowRecord & { consumer?: { name: string } };
 
-const ACTIVE_REFUND_REVIEW_STATUSES = new Set([
-  'merchant_review',
+const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'merchant_response_requested',
+  'merchant_responded',
   'merchant_disputed',
   'platform_investigation',
-  'closure_suspected',
-  'closure_confirmed',
   'auto_approved',
   'platform_approved',
+  'refunded',
+  'rejected',
 ]);
 
 type RealtimeEvent = {
@@ -89,12 +90,12 @@ export function buildBusinessRealtimeEvents(dashboard?: BusinessDashboard): Real
         return [];
       });
     const refundEvents = (escrow.refundReviewRequests ?? [])
-      .filter((request: RefundReviewRequest) => ACTIVE_REFUND_REVIEW_STATUSES.has(request.status))
+      .filter((request: RefundReviewRequest) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
       .map((request: RefundReviewRequest) => ({
         id: `business-refund-review-${request.id}`,
         title: '환불 검토 요청 도착',
         body: `${consumerName}님이 ${formatKrwFromRlusd(request.refundableAmount)} 환불 검토를 요청했습니다.`,
-        detail: request.consumerReason ?? undefined,
+        detail: request.merchantNotice ?? undefined,
       }));
     return [...escrowEvents, ...chargeEvents, ...refundEvents];
   });

@@ -31,14 +31,15 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
   { key: 'cancelled', label: '취소됨' },
 ];
 
-const ACTIVE_REFUND_REVIEW_STATUSES = new Set([
-  'merchant_review',
+const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'merchant_response_requested',
+  'merchant_responded',
   'merchant_disputed',
   'platform_investigation',
-  'closure_suspected',
-  'closure_confirmed',
   'auto_approved',
   'platform_approved',
+  'refunded',
+  'rejected',
 ]);
 
 type EscrowWithConsumer = EscrowRecord & { consumer?: { id: string; name: string } };
@@ -138,7 +139,7 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
       : `${FILTER_OPTIONS.find((option) => option.key === statusFilter)?.label ?? '진행중'} 에스크로`;
   const refundReviewItems = ((dashboard?.escrows ?? []) as EscrowWithConsumer[])
     .flatMap((escrow) => (escrow.refundReviewRequests ?? [])
-      .filter((request: RefundReviewRequest) => ACTIVE_REFUND_REVIEW_STATUSES.has(request.status))
+      .filter((request: RefundReviewRequest) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
       .map((request: RefundReviewRequest) => ({ escrow, request })))
     .sort((a, b) => new Date(b.request.requestedAt).getTime() - new Date(a.request.requestedAt).getTime());
   const latestRefundReviewItem = refundReviewItems[0];
@@ -230,8 +231,8 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
                 <Text style={styles.refundReviewSummary}>
                   {latestRefundReviewItem.escrow.consumer?.name ?? '손님'} · 환불 가능 {formatKrwFromRlusd(latestRefundReviewItem.request.refundableAmount)}
                 </Text>
-                {!!latestRefundReviewItem.request.consumerReason && (
-                  <Text style={styles.refundReviewReason} numberOfLines={2}>{latestRefundReviewItem.request.consumerReason}</Text>
+                {!!latestRefundReviewItem.request.merchantNotice && (
+                  <Text style={styles.refundReviewReason} numberOfLines={2}>{latestRefundReviewItem.request.merchantNotice}</Text>
                 )}
               </View>
             )}

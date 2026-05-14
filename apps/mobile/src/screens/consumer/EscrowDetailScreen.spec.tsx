@@ -289,7 +289,7 @@ describe('EscrowDetailScreen', () => {
     api.requestRefundReview.mockResolvedValue({
       id: 'refund-review-1',
       escrowId: 'e-prepaid-refund',
-      status: 'merchant_review',
+      status: 'platform_review',
       refundableAmount: 10,
       merchantRespondBy: '2026-05-18T00:00:00.000Z',
       consumerReason: reason,

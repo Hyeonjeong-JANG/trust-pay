@@ -53,6 +53,9 @@ const STATUS_KO: Record<string, string> = {
 };
 
 const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
+  platform_review: 'TrustPay 검토 중',
+  merchant_response_requested: '사업자 응답 대기',
+  merchant_responded: '사업자 응답 완료',
   merchant_review: '사업자 응답 대기',
   merchant_disputed: '사업자 이의제기',
   platform_investigation: 'TrustPay 조사 중',

@@ -65,6 +65,9 @@ const STATUS_KO: Record<string, string> = {
 };
 
 const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
+  platform_review: 'TrustPay 검토 중',
+  merchant_response_requested: '사업자 응답 대기',
+  merchant_responded: '사업자 응답 완료',
   merchant_review: '사업자 응답 대기',
   merchant_disputed: '사업자 이의제기',
   platform_investigation: 'TrustPay 조사 중',
@@ -75,6 +78,17 @@ const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
   refunded: '환불 완료',
   rejected: '환불 검토 거절',
 };
+
+const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'merchant_response_requested',
+  'merchant_responded',
+  'merchant_disputed',
+  'platform_investigation',
+  'auto_approved',
+  'platform_approved',
+  'refunded',
+  'rejected',
+]);
 
 function rippleTimeToDate(rippleTime: number): string {
   const RIPPLE_EPOCH = 946684800;
@@ -111,7 +125,9 @@ function isChargeRequest(item: EscrowEntry | ChargeRequest): item is ChargeReque
 
 function getLatestRefundReview(requests?: RefundReviewRequest[]): RefundReviewRequest | null {
   if (!requests?.length) return null;
-  return [...requests].sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())[0];
+  return requests
+    .filter((request) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
+    .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())[0] ?? null;
 }
 
 export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscrowDetail'>) {
@@ -122,6 +138,7 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
   const [manualChargeAmount, setManualChargeAmount] = useState('');
   const [selectedChargeOptionId, setSelectedChargeOptionId] = useState(DIRECT_CHARGE_OPTION_ID);
   const [isChargeDropdownOpen, setIsChargeDropdownOpen] = useState(false);
+  const [merchantResponse, setMerchantResponse] = useState('');
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['escrow', id],
@@ -142,6 +159,21 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
     onError: (err: Error) => {
       const apiErr = err as ApiError;
       showErrorToast('차감 요청 실패', apiErr.userMessage ?? err.message);
+    },
+  });
+
+  const refundReviewResponseMutation = useMutation({
+    mutationFn: ({ requestId, response }: { requestId: string; response: string }) =>
+      api.respondToRefundReviewRequest(requestId, { response }),
+    onSuccess: () => {
+      setMerchantResponse('');
+      queryClient.invalidateQueries({ queryKey: ['escrow', id] });
+      queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
+      showSuccessToast('소명 제출 완료', 'TrustPay 운영 검토 큐에 사업자 응답을 전달했습니다.');
+    },
+    onError: (err: Error) => {
+      const apiErr = err as ApiError;
+      showErrorToast('소명 제출 실패', apiErr.userMessage ?? err.message);
     },
   });
 
@@ -225,6 +257,16 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
     chargeRequestMutation.mutate({ menuName, amount });
   };
 
+  const submitMerchantResponse = () => {
+    if (!latestRefundReview) return;
+    const response = merchantResponse.trim();
+    if (response.length < 10) {
+      showErrorToast('소명 제출 실패', '소명 내용을 10자 이상 입력해주세요.');
+      return;
+    }
+    refundReviewResponseMutation.mutate({ requestId: latestRefundReview.id, response });
+  };
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -285,23 +327,32 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                 <Text style={styles.refundReviewDesc}>
                   환불 검토 금액 {formatKrwFromRlusd(latestRefundReview.refundableAmount)} · 사업자 응답 기한 {isoToDate(latestRefundReview.merchantRespondBy) ?? '-'}
                 </Text>
-                {!!latestRefundReview.investigationReason && (
-                  <Text style={styles.refundReviewPolicy}>{latestRefundReview.investigationReason}</Text>
-                )}
-                {!!latestRefundReview.consumerReason && (
+                {!!latestRefundReview.merchantNotice && (
                   <View style={styles.refundReviewReasonBox}>
-                    <Text style={styles.refundReviewReasonLabel}>소비자 요청 사유</Text>
-                    <Text style={styles.refundReviewReason}>{latestRefundReview.consumerReason}</Text>
+                    <Text style={styles.refundReviewReasonLabel}>TrustPay 소명 요청</Text>
+                    <Text style={styles.refundReviewReason}>{latestRefundReview.merchantNotice}</Text>
                   </View>
                 )}
-                {!!latestRefundReview.photoDataUrls?.length && (
-                  <View style={styles.refundReviewPhotoBox}>
-                    <Text style={styles.refundReviewPhotoCount}>첨부 사진 {latestRefundReview.photoDataUrls.length}장</Text>
-                    <View style={styles.refundReviewPhotoRow}>
-                      {latestRefundReview.photoDataUrls.map((uri, index) => (
-                        <Image key={`${uri.slice(0, 32)}-${index}`} source={{ uri }} style={styles.refundReviewPhotoThumb} />
-                      ))}
-                    </View>
+                {latestRefundReview.status === 'merchant_response_requested' && (
+                  <View style={styles.refundReviewResponseBox}>
+                    <TextInput
+                      style={styles.refundReviewResponseInput}
+                      placeholder="TrustPay에 전달할 소명 내용을 입력해주세요"
+                      placeholderTextColor={colors.gray400}
+                      value={merchantResponse}
+                      onChangeText={setMerchantResponse}
+                      multiline
+                      textAlignVertical="top"
+                      maxLength={1000}
+                    />
+                    <TouchableOpacity
+                      style={[styles.refundReviewResponseButton, refundReviewResponseMutation.isPending && styles.buttonDisabled]}
+                      onPress={submitMerchantResponse}
+                      disabled={refundReviewResponseMutation.isPending}
+                      activeOpacity={0.84}
+                    >
+                      <Text style={styles.refundReviewResponseButtonText}>{refundReviewResponseMutation.isPending ? '제출 중...' : '소명 제출'}</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -567,6 +618,25 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   refundReviewReason: { color: colors.gray700, fontSize: font.size.sm, lineHeight: 20 },
+  refundReviewResponseBox: { gap: spacing.sm, marginTop: spacing.md },
+  refundReviewResponseInput: {
+    backgroundColor: colors.gray50,
+    borderColor: colors.gray200,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    color: colors.gray900,
+    fontSize: font.size.md,
+    minHeight: 96,
+    padding: spacing.md,
+  },
+  refundReviewResponseButton: {
+    alignItems: 'center',
+    backgroundColor: colors.warning,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  refundReviewResponseButtonText: { color: colors.white, fontSize: font.size.md, fontWeight: font.weight.bold },
   refundReviewPhotoBox: { marginTop: spacing.sm },
   refundReviewPhotoCount: {
     color: colors.gray600,
