@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildAdminAuthHeaders, escapeHtml, getAdminRequestErrorMessage, getApiBase, getStatusLabel, safeDataImageSrc, summarizeReview, visibleQueueStatuses } from './admin-state.js';
+import { adminTabs, buildAdminAuthHeaders, escapeHtml, getAdminRequestErrorMessage, getApiBase, getStatusLabel, getTabMeta, safeDataImageSrc, summarizeDashboard, summarizeEscrow, summarizeReview, visibleQueueStatuses } from './admin-state.js';
 
 test('getApiBase resolves local and deployed admin API roots', () => {
   assert.equal(getApiBase('/api', 'localhost'), 'http://localhost:3000');
@@ -23,6 +23,28 @@ test('visibleQueueStatuses prioritizes operational refund review work', () => {
     'platform_investigation',
     'platform_approved',
     'rejected',
+  ]);
+});
+
+test('adminTabs defines standard operations sections', () => {
+  assert.deepEqual(adminTabs.map((tab) => tab.id), ['dashboard', 'refunds', 'businesses', 'consumers', 'escrows', 'settings']);
+  assert.equal(getTabMeta('businesses').label, '가맹점');
+  assert.equal(getTabMeta('unknown').label, '대시보드');
+});
+
+test('summarizeDashboard creates card-ready admin metrics', () => {
+  assert.deepEqual(summarizeDashboard({
+    refundReviews: { open: 4, merchantResponseRequested: 2, merchantResponded: 1, platformInvestigation: 1 },
+    businesses: { total: 7 },
+    consumers: { total: 11 },
+    escrows: { active: 5 },
+  }), [
+    { label: '열린 환불/분쟁', value: '4건', tone: 'warning' },
+    { label: '사업자 소명 대기', value: '2건', tone: 'primary' },
+    { label: '사업자 응답 완료', value: '1건', tone: 'success' },
+    { label: '활성 에스크로', value: '5건', tone: 'neutral' },
+    { label: '가맹점', value: '7곳', tone: 'neutral' },
+    { label: '소비자', value: '11명', tone: 'neutral' },
   ]);
 });
 
@@ -52,6 +74,25 @@ test('summarizeReview creates an operator-readable queue item', () => {
   assert.equal(summary.reasonPreview, '2주 넘게 안 열고 전화도 안 받아요ㅠㅠ');
 });
 
+test('summarizeEscrow creates compact transaction rows', () => {
+  const summary = summarizeEscrow({
+    id: 'escrow-1',
+    status: 'active',
+    escrowType: 'prepaid',
+    totalAmount: 150,
+    business: { name: '강남 블루보틀' },
+    consumer: { name: '이서연' },
+    entries: [{ status: 'pending' }, { status: 'released' }],
+    refundReviewRequests: [{ status: 'platform_review' }],
+  });
+
+  assert.equal(summary.businessName, '강남 블루보틀');
+  assert.equal(summary.consumerName, '이서연');
+  assert.equal(summary.totalKrw, '₩202,500');
+  assert.equal(summary.progressText, '1/2 정산');
+  assert.equal(summary.refundText, '환불/분쟁 1건');
+});
+
 test('escapeHtml neutralizes consumer-provided markup before admin rendering', () => {
   assert.equal(escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
 });
@@ -62,10 +103,11 @@ test('safeDataImageSrc only permits plain base64 image data URLs', () => {
   assert.equal(safeDataImageSrc('data:image/png;base64,AAA" onerror="alert(1)'), '');
 });
 
-test('admin shell uses standard console copy and demo admin credentials', () => {
+test('admin shell uses tabbed console copy and demo admin credentials', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
-  assert.match(html, /환불 검토 관리/);
+  assert.match(html, /대시보드/);
+  assert.match(html, /id="admin-tabs"/);
   assert.match(html, /관리자 아이디/);
   assert.match(html, /placeholder="admin"/);
   assert.match(html, /admin1234/);

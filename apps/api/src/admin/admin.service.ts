@@ -4,6 +4,7 @@ import type { AdminRefundReviewListInput, AdminRequestMerchantResponseInput, Adm
 
 type AdminSession = { role: string };
 const TERMINAL_REFUND_REVIEW_STATUSES = new Set(['platform_approved', 'rejected', 'refunded']);
+const OPEN_REFUND_REVIEW_STATUSES = ['platform_review', 'merchant_response_requested', 'merchant_responded', 'platform_investigation'];
 
 function parsePhotoDataUrls(value?: string | null): string[] {
   if (!value) return [];
@@ -29,6 +30,69 @@ function addBusinessDays(value: Date, days: number): Date {
 @Injectable()
 export class AdminService {
   constructor(private prisma: PrismaService) {}
+
+  async getDashboard(user: AdminSession) {
+    this.assertAdmin(user);
+    const [open, merchantResponseRequested, merchantResponded, platformInvestigation, businesses, consumers, activeEscrows] = await Promise.all([
+      this.prisma.refundReviewRequest.count({ where: { status: { in: OPEN_REFUND_REVIEW_STATUSES } } }),
+      this.prisma.refundReviewRequest.count({ where: { status: 'merchant_response_requested' } }),
+      this.prisma.refundReviewRequest.count({ where: { status: 'merchant_responded' } }),
+      this.prisma.refundReviewRequest.count({ where: { status: 'platform_investigation' } }),
+      this.prisma.business.count(),
+      this.prisma.consumer.count(),
+      this.prisma.escrow.count({ where: { status: 'active' } }),
+    ]);
+
+    return {
+      refundReviews: {
+        open,
+        merchantResponseRequested,
+        merchantResponded,
+        platformInvestigation,
+      },
+      businesses: { total: businesses },
+      consumers: { total: consumers },
+      escrows: { active: activeEscrows },
+    };
+  }
+
+  async listBusinesses(user: AdminSession) {
+    this.assertAdmin(user);
+    const businesses = await this.prisma.business.findMany({
+      include: { _count: { select: { products: true, escrows: true, refundReviewRequests: true } } },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+    return businesses.map((business) => this.stripSecret(business));
+  }
+
+  async listConsumers(user: AdminSession) {
+    this.assertAdmin(user);
+    const consumers = await this.prisma.consumer.findMany({
+      include: { _count: { select: { escrows: true, chargeRequests: true, refundReviewRequests: true } } },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+    return consumers.map((consumer) => this.stripSecret(consumer));
+  }
+
+  async listEscrows(user: AdminSession) {
+    this.assertAdmin(user);
+    const escrows = await this.prisma.escrow.findMany({
+      include: {
+        business: true,
+        consumer: true,
+        entries: true,
+        chargeRequests: true,
+        refundReviewRequests: { orderBy: { requestedAt: 'desc' } },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+    return escrows.map((escrow) => ({
+      ...escrow,
+      business: escrow.business ? this.stripSecret(escrow.business) : escrow.business,
+      consumer: escrow.consumer ? this.stripSecret(escrow.consumer) : escrow.consumer,
+      refundReviewRequests: (escrow.refundReviewRequests ?? []).map((review: any) => this.serializeRefundReview(review)),
+    }));
+  }
 
   async listRefundReviews(user: AdminSession, query: AdminRefundReviewListInput) {
     this.assertAdmin(user);
@@ -112,6 +176,11 @@ export class AdminService {
         },
       },
     } as const;
+  }
+
+  private stripSecret(record: any) {
+    const { xrplSecret: _secret, ...rest } = record;
+    return rest;
   }
 
   private serializeRefundReview(review: any) {

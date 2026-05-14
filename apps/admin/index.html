@@ -7,13 +7,16 @@
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <header class="masthead">
-        <div>
-          <div class="eyebrow">TrustPay Admin</div>
-          <h1>환불 검토 관리</h1>
-          <p>소비자 환불 요청을 확인하고 사업자 소명 요청, 승인, 거절 처리를 진행합니다.</p>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <div class="brand-mark">TP</div>
+          <div>
+            <strong>TrustPay</strong>
+            <span>관리자 콘솔</span>
+          </div>
         </div>
+        <nav id="admin-tabs" class="side-nav" aria-label="관리자 메뉴"></nav>
         <form id="secret-form" class="login-panel">
           <div class="credential-grid">
             <label for="admin-id">관리자 아이디</label>
@@ -24,15 +27,20 @@
           <div class="secret-row">
             <button type="submit" class="primary">로그인</button>
           </div>
-          <div id="status-line" class="status-line">로그인 대기</div>
         </form>
-      </header>
-      <nav id="filters" class="filters" aria-label="환불 검토 상태 필터"></nav>
-      <section class="workbench">
-        <aside id="case-list" class="queue" aria-label="환불 검토 목록"></aside>
-        <article id="case-detail" class="detail" aria-label="환불 검토 상세">
-          <div class="empty detail-empty">관리자 비밀번호를 입력하세요.</div>
-        </article>
+      </aside>
+      <section class="content-shell">
+        <header class="topbar">
+          <div>
+            <div class="eyebrow">TrustPay Admin</div>
+            <h1 id="content-title">대시보드</h1>
+            <p id="content-desc">오늘 처리해야 할 운영 지표를 확인합니다.</p>
+          </div>
+          <div id="status-line" class="status-line">로그인 대기</div>
+        </header>
+        <section id="content-body" class="content-body">
+          <div class="empty detail-empty">관리자 아이디와 비밀번호를 입력하세요.</div>
+        </section>
       </section>
     </main>
     <script type="module" src="./src/main.js"></script>

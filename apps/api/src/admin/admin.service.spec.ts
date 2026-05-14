@@ -11,7 +11,20 @@ describe('AdminService', () => {
 
   beforeEach(() => {
     prisma = {
+      business: {
+        count: jest.fn(),
+        findMany: jest.fn(),
+      },
+      consumer: {
+        count: jest.fn(),
+        findMany: jest.fn(),
+      },
+      escrow: {
+        count: jest.fn(),
+        findMany: jest.fn(),
+      },
       refundReviewRequest: {
+        count: jest.fn(),
         findMany: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
@@ -47,6 +60,99 @@ describe('AdminService', () => {
     expect(result[0].photoDataUrls).toEqual(['data:image/png;base64,ZmFrZQ==']);
     expect(result[0].escrow.business).not.toHaveProperty('xrplSecret');
     await expect(service.listRefundReviews(businessUser, {})).rejects.toThrow(ForbiddenException);
+  });
+
+  it('returns dashboard counts for admin operations tabs', async () => {
+    prisma.refundReviewRequest.count
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(4);
+    prisma.business.count.mockResolvedValue(7);
+    prisma.consumer.count.mockResolvedValue(11);
+    prisma.escrow.count.mockResolvedValue(5);
+
+    const result = await service.getDashboard(adminUser);
+
+    expect(result).toEqual({
+      refundReviews: {
+        open: 3,
+        merchantResponseRequested: 2,
+        merchantResponded: 1,
+        platformInvestigation: 4,
+      },
+      businesses: { total: 7 },
+      consumers: { total: 11 },
+      escrows: { active: 5 },
+    });
+    expect(prisma.refundReviewRequest.count).toHaveBeenCalledWith({
+      where: { status: { in: ['platform_review', 'merchant_response_requested', 'merchant_responded', 'platform_investigation'] } },
+    });
+  });
+
+  it('lists businesses without secrets for admin review', async () => {
+    prisma.business.findMany.mockResolvedValue([
+      {
+        id: 'business-1',
+        name: '파워짐',
+        category: '헬스장',
+        registrationNumber: '1010100002',
+        registrationVerificationStatus: 'demo_verified',
+        isActive: true,
+        xrplSecret: 'secret',
+        _count: { products: 1, escrows: 2, refundReviewRequests: 1 },
+      },
+    ]);
+
+    const result = await service.listBusinesses(adminUser);
+
+    expect(prisma.business.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      include: { _count: { select: { products: true, escrows: true, refundReviewRequests: true } } },
+    }));
+    expect(result[0]).not.toHaveProperty('xrplSecret');
+    expect(result[0]._count).toEqual({ products: 1, escrows: 2, refundReviewRequests: 1 });
+  });
+
+  it('lists consumers without secrets for admin review', async () => {
+    prisma.consumer.findMany.mockResolvedValue([
+      {
+        id: 'consumer-1',
+        name: '김민수',
+        phone: '01020000001',
+        xrplSecret: 'secret',
+        _count: { escrows: 2, chargeRequests: 3, refundReviewRequests: 1 },
+      },
+    ]);
+
+    const result = await service.listConsumers(adminUser);
+
+    expect(prisma.consumer.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      include: { _count: { select: { escrows: true, chargeRequests: true, refundReviewRequests: true } } },
+    }));
+    expect(result[0]).not.toHaveProperty('xrplSecret');
+  });
+
+  it('lists escrows with sanitized participants for admin review', async () => {
+    prisma.escrow.findMany.mockResolvedValue([
+      {
+        id: 'escrow-1',
+        status: 'active',
+        totalAmount: 600,
+        business: { id: 'business-1', name: '파워짐', xrplSecret: 'secret' },
+        consumer: { id: 'consumer-1', name: '김민수', xrplSecret: 'secret' },
+        entries: [],
+        chargeRequests: [],
+        refundReviewRequests: [{ id: 'review-1', photoDataUrlsJson: null }],
+      },
+    ]);
+
+    const result = await service.listEscrows(adminUser);
+
+    expect(prisma.escrow.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({ business: true, consumer: true }),
+    }));
+    expect(result[0].business).not.toHaveProperty('xrplSecret');
+    expect(result[0].consumer).not.toHaveProperty('xrplSecret');
   });
 
   it('requests a merchant response with an admin-written notice', async () => {

@@ -7,6 +7,15 @@ export const visibleQueueStatuses = [
   'rejected',
 ];
 
+export const adminTabs = [
+  { id: 'dashboard', label: '대시보드', description: '오늘 처리해야 할 운영 지표를 확인합니다.' },
+  { id: 'refunds', label: '환불/분쟁', description: '소비자 환불 요청과 사업자 소명을 처리합니다.' },
+  { id: 'businesses', label: '가맹점', description: '가입 가맹점과 인증 상태를 확인합니다.' },
+  { id: 'consumers', label: '소비자', description: '소비자 계정과 이용 현황을 확인합니다.' },
+  { id: 'escrows', label: '거래/에스크로', description: '전체 보호 결제와 정산 상태를 확인합니다.' },
+  { id: 'settings', label: '설정', description: '관리자 로그인과 API 연결 상태를 확인합니다.' },
+];
+
 const STATUS_LABELS = {
   platform_review: 'TrustPay 검토',
   merchant_response_requested: '사업자 소명 요청',
@@ -49,6 +58,10 @@ export function getStatusLabel(status) {
   return STATUS_LABELS[status] ?? status;
 }
 
+export function getTabMeta(tabId) {
+  return adminTabs.find((tab) => tab.id === tabId) ?? adminTabs[0];
+}
+
 export function buildAdminAuthHeaders(adminId, adminSecret) {
   return {
     'Content-Type': 'application/json',
@@ -83,6 +96,21 @@ export function formatKrwFromRlusd(amount) {
   return `₩${Math.round(Number(amount || 0) * KRW_PER_RLUSD).toLocaleString('ko-KR')}`;
 }
 
+function formatCount(value, suffix) {
+  return `${Number(value || 0).toLocaleString('ko-KR')}${suffix}`;
+}
+
+export function summarizeDashboard(dashboard = {}) {
+  return [
+    { label: '열린 환불/분쟁', value: formatCount(dashboard.refundReviews?.open, '건'), tone: 'warning' },
+    { label: '사업자 소명 대기', value: formatCount(dashboard.refundReviews?.merchantResponseRequested, '건'), tone: 'primary' },
+    { label: '사업자 응답 완료', value: formatCount(dashboard.refundReviews?.merchantResponded, '건'), tone: 'success' },
+    { label: '활성 에스크로', value: formatCount(dashboard.escrows?.active, '건'), tone: 'neutral' },
+    { label: '가맹점', value: formatCount(dashboard.businesses?.total, '곳'), tone: 'neutral' },
+    { label: '소비자', value: formatCount(dashboard.consumers?.total, '명'), tone: 'neutral' },
+  ];
+}
+
 function sumAmount(items, status) {
   return (items ?? [])
     .filter((item) => item.status === status)
@@ -108,5 +136,21 @@ export function summarizeReview(review) {
     respondBy: review.merchantRespondBy ? new Date(review.merchantRespondBy).toLocaleDateString('ko-KR') : '-',
     photoCountText: `첨부 ${(review.photoDataUrls ?? []).length}장`,
     reasonPreview: reason.length > 80 ? `${reason.slice(0, 80)}...` : reason,
+  };
+}
+
+export function summarizeEscrow(escrow) {
+  const entries = escrow.entries ?? [];
+  const releasedCount = entries.filter((entry) => entry.status === 'released').length;
+  const refundCount = (escrow.refundReviewRequests ?? []).length;
+  return {
+    id: escrow.id,
+    status: escrow.status,
+    escrowType: escrow.escrowType,
+    businessName: escrow.business?.name ?? '사업자 미확인',
+    consumerName: escrow.consumer?.name ?? '소비자 미확인',
+    totalKrw: formatKrwFromRlusd(escrow.totalAmount),
+    progressText: `${releasedCount}/${entries.length} 정산`,
+    refundText: `환불/분쟁 ${refundCount}건`,
   };
 }

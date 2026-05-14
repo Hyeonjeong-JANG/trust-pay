@@ -9,6 +9,26 @@ import { adminRefundReviewListSchema, adminRequestMerchantResponseSchema, adminR
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
+  @Get('dashboard')
+  getDashboard(@Req() req: { user: AdminUser }) {
+    return this.adminService.getDashboard(req.user);
+  }
+
+  @Get('businesses')
+  listBusinesses(@Req() req: { user: AdminUser }) {
+    return this.adminService.listBusinesses(req.user);
+  }
+
+  @Get('consumers')
+  listConsumers(@Req() req: { user: AdminUser }) {
+    return this.adminService.listConsumers(req.user);
+  }
+
+  @Get('escrows')
+  listEscrows(@Req() req: { user: AdminUser }) {
+    return this.adminService.listEscrows(req.user);
+  }
+
   @Get('refund-reviews')
   listRefundReviews(
     @Query(new ZodValidationPipe(adminRefundReviewListSchema)) query: AdminRefundReviewListInput,
