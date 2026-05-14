@@ -192,6 +192,7 @@ function renderQueue() {
       <span class="case-status">${summary.statusLabel}</span>
       <strong>${escapeHtml(summary.businessName)}</strong>
       <span>${escapeHtml(summary.consumerName)} · ${summary.refundableKrw}</span>
+      <span class="case-date">${escapeHtml(summary.queueDateLabel)} ${escapeHtml(summary.queueDate)}</span>
       <small>${escapeHtml(summary.reasonPreview || '요청 사유 없음')}</small>
     `;
     card.addEventListener('click', () => {

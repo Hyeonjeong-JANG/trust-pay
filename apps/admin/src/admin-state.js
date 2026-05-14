@@ -1,8 +1,8 @@
 export const visibleQueueStatuses = [
+  'all',
   'needs_action',
   'waiting_merchant',
   'resolved',
-  'all',
 ];
 
 export const adminTabs = [
@@ -93,6 +93,12 @@ function getQueueTimestamp(review = {}) {
   if (review.status === 'merchant_responded' && review.merchantRespondedAt) return review.merchantRespondedAt;
   if (TERMINAL_REFUND_REVIEW_STATUSES.has(review.status) && review.resolvedAt) return review.resolvedAt;
   return review.requestedAt || review.merchantRespondedAt || review.resolvedAt || '';
+}
+
+function getQueueDateLabel(review = {}) {
+  if (review.status === 'merchant_responded' && review.merchantRespondedAt) return '사업자 응답';
+  if (TERMINAL_REFUND_REVIEW_STATUSES.has(review.status) && review.resolvedAt) return '종료';
+  return '접수';
 }
 
 export function sortReviewsForQueue(reviews = [], status = 'needs_action') {
@@ -235,6 +241,8 @@ export function summarizeReview(review) {
     usedKrw: formatKrwFromRlusd(usedAmount),
     requestedAt: formatDateTime(review.requestedAt) || '-',
     respondBy: formatDate(review.merchantRespondBy) || '-',
+    queueDate: formatDateTime(getQueueTimestamp(review)) || '-',
+    queueDateLabel: getQueueDateLabel(review),
     photoCountText: `첨부 ${(review.photoDataUrls ?? []).length}장`,
     reasonPreview: reason.length > 80 ? `${reason.slice(0, 80)}...` : reason,
   };

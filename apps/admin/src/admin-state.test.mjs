@@ -17,11 +17,12 @@ test('getStatusLabel describes platform-first refund review states', () => {
 
 test('visibleQueueStatuses prioritizes operational refund review work', () => {
   assert.deepEqual(visibleQueueStatuses, [
+    'all',
     'needs_action',
     'waiting_merchant',
     'resolved',
-    'all',
   ]);
+  assert.equal(getStatusLabel('all'), '전체');
   assert.equal(getStatusLabel('needs_action'), '처리 필요');
   assert.equal(getStatusLabel('waiting_merchant'), '사업자 대기');
   assert.equal(getStatusLabel('resolved'), '완료');
@@ -54,6 +55,21 @@ test('sortReviewsForQueue puts oldest unprocessed incoming work first', () => {
   ], 'needs_action');
 
   assert.deepEqual(reviews.map((review) => review.id), ['old-merchant-response', 'new-consumer']);
+});
+
+test('summarizeReview exposes the queue ordering date shown on case cards', () => {
+  const summary = summarizeReview({
+    id: 'review-responded',
+    status: 'merchant_responded',
+    refundableAmount: 300,
+    requestedAt: '2026-05-10T00:00:00.000Z',
+    merchantRespondedAt: '2026-05-14T08:30:00.000Z',
+    merchantResponse: '사업자 응답입니다.',
+    escrow: { business: { name: '파워짐' }, consumer: { name: '김민수' }, entries: [], chargeRequests: [] },
+  });
+
+  assert.equal(summary.queueDateLabel, '사업자 응답');
+  assert.match(summary.queueDate, /2026\. 5\. 14\./);
 });
 
 test('admin refund detail renders a timeline and status-specific action modes', () => {
