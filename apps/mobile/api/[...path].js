@@ -1061,7 +1061,13 @@ module.exports = async function handler(req, res) {
   }
 
   const url = new URL(req.url, 'https://trustpay.demo');
-  const path = url.pathname.replace(/^\/api/, '');
+  let path = url.pathname.replace(/^\/api/, '');
+  const rewrittenAdminPath = path === '/admin' ? url.searchParams.get('path') : null;
+  if (rewrittenAdminPath) {
+    // Vercel rewrites nested admin paths here to avoid extra serverless functions.
+    url.searchParams.delete('path');
+    path = `/admin/${rewrittenAdminPath.replace(/^\//, '')}`;
+  }
   const parts = path.split('/').filter(Boolean);
   const body = req.method === 'POST' ? await parseBody(req) : {};
 

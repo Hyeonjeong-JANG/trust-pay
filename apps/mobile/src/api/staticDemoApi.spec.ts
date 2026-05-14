@@ -1,8 +1,5 @@
-const { existsSync } = require('fs');
-const { join } = require('path');
 const handler = require('../../api/[...path].js');
-
-const rootApiDir = join(__dirname, '../../../../api');
+const vercelConfig = require('../../../../vercel.json');
 
 function createResponse() {
   const response = {
@@ -52,19 +49,26 @@ function rippleTimeToIsoDate(value: number) {
 }
 
 describe('static Demo API fixture', () => {
-  it('exposes Vercel root routes for nested admin API paths', () => {
-    for (const routeFile of [
-      'admin/dashboard.js',
-      'admin/businesses.js',
-      'admin/consumers.js',
-      'admin/escrows.js',
-      'admin/refund-reviews/index.js',
-      'admin/refund-reviews/[id].js',
-      'admin/refund-reviews/[id]/request-merchant-response.js',
-      'admin/refund-reviews/[id]/resolve.js',
-    ]) {
-      expect(existsSync(join(rootApiDir, routeFile))).toBe(true);
-    }
+  it('routes nested admin API paths through the existing root Vercel function', () => {
+    expect(vercelConfig.rewrites).toContainEqual({
+      source: '/api/admin/:path*',
+      destination: '/api/admin?path=:path*',
+    });
+  });
+
+  it('serves admin API requests after Vercel rewrites them to the root admin path', async () => {
+    const dashboardResponse = await callAdminApi('GET', '/api/admin?path=dashboard');
+    const dashboard = dashboardResponse.body as any;
+
+    expect(dashboardResponse.statusCode).toBe(200);
+    expect(dashboard.refundReviews.open).toBe(5);
+
+    const reviewResponse = await callAdminApi('GET', '/api/admin?path=refund-reviews&status=platform_review');
+    const reviews = reviewResponse.body as any[];
+
+    expect(reviewResponse.statusCode).toBe(200);
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]).toMatchObject({ status: 'platform_review' });
   });
 
   it('serves demo admin refund cases for every queue filter', async () => {
