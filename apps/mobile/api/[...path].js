@@ -45,7 +45,32 @@ const REFUND_REVIEW_ACADEMY_INVESTIGATION_ID = '00000000-0000-4000-a000-00000000
 const REFUND_REVIEW_SALON_APPROVED_ID = '00000000-0000-4000-a000-000000004006';
 const REFUND_REVIEW_ACADEMY_REJECTED_ID = '00000000-0000-4000-a000-000000004007';
 const OPEN_REFUND_REVIEW_STATUSES = ['platform_review', 'merchant_response_requested', 'merchant_responded', 'merchant_review', 'platform_investigation'];
+const ACTIVE_REFUND_REVIEW_STATUSES = new Set([
+  'platform_review',
+  'merchant_response_requested',
+  'merchant_responded',
+  'merchant_review',
+  'merchant_disputed',
+  'platform_investigation',
+  'closure_suspected',
+  'closure_confirmed',
+  'auto_approved',
+  'platform_approved',
+]);
 const TERMINAL_REFUND_REVIEW_STATUSES = new Set(['platform_approved', 'rejected', 'refunded']);
+const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
+  'platform_review',
+  'merchant_response_requested',
+  'merchant_responded',
+  'merchant_review',
+  'merchant_disputed',
+  'platform_investigation',
+  'auto_approved',
+  'platform_approved',
+  'refunded',
+  'rejected',
+]);
+const DEMO_REFUND_INVESTIGATION_REASON = '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.';
 
 const consumers = [
   {
@@ -913,7 +938,7 @@ function makeEscrow({ id, consumerId = CONSUMER_ID, businessId, productId = null
   };
 }
 
-function withRelations(escrow) {
+function withRelations(escrow, audience = 'consumer') {
   const product = products.find((item) => item.id === escrow.productId) || null;
   return {
     ...escrow,
@@ -926,7 +951,25 @@ function withRelations(escrow) {
         ...item,
         menuItem: product?.menuItems.find((menu) => menu.id === item.menuItemId) || item.menuItem || null,
       })),
+    refundReviewRequests: refundReviewsForEscrow(escrow.id, audience),
   };
+}
+
+function refundReviewsForEscrow(escrowId, audience) {
+  const reviews = refundReviewRequests
+    .filter((item) => item.escrowId === escrowId)
+    .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
+  if (audience === 'merchant') {
+    return reviews
+      .filter((item) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(item.status))
+      .map(stripRefundReviewForMerchant);
+  }
+  return reviews.map((review) => ({ ...review }));
+}
+
+function stripRefundReviewForMerchant(review) {
+  const { consumerReason: _consumerReason, photoDataUrls: _photoDataUrls, photoDataUrlsJson: _photoDataUrlsJson, ...rest } = review;
+  return rest;
 }
 
 function parseEntryIds(request) {
@@ -960,6 +1003,12 @@ function isAdminRequest(req) {
   return getHeader(req, 'x-admin-id') === expectedId && getHeader(req, 'x-admin-secret') === expectedSecret;
 }
 
+function getDemoSession(req) {
+  const authorization = getHeader(req, 'authorization') || '';
+  const match = authorization.match(/^Bearer demo-token-(consumer|business)-(.+)$/);
+  return match ? { role: match[1], userId: match[2] } : null;
+}
+
 function addBusinessDays(value, days) {
   const result = new Date(value);
   let remaining = days;
@@ -980,7 +1029,7 @@ function serializeAdminReview(review) {
   const escrow = escrows.find((item) => item.id === review.escrowId);
   return {
     ...review,
-    escrow: escrow ? withRelations(escrow) : null,
+    escrow: escrow ? withRelations(escrow, 'consumer') : null,
   };
 }
 
@@ -1009,7 +1058,7 @@ function adminConsumerRows() {
 
 function adminEscrowRows() {
   return escrows.map((escrow) => ({
-    ...withRelations(escrow),
+    ...withRelations(escrow, 'consumer'),
     refundReviewRequests: refundReviewRequests
       .filter((review) => review.escrowId === escrow.id)
       .map(reviewWithoutEscrow),
@@ -1062,11 +1111,11 @@ module.exports = async function handler(req, res) {
 
   const url = new URL(req.url, 'https://trustpay.demo');
   let path = url.pathname.replace(/^\/api/, '');
-  const rewrittenAdminPath = path === '/admin' ? url.searchParams.get('path') : null;
-  if (rewrittenAdminPath) {
-    // Vercel rewrites nested admin paths here to avoid extra serverless functions.
+  const rewrittenPath = path === '/demo' || path === '/admin' ? url.searchParams.get('path') : null;
+  if (rewrittenPath) {
+    // Vercel rewrites nested demo API paths here so state stays in one function.
     url.searchParams.delete('path');
-    path = `/admin/${rewrittenAdminPath.replace(/^\//, '')}`;
+    path = `/${rewrittenPath.replace(/^\//, '')}`;
   }
   const parts = path.split('/').filter(Boolean);
   const body = req.method === 'POST' ? await parseBody(req) : {};
@@ -1179,7 +1228,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'GET' && parts[0] === 'business' && parts[2] === 'dashboard') {
     const businessId = parts[1];
-    const scoped = escrows.filter((item) => item.businessId === businessId).map(withRelations);
+    const scoped = escrows.filter((item) => item.businessId === businessId).map((escrow) => withRelations(escrow, 'merchant'));
     return send(res, 200, {
       business: businesses.find((item) => item.id === businessId),
       totalReceived: scoped.reduce((sum, escrow) => {
@@ -1221,12 +1270,83 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'GET' && parts[0] === 'escrow' && parts[1] === 'consumer') {
-    return send(res, 200, escrows.filter((item) => item.consumerId === parts[2]).map(withRelations));
+    return send(res, 200, escrows.filter((item) => item.consumerId === parts[2]).map((escrow) => withRelations(escrow, 'consumer')));
+  }
+
+  if (req.method === 'POST' && parts[0] === 'escrow' && parts[1] === 'refund-review-requests' && parts[3] === 'merchant-response') {
+    const session = getDemoSession(req);
+    const review = refundReviewRequests.find((item) => item.id === parts[2]);
+    if (!review) return send(res, 404, { message: 'Refund review not found' });
+    if (!session || session.role !== 'business' || session.userId !== review.businessId) {
+      return send(res, 403, { message: '해당 사업자만 환불 검토 소명을 제출할 수 있습니다' });
+    }
+    if (review.status !== 'merchant_response_requested') {
+      return send(res, 400, { message: '사업자 소명 요청 상태에서만 응답할 수 있습니다' });
+    }
+    const response = typeof body.response === 'string' ? body.response.trim() : '';
+    if (response.length < 10) return send(res, 400, { message: '소명 내용을 10자 이상 입력해주세요' });
+
+    review.status = 'merchant_responded';
+    review.merchantResponse = response;
+    review.merchantRespondedAt = new Date().toISOString();
+    const escrow = escrows.find((item) => item.id === review.escrowId);
+    return send(res, 200, { ...stripRefundReviewForMerchant(review), escrow: escrow ? withRelations(escrow, 'merchant') : null });
+  }
+
+  if (req.method === 'POST' && parts[0] === 'escrow' && parts[2] === 'refund-review-requests') {
+    const session = getDemoSession(req);
+    const escrow = escrows.find((item) => item.id === parts[1]);
+    if (!escrow) return send(res, 404, { message: 'Escrow not found' });
+    if (!session || session.role !== 'consumer' || session.userId !== escrow.consumerId) {
+      return send(res, 403, { message: '해당 소비자만 환불 검토를 요청할 수 있습니다' });
+    }
+    if (escrow.status !== 'active') {
+      return send(res, 400, { message: '진행 중인 에스크로만 환불 검토를 요청할 수 있습니다' });
+    }
+
+    const existing = refundReviewRequests
+      .filter((review) => review.escrowId === escrow.id && ACTIVE_REFUND_REVIEW_STATUSES.has(review.status))
+      .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())[0];
+    if (existing) return send(res, 200, { ...existing, escrow: withRelations(escrow, 'consumer') });
+
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    if (reason.length < 10) return send(res, 400, { message: '환불 사유를 10자 이상 입력해주세요' });
+    const refundableAmount = escrow.entries
+      .filter((entry) => entry.status === 'pending')
+      .reduce((sum, entry) => sum + Number(entry.amount || escrow.monthlyAmount), 0);
+    if (refundableAmount <= 0) return send(res, 400, { message: '환불 검토 가능한 미사용 잔액이 없습니다' });
+
+    const now = new Date();
+    const review = {
+      id: `demo-refund-review-${now.getTime()}`,
+      escrowId: escrow.id,
+      consumerId: escrow.consumerId,
+      businessId: escrow.businessId,
+      status: 'platform_review',
+      refundableAmount,
+      merchantRespondBy: addBusinessDays(now, 3).toISOString(),
+      businessClosureStatus: 'unavailable',
+      businessClosureSource: 'demo',
+      businessClosureCheckedAt: now.toISOString(),
+      investigationReason: DEMO_REFUND_INVESTIGATION_REASON,
+      consumerReason: reason,
+      merchantNotice: null,
+      merchantResponse: null,
+      merchantRespondedAt: null,
+      adminResolutionReason: null,
+      photoDataUrls: Array.isArray(body.photoDataUrls) ? body.photoDataUrls.filter((item) => typeof item === 'string') : [],
+      requestedAt: now.toISOString(),
+      resolvedAt: null,
+    };
+    refundReviewRequests = [review, ...refundReviewRequests];
+    return send(res, 201, { ...review, escrow: withRelations(escrow, 'consumer') });
   }
 
   if (req.method === 'GET' && parts[0] === 'escrow' && parts[1]) {
     const escrow = escrows.find((item) => item.id === parts[1]);
-    return escrow ? send(res, 200, withRelations(escrow)) : send(res, 404, { message: 'Escrow not found' });
+    const session = getDemoSession(req);
+    const audience = session?.role === 'business' ? 'merchant' : 'consumer';
+    return escrow ? send(res, 200, withRelations(escrow, audience)) : send(res, 404, { message: 'Escrow not found' });
   }
 
   if (req.method === 'POST' && path === '/escrow') {
@@ -1256,7 +1376,7 @@ module.exports = async function handler(req, res) {
       entryStatuses: Array.from({ length: entryCount }, (_, index) => !isPrepaid && index === 0 ? 'released' : 'pending'),
     });
     escrows = [escrow, ...escrows];
-    return send(res, 201, withRelations(escrow));
+    return send(res, 201, withRelations(escrow, 'consumer'));
   }
 
   if (req.method === 'POST' && parts[0] === 'escrow' && parts[2] === 'charge-requests') {

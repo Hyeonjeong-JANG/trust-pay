@@ -5,8 +5,8 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/api/admin/:path*",
-      "destination": "/api/admin?path=:path*"
+      "source": "/api/:path*",
+      "destination": "/api/demo?path=:path*"
     },
     {
       "source": "/((?!api/).*)",

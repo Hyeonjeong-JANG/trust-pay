@@ -49,21 +49,21 @@ function rippleTimeToIsoDate(value: number) {
 }
 
 describe('static Demo API fixture', () => {
-  it('routes nested admin API paths through the existing root Vercel function', () => {
+  it('routes nested API paths through a single Vercel demo function', () => {
     expect(vercelConfig.rewrites).toContainEqual({
-      source: '/api/admin/:path*',
-      destination: '/api/admin?path=:path*',
+      source: '/api/:path*',
+      destination: '/api/demo?path=:path*',
     });
   });
 
-  it('serves admin API requests after Vercel rewrites them to the root admin path', async () => {
-    const dashboardResponse = await callAdminApi('GET', '/api/admin?path=dashboard');
+  it('serves admin API requests after Vercel rewrites them to the single demo path', async () => {
+    const dashboardResponse = await callAdminApi('GET', '/api/demo?path=admin/dashboard');
     const dashboard = dashboardResponse.body as any;
 
     expect(dashboardResponse.statusCode).toBe(200);
     expect(dashboard.refundReviews.open).toBe(5);
 
-    const reviewResponse = await callAdminApi('GET', '/api/admin?path=refund-reviews&status=platform_review');
+    const reviewResponse = await callAdminApi('GET', '/api/demo?path=admin/refund-reviews&status=platform_review');
     const reviews = reviewResponse.body as any[];
 
     expect(reviewResponse.statusCode).toBe(200);
@@ -141,6 +141,92 @@ describe('static Demo API fixture', () => {
       expect(response.statusCode).toBe(200);
       expect(customerNames.size).toBeGreaterThanOrEqual(minimumCustomers);
     }
+  });
+
+  it('includes merchant-visible refund reviews on bundled business dashboards', async () => {
+    const response = await callApi('GET', '/api/business/00000000-0000-4000-a000-000000000020/dashboard');
+    const dashboard = response.body as any;
+    const refundEscrow = dashboard.escrows.find((escrow: any) => escrow.id === '00000000-0000-4000-a000-000000000700');
+    const review = refundEscrow?.refundReviewRequests?.[0];
+
+    expect(response.statusCode).toBe(200);
+    expect(review).toMatchObject({
+      id: '00000000-0000-4000-a000-000000004001',
+      status: 'merchant_review',
+      merchantNotice: '소비자가 남은 5개월분 환불 검토를 요청했습니다.',
+    });
+    expect(review).not.toHaveProperty('consumerReason');
+    expect(review).not.toHaveProperty('photoDataUrls');
+  });
+
+  it('keeps consumer-created refund reviews visible to admin and merchant dashboards', async () => {
+    const consumerHeaders = { authorization: 'Bearer demo-token-consumer-00000000-0000-4000-a000-000000000001' };
+    const businessHeaders = { authorization: 'Bearer demo-token-business-00000000-0000-4000-a000-000000000020' };
+    const reason = '2주째 헬스장을 열지 않아 환불 검토를 요청합니다.';
+    const photoDataUrls = ['data:image/png;base64,ZmFrZQ=='];
+
+    const createResponse = await callApi(
+      'POST',
+      '/api/demo?path=escrow/00000000-0000-4000-a000-000000000100/refund-review-requests',
+      { reason, photoDataUrls },
+      consumerHeaders,
+    );
+    const created = createResponse.body as any;
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(created).toMatchObject({
+      escrowId: '00000000-0000-4000-a000-000000000100',
+      consumerId: '00000000-0000-4000-a000-000000000001',
+      businessId: '00000000-0000-4000-a000-000000000020',
+      status: 'platform_review',
+      refundableAmount: 300,
+      consumerReason: reason,
+      photoDataUrls,
+    });
+
+    const adminResponse = await callAdminApi('GET', '/api/demo?path=admin/refund-reviews&status=platform_review');
+    const adminReview = (adminResponse.body as any[]).find((review) => review.id === created.id);
+
+    expect(adminResponse.statusCode).toBe(200);
+    expect(adminReview).toMatchObject({ id: created.id, consumerReason: reason, escrow: { consumer: { name: '김민수' }, business: { name: '파워짐 피트니스' } } });
+
+    const businessDashboardResponse = await callApi(
+      'GET',
+      '/api/demo?path=business/00000000-0000-4000-a000-000000000020/dashboard',
+      undefined,
+      businessHeaders,
+    );
+    const dashboard = businessDashboardResponse.body as any;
+    const businessReview = dashboard.escrows
+      .find((escrow: any) => escrow.id === '00000000-0000-4000-a000-000000000100')
+      ?.refundReviewRequests?.find((review: any) => review.id === created.id);
+
+    expect(businessDashboardResponse.statusCode).toBe(200);
+    expect(businessReview).toMatchObject({ id: created.id, status: 'platform_review', refundableAmount: 300 });
+    expect(businessReview).not.toHaveProperty('consumerReason');
+    expect(businessReview).not.toHaveProperty('photoDataUrls');
+
+    const merchantNotice = '영업 여부와 남은 이용권 처리 방안을 답변해주세요.';
+    const requestMerchantResponse = await callAdminApi(
+      'POST',
+      `/api/demo?path=admin/refund-reviews/${created.id}/request-merchant-response`,
+      { merchantNotice },
+    );
+
+    expect(requestMerchantResponse.statusCode).toBe(200);
+    expect(requestMerchantResponse.body).toMatchObject({ id: created.id, status: 'merchant_response_requested', merchantNotice });
+
+    const merchantResponse = await callApi(
+      'POST',
+      `/api/demo?path=escrow/refund-review-requests/${created.id}/merchant-response`,
+      { response: '정상 영업 중이며 미사용 기간 처리 방안을 TrustPay에 전달합니다.' },
+      businessHeaders,
+    );
+
+    expect(merchantResponse.statusCode).toBe(200);
+    expect(merchantResponse.body).toMatchObject({ id: created.id, status: 'merchant_responded' });
+    expect(merchantResponse.body).not.toHaveProperty('consumerReason');
+    expect(merchantResponse.body).not.toHaveProperty('photoDataUrls');
   });
 
   it('matches digit-only demo phone login to the existing hyphenated consumer', async () => {
