@@ -63,6 +63,11 @@ const CHARGE_LAUNDRY_JIHUN_DRY_CLEANING_ID = '00000000-0000-4000-a000-0000000030
 const CHARGE_LAUNDRY_DAEUN_BEDDING_ID = '00000000-0000-4000-a000-000000003043';
 const REFUND_REVIEW_GYM_HAJUN_ID = '00000000-0000-4000-a000-000000004001';
 const REFUND_REVIEW_LAUNDRY_DAEUN_ID = '00000000-0000-4000-a000-000000004002';
+const REFUND_REVIEW_CAFE_PLATFORM_ID = '00000000-0000-4000-a000-000000004003';
+const REFUND_REVIEW_SALON_RESPONDED_ID = '00000000-0000-4000-a000-000000004004';
+const REFUND_REVIEW_ACADEMY_INVESTIGATION_ID = '00000000-0000-4000-a000-000000004005';
+const REFUND_REVIEW_SALON_APPROVED_ID = '00000000-0000-4000-a000-000000004006';
+const REFUND_REVIEW_ACADEMY_REJECTED_ID = '00000000-0000-4000-a000-000000004007';
 
 function entryIds(escrowId: string, start: number, end: number): string[] {
   return Array.from({ length: end - start + 1 }, (_, index) => `${escrowId}-entry-${start + index}`);
@@ -1061,6 +1066,98 @@ async function main() {
       },
     });
   }
+
+  await prisma.refundReviewRequest.create({
+    data: {
+      id: REFUND_REVIEW_CAFE_PLATFORM_ID,
+      escrowId: prepaidCafe.id,
+      consumerId: seoyeon.id,
+      businessId: cafe.id,
+      status: 'platform_review',
+      refundableAmount: 110,
+      merchantRespondBy: new Date('2026-05-19T09:00:00.000Z'),
+      businessClosureStatus: 'not_checked',
+      consumerReason: '회사 이전으로 남은 커피 이용권을 더 쓰기 어려워 환불 검토를 요청합니다.',
+      merchantNotice: '소비자가 남은 카페 선불권 환불 검토를 요청했습니다.',
+      photoDataUrlsJson: JSON.stringify(['demo://refund/cafe-seoyeon-receipt.png']),
+      requestedAt: new Date('2026-05-13T02:15:00.000Z'),
+    },
+  });
+
+  await prisma.refundReviewRequest.create({
+    data: {
+      id: REFUND_REVIEW_SALON_RESPONDED_ID,
+      escrowId: salonDaeun.id,
+      consumerId: daeun.id,
+      businessId: salon.id,
+      status: 'merchant_responded',
+      refundableAmount: 220,
+      merchantRespondBy: new Date('2026-05-18T09:00:00.000Z'),
+      businessClosureStatus: 'not_checked',
+      consumerReason: '예약 가능한 시간이 계속 밀려 남은 선불권 환불을 요청합니다.',
+      merchantNotice: '소비자가 예약 지연을 이유로 남은 선불권 환불 검토를 요청했습니다.',
+      merchantResponse: '영업은 정상 진행 중이며 다음 주 우선 예약과 부분 환불 중 선택 가능하도록 안내했습니다.',
+      merchantRespondedAt: new Date('2026-05-16T05:20:00.000Z'),
+      photoDataUrlsJson: JSON.stringify(['demo://refund/salon-daeun-booking.png']),
+      requestedAt: new Date('2026-05-14T03:35:00.000Z'),
+    },
+  });
+
+  await prisma.refundReviewRequest.create({
+    data: {
+      id: REFUND_REVIEW_ACADEMY_INVESTIGATION_ID,
+      escrowId: academyYuna.id,
+      consumerId: yuna.id,
+      businessId: academy.id,
+      status: 'platform_investigation',
+      refundableAmount: 750,
+      merchantRespondBy: new Date('2026-05-22T09:00:00.000Z'),
+      businessClosureStatus: 'not_checked',
+      investigationReason: '수업 일정 변경 고지와 출석 기록 확인이 필요합니다.',
+      consumerReason: '강사 변경 이후 수업 일정이 맞지 않아 남은 수강료 환불을 요청합니다.',
+      merchantNotice: '수업 변경 내역과 출석 기록을 확인해 주세요.',
+      photoDataUrlsJson: JSON.stringify(['demo://refund/academy-yuna-schedule.png']),
+      requestedAt: new Date('2026-05-15T01:45:00.000Z'),
+    },
+  });
+
+  await prisma.refundReviewRequest.create({
+    data: {
+      id: REFUND_REVIEW_SALON_APPROVED_ID,
+      escrowId: escrow3.id,
+      consumerId: minsu.id,
+      businessId: salon.id,
+      status: 'platform_approved',
+      refundableAmount: 300,
+      merchantRespondBy: new Date('2026-05-12T09:00:00.000Z'),
+      businessClosureStatus: 'not_checked',
+      consumerReason: '사용하지 않은 3회분 환불을 요청합니다.',
+      merchantNotice: '취소 완료 건의 미사용분 환불 승인 내역입니다.',
+      adminResolutionReason: '미사용 3회분 환불 대상임을 확인했습니다.',
+      photoDataUrlsJson: JSON.stringify(['demo://refund/salon-minsu-approved.png']),
+      requestedAt: new Date('2026-05-09T05:10:00.000Z'),
+      resolvedAt: new Date('2026-05-10T06:20:00.000Z'),
+    },
+  });
+
+  await prisma.refundReviewRequest.create({
+    data: {
+      id: REFUND_REVIEW_ACADEMY_REJECTED_ID,
+      escrowId: academyHajun.id,
+      consumerId: hajun.id,
+      businessId: academy.id,
+      status: 'rejected',
+      refundableAmount: 0,
+      merchantRespondBy: new Date('2026-04-20T09:00:00.000Z'),
+      businessClosureStatus: 'not_checked',
+      consumerReason: '수강 완료 후 일부 금액 환불을 요청합니다.',
+      merchantNotice: '완료된 수강권 환불 요청에 대한 검토 내역입니다.',
+      adminResolutionReason: '전체 수강과 정산이 완료되어 환불 대상이 아닙니다.',
+      photoDataUrlsJson: JSON.stringify(['demo://refund/academy-hajun-rejected.png']),
+      requestedAt: new Date('2026-04-18T02:05:00.000Z'),
+      resolvedAt: new Date('2026-04-19T04:30:00.000Z'),
+    },
+  });
 
   console.log('Seed complete!');
   console.log(`  Consumer: ${minsu.name} (${minsu.phone})`);

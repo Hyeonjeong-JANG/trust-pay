@@ -16,12 +16,13 @@ function createResponse() {
   return response;
 }
 
-async function callApi(method: string, url: string, body?: unknown) {
+async function callApi(method: string, url: string, body?: unknown, headers: Record<string, string> = {}) {
   const response = createResponse();
   const payload = body === undefined ? '' : JSON.stringify(body);
   const request = {
     method,
     url,
+    headers,
     on(event: string, callback: (chunk?: string) => void) {
       if (event === 'data' && payload) callback(payload);
       if (event === 'end') callback();
@@ -30,6 +31,10 @@ async function callApi(method: string, url: string, body?: unknown) {
   };
   await handler(request, response);
   return response;
+}
+
+function callAdminApi(method: string, url: string, body?: unknown) {
+  return callApi(method, url, body, { 'x-admin-id': 'admin', 'x-admin-secret': 'admin1234' });
 }
 
 function isoDateToRippleTime(value: string) {
@@ -43,6 +48,48 @@ function rippleTimeToIsoDate(value: number) {
 }
 
 describe('static Demo API fixture', () => {
+  it('serves demo admin refund cases for every queue filter', async () => {
+    const dashboardResponse = await callAdminApi('GET', '/api/admin/dashboard');
+    const dashboard = dashboardResponse.body as any;
+
+    expect(dashboardResponse.statusCode).toBe(200);
+    expect(dashboard.refundReviews).toMatchObject({
+      open: 5,
+      merchantResponseRequested: 1,
+      merchantResponded: 1,
+      platformInvestigation: 1,
+    });
+
+    const openResponse = await callAdminApi('GET', '/api/admin/refund-reviews');
+    const openReviews = openResponse.body as any[];
+
+    expect(openResponse.statusCode).toBe(200);
+    expect(new Set(openReviews.map((review) => review.status))).toEqual(new Set([
+      'platform_review',
+      'merchant_response_requested',
+      'merchant_responded',
+      'merchant_review',
+      'platform_investigation',
+    ]));
+
+    for (const status of [
+      'platform_review',
+      'merchant_response_requested',
+      'merchant_responded',
+      'merchant_review',
+      'platform_investigation',
+      'platform_approved',
+      'rejected',
+    ]) {
+      const response = await callAdminApi('GET', `/api/admin/refund-reviews?status=${status}`);
+      const reviews = response.body as any[];
+
+      expect(response.statusCode).toBe(200);
+      expect(reviews).toHaveLength(1);
+      expect(reviews[0]).toMatchObject({ status, escrow: { business: expect.any(Object), consumer: expect.any(Object) } });
+    }
+  });
+
   it('serves varied demo customers across every bundled business dashboard', async () => {
     const businessesResponse = await callApi('GET', '/api/business');
     const businesses = businessesResponse.body as any[];

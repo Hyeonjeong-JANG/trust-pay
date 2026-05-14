@@ -35,4 +35,20 @@ describe('demo seed distribution', () => {
     expect(distinctConsumerRefsForBusiness(seed, 'laundry').size).toBeGreaterThanOrEqual(2);
     expect(distinctConsumerRefsForBusiness(seed, 'academy').size).toBeGreaterThanOrEqual(2);
   });
+
+  it('seeds every admin refund review queue status', () => {
+    const seed = readSeed();
+
+    for (const status of [
+      'platform_review',
+      'merchant_response_requested',
+      'merchant_responded',
+      'merchant_review',
+      'platform_investigation',
+      'platform_approved',
+      'rejected',
+    ]) {
+      expect(seed).toContain(`status: '${status}'`);
+    }
+  });
 });

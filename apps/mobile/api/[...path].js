@@ -37,6 +37,15 @@ const CHARGE_SALON_DAEUN_COLOR_ID = '00000000-0000-4000-a000-000000003033';
 const CHARGE_LAUNDRY_JIHUN_SHIRTS_ID = '00000000-0000-4000-a000-000000003041';
 const CHARGE_LAUNDRY_JIHUN_DRY_CLEANING_ID = '00000000-0000-4000-a000-000000003042';
 const CHARGE_LAUNDRY_DAEUN_BEDDING_ID = '00000000-0000-4000-a000-000000003043';
+const REFUND_REVIEW_GYM_HAJUN_ID = '00000000-0000-4000-a000-000000004001';
+const REFUND_REVIEW_LAUNDRY_DAEUN_ID = '00000000-0000-4000-a000-000000004002';
+const REFUND_REVIEW_CAFE_PLATFORM_ID = '00000000-0000-4000-a000-000000004003';
+const REFUND_REVIEW_SALON_RESPONDED_ID = '00000000-0000-4000-a000-000000004004';
+const REFUND_REVIEW_ACADEMY_INVESTIGATION_ID = '00000000-0000-4000-a000-000000004005';
+const REFUND_REVIEW_SALON_APPROVED_ID = '00000000-0000-4000-a000-000000004006';
+const REFUND_REVIEW_ACADEMY_REJECTED_ID = '00000000-0000-4000-a000-000000004007';
+const OPEN_REFUND_REVIEW_STATUSES = ['platform_review', 'merchant_response_requested', 'merchant_responded', 'merchant_review', 'platform_investigation'];
+const TERMINAL_REFUND_REVIEW_STATUSES = new Set(['platform_approved', 'rejected', 'refunded']);
 
 const consumers = [
   {
@@ -714,6 +723,142 @@ let escrows = [
   }),
 ];
 
+let refundReviewRequests = [
+  {
+    id: REFUND_REVIEW_CAFE_PLATFORM_ID,
+    escrowId: '00000000-0000-4000-a000-000000000400',
+    consumerId: CONSUMER_SEOYEON_ID,
+    businessId: BUSINESS_CAFE_ID,
+    status: 'platform_review',
+    refundableAmount: 110,
+    merchantRespondBy: '2026-05-19T09:00:00.000Z',
+    businessClosureStatus: 'not_checked',
+    consumerReason: '회사 이전으로 남은 커피 이용권을 더 쓰기 어려워 환불 검토를 요청합니다.',
+    merchantNotice: '소비자가 남은 카페 선불권 환불 검토를 요청했습니다.',
+    merchantResponse: null,
+    merchantRespondedAt: null,
+    adminResolutionReason: null,
+    investigationReason: null,
+    photoDataUrls: ['demo://refund/cafe-seoyeon-receipt.png'],
+    requestedAt: '2026-05-13T02:15:00.000Z',
+    resolvedAt: null,
+  },
+  {
+    id: REFUND_REVIEW_LAUNDRY_DAEUN_ID,
+    escrowId: '00000000-0000-4000-a000-000000000901',
+    consumerId: CONSUMER_DAEUN_ID,
+    businessId: BUSINESS_LAUNDRY_ID,
+    status: 'merchant_response_requested',
+    refundableAmount: 110,
+    merchantRespondBy: '2026-05-21T09:00:00.000Z',
+    businessClosureStatus: 'not_checked',
+    consumerReason: '장기 출장으로 남은 세탁권 환불이 필요합니다.',
+    merchantNotice: '소비자가 남은 세탁권 환불 검토를 요청했습니다.',
+    merchantResponse: null,
+    merchantRespondedAt: null,
+    adminResolutionReason: null,
+    investigationReason: null,
+    photoDataUrls: ['demo://refund/laundry-daeun-receipt.png'],
+    requestedAt: '2026-05-15T04:10:00.000Z',
+    resolvedAt: null,
+  },
+  {
+    id: REFUND_REVIEW_SALON_RESPONDED_ID,
+    escrowId: '00000000-0000-4000-a000-000000000800',
+    consumerId: CONSUMER_DAEUN_ID,
+    businessId: BUSINESS_SALON_ID,
+    status: 'merchant_responded',
+    refundableAmount: 220,
+    merchantRespondBy: '2026-05-18T09:00:00.000Z',
+    businessClosureStatus: 'not_checked',
+    consumerReason: '예약 가능한 시간이 계속 밀려 남은 선불권 환불을 요청합니다.',
+    merchantNotice: '소비자가 예약 지연을 이유로 남은 선불권 환불 검토를 요청했습니다.',
+    merchantResponse: '영업은 정상 진행 중이며 다음 주 우선 예약과 부분 환불 중 선택 가능하도록 안내했습니다.',
+    merchantRespondedAt: '2026-05-16T05:20:00.000Z',
+    adminResolutionReason: null,
+    investigationReason: null,
+    photoDataUrls: ['demo://refund/salon-daeun-booking.png'],
+    requestedAt: '2026-05-14T03:35:00.000Z',
+    resolvedAt: null,
+  },
+  {
+    id: REFUND_REVIEW_GYM_HAJUN_ID,
+    escrowId: '00000000-0000-4000-a000-000000000700',
+    consumerId: CONSUMER_HAJUN_ID,
+    businessId: BUSINESS_GYM_ID,
+    status: 'merchant_review',
+    refundableAmount: 500,
+    merchantRespondBy: '2026-05-20T09:00:00.000Z',
+    businessClosureStatus: 'not_checked',
+    consumerReason: '개인 일정으로 이용이 어려워 남은 기간 환불을 요청합니다.',
+    merchantNotice: '소비자가 남은 5개월분 환불 검토를 요청했습니다.',
+    merchantResponse: null,
+    merchantRespondedAt: null,
+    adminResolutionReason: null,
+    investigationReason: null,
+    photoDataUrls: ['demo://refund/gym-hajun-membership.png'],
+    requestedAt: '2026-05-14T08:30:00.000Z',
+    resolvedAt: null,
+  },
+  {
+    id: REFUND_REVIEW_ACADEMY_INVESTIGATION_ID,
+    escrowId: '00000000-0000-4000-a000-000000000902',
+    consumerId: CONSUMER_YUNA_ID,
+    businessId: BUSINESS_ACADEMY_ID,
+    status: 'platform_investigation',
+    refundableAmount: 750,
+    merchantRespondBy: '2026-05-22T09:00:00.000Z',
+    businessClosureStatus: 'not_checked',
+    consumerReason: '강사 변경 이후 수업 일정이 맞지 않아 남은 수강료 환불을 요청합니다.',
+    merchantNotice: '수업 변경 내역과 출석 기록을 확인해 주세요.',
+    merchantResponse: null,
+    merchantRespondedAt: null,
+    adminResolutionReason: null,
+    investigationReason: '수업 일정 변경 고지와 출석 기록 확인이 필요합니다.',
+    photoDataUrls: ['demo://refund/academy-yuna-schedule.png'],
+    requestedAt: '2026-05-15T01:45:00.000Z',
+    resolvedAt: null,
+  },
+  {
+    id: REFUND_REVIEW_SALON_APPROVED_ID,
+    escrowId: '00000000-0000-4000-a000-000000000300',
+    consumerId: CONSUMER_ID,
+    businessId: BUSINESS_SALON_ID,
+    status: 'platform_approved',
+    refundableAmount: 300,
+    merchantRespondBy: '2026-05-12T09:00:00.000Z',
+    businessClosureStatus: 'not_checked',
+    consumerReason: '사용하지 않은 3회분 환불을 요청합니다.',
+    merchantNotice: '취소 완료 건의 미사용분 환불 승인 내역입니다.',
+    merchantResponse: null,
+    merchantRespondedAt: null,
+    adminResolutionReason: '미사용 3회분 환불 대상임을 확인했습니다.',
+    investigationReason: null,
+    photoDataUrls: ['demo://refund/salon-minsu-approved.png'],
+    requestedAt: '2026-05-09T05:10:00.000Z',
+    resolvedAt: '2026-05-10T06:20:00.000Z',
+  },
+  {
+    id: REFUND_REVIEW_ACADEMY_REJECTED_ID,
+    escrowId: '00000000-0000-4000-a000-000000000903',
+    consumerId: CONSUMER_HAJUN_ID,
+    businessId: BUSINESS_ACADEMY_ID,
+    status: 'rejected',
+    refundableAmount: 0,
+    merchantRespondBy: '2026-04-20T09:00:00.000Z',
+    businessClosureStatus: 'not_checked',
+    consumerReason: '수강 완료 후 일부 금액 환불을 요청합니다.',
+    merchantNotice: '완료된 수강권 환불 요청에 대한 검토 내역입니다.',
+    merchantResponse: null,
+    merchantRespondedAt: null,
+    adminResolutionReason: '전체 수강과 정산이 완료되어 환불 대상이 아닙니다.',
+    investigationReason: null,
+    photoDataUrls: ['demo://refund/academy-hajun-rejected.png'],
+    requestedAt: '2026-04-18T02:05:00.000Z',
+    resolvedAt: '2026-04-19T04:30:00.000Z',
+  },
+];
+
 function rippleTimeFromNow(month) {
   const rippleEpoch = 946684800;
   const date = new Date();
@@ -804,12 +949,93 @@ function selectEntriesCoveringAmount(entries, amount) {
   return null;
 }
 
+function getHeader(req, name) {
+  const value = req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function isAdminRequest(req) {
+  const expectedId = process.env.ADMIN_ID || 'admin';
+  const expectedSecret = process.env.ADMIN_API_SECRET || 'admin1234';
+  return getHeader(req, 'x-admin-id') === expectedId && getHeader(req, 'x-admin-secret') === expectedSecret;
+}
+
+function addBusinessDays(value, days) {
+  const result = new Date(value);
+  let remaining = days;
+  while (remaining > 0) {
+    result.setDate(result.getDate() + 1);
+    const day = result.getDay();
+    if (day !== 0 && day !== 6) remaining -= 1;
+  }
+  return result;
+}
+
+function reviewWithoutEscrow(review) {
+  const { escrow: _escrow, ...rest } = review;
+  return rest;
+}
+
+function serializeAdminReview(review) {
+  const escrow = escrows.find((item) => item.id === review.escrowId);
+  return {
+    ...review,
+    escrow: escrow ? withRelations(escrow) : null,
+  };
+}
+
+function adminBusinessRows() {
+  return businesses.map((business) => ({
+    ...business,
+    registrationVerificationStatus: 'demo_verified',
+    _count: {
+      products: products.filter((product) => product.businessId === business.id).length,
+      escrows: escrows.filter((escrow) => escrow.businessId === business.id).length,
+      refundReviewRequests: refundReviewRequests.filter((review) => review.businessId === business.id).length,
+    },
+  }));
+}
+
+function adminConsumerRows() {
+  return consumers.map((consumer) => ({
+    ...consumer,
+    _count: {
+      escrows: escrows.filter((escrow) => escrow.consumerId === consumer.id).length,
+      chargeRequests: chargeRequests.filter((request) => request.consumerId === consumer.id).length,
+      refundReviewRequests: refundReviewRequests.filter((review) => review.consumerId === consumer.id).length,
+    },
+  }));
+}
+
+function adminEscrowRows() {
+  return escrows.map((escrow) => ({
+    ...withRelations(escrow),
+    refundReviewRequests: refundReviewRequests
+      .filter((review) => review.escrowId === escrow.id)
+      .map(reviewWithoutEscrow),
+  }));
+}
+
+function adminDashboard() {
+  return {
+    refundReviews: {
+      open: refundReviewRequests.filter((review) => OPEN_REFUND_REVIEW_STATUSES.includes(review.status)).length,
+      merchantResponseRequested: refundReviewRequests.filter((review) => review.status === 'merchant_response_requested').length,
+      merchantResponded: refundReviewRequests.filter((review) => review.status === 'merchant_responded').length,
+      platformInvestigation: refundReviewRequests.filter((review) => review.status === 'platform_investigation').length,
+    },
+    businesses: { total: businesses.length },
+    consumers: { total: consumers.length },
+    escrows: { active: escrows.filter((escrow) => escrow.status === 'active').length },
+  };
+}
+
 function send(res, status, data) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Admin-Id, X-Admin-Secret');
   res.end(JSON.stringify(data));
 }
 
@@ -838,6 +1064,60 @@ module.exports = async function handler(req, res) {
   const path = url.pathname.replace(/^\/api/, '');
   const parts = path.split('/').filter(Boolean);
   const body = req.method === 'POST' ? await parseBody(req) : {};
+
+  if (parts[0] === 'admin') {
+    if (!isAdminRequest(req)) return send(res, 401, { message: '관리자 권한이 필요합니다' });
+
+    if (req.method === 'GET' && path === '/admin/dashboard') {
+      return send(res, 200, adminDashboard());
+    }
+
+    if (req.method === 'GET' && path === '/admin/businesses') {
+      return send(res, 200, adminBusinessRows());
+    }
+
+    if (req.method === 'GET' && path === '/admin/consumers') {
+      return send(res, 200, adminConsumerRows());
+    }
+
+    if (req.method === 'GET' && path === '/admin/escrows') {
+      return send(res, 200, adminEscrowRows());
+    }
+
+    if (req.method === 'GET' && parts[1] === 'refund-reviews' && !parts[2]) {
+      const status = url.searchParams.get('status');
+      const reviews = refundReviewRequests
+        .filter((review) => status ? review.status === status : OPEN_REFUND_REVIEW_STATUSES.includes(review.status))
+        .sort((a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime())
+        .map(serializeAdminReview);
+      return send(res, 200, reviews);
+    }
+
+    if (req.method === 'GET' && parts[1] === 'refund-reviews' && parts[2]) {
+      const review = refundReviewRequests.find((item) => item.id === parts[2]);
+      return review ? send(res, 200, serializeAdminReview(review)) : send(res, 404, { message: 'Refund review not found' });
+    }
+
+    if (req.method === 'POST' && parts[1] === 'refund-reviews' && parts[3] === 'request-merchant-response') {
+      const review = refundReviewRequests.find((item) => item.id === parts[2]);
+      if (!review) return send(res, 404, { message: 'Refund review not found' });
+      if (TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) return send(res, 400, { message: '이미 종료된 환불 검토입니다' });
+      review.status = 'merchant_response_requested';
+      review.merchantNotice = body.merchantNotice;
+      review.merchantRespondBy = addBusinessDays(new Date(), 3).toISOString();
+      return send(res, 200, serializeAdminReview(review));
+    }
+
+    if (req.method === 'POST' && parts[1] === 'refund-reviews' && parts[3] === 'resolve') {
+      const review = refundReviewRequests.find((item) => item.id === parts[2]);
+      if (!review) return send(res, 404, { message: 'Refund review not found' });
+      if (TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) return send(res, 400, { message: '이미 종료된 환불 검토입니다' });
+      review.status = body.decision === 'approve' ? 'platform_approved' : body.decision === 'reject' ? 'rejected' : 'platform_investigation';
+      review.adminResolutionReason = body.reason;
+      review.resolvedAt = body.decision === 'investigate' ? null : new Date().toISOString();
+      return send(res, 200, serializeAdminReview(review));
+    }
+  }
 
   if (req.method === 'POST' && path === '/auth/request-code') {
     const isNewUser = body.role === 'consumer' && !findConsumerByIdentifier(body);
