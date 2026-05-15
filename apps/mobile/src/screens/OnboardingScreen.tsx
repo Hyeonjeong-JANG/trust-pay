@@ -39,8 +39,8 @@ const SLIDES: Slide[] = [
   {
     key: '3',
     illustration: <StablecoinIllustration size={120} />,
-    title: 'RLUSD 스테이블코인',
-    desc: '달러에 연동된 RLUSD로 가격 변동 걱정 없이\n안정적으로 결제할 수 있습니다.',
+    title: '원화 우선 결제 확인',
+    desc: '앱에서는 원화 금액을 먼저 확인하고\nRLUSD는 보호 원장 증빙용 보조 단위로만 표시됩니다.',
   },
   {
     key: '4',

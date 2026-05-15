@@ -96,6 +96,33 @@ describe('BusinessEscrowDetailScreen', () => {
     expect(queryByText(/만료:/)).toBeNull();
   });
 
+  it('should show settled charge history with KRW first and RLUSD as secondary detail', async () => {
+    const { api } = require('../../api/client');
+    api.getEscrow.mockResolvedValue({
+      id: 'e-prepaid-charge-history',
+      status: 'active',
+      escrowType: 'prepaid',
+      totalAmount: 150,
+      monthlyAmount: 5,
+      unitPrice: 5,
+      months: 30,
+      business: { name: '강남 블루보틀' },
+      consumer: { name: '이서연' },
+      entries: [],
+      chargeRequests: [
+        { id: 'charge-1', menuName: '아메리카노', amount: 5, status: 'settled', requestedAt: '2026-05-13T00:00:00.000Z', settledAt: '2026-05-13T00:00:00.000Z' },
+      ],
+    });
+
+    const { findByText } = renderWithProviders(
+      <BusinessEscrowDetailScreen route={{ params: { id: 'e-prepaid-charge-history' } } as any} navigation={{} as any} />,
+    );
+
+    expect(await findByText('아메리카노 ₩6,750')).toBeTruthy();
+    expect(await findByText('₩6,750')).toBeTruthy();
+    expect(await findByText('5.00 RLUSD')).toBeTruthy();
+  });
+
   it('should send prepaid charge requests from the detail screen using a selected menu', async () => {
     const { api } = require('../../api/client');
     api.createChargeRequest.mockResolvedValue({ id: 'charge-menu', status: 'pending_approval' });

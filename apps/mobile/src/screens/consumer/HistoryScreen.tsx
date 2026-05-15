@@ -13,6 +13,7 @@ import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import { HistoryCardSkeleton, SkeletonBox } from '../../components/Skeleton';
 import { colors, spacing, radius, font, shadow } from '../../theme';
+import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import type { EscrowRecord, EscrowEntry, RefundReviewRequest } from '@prepaid-shield/shared-types';
 import type { ConsumerTabProps } from '../../navigation/types';
 
@@ -167,9 +168,9 @@ export function HistoryScreen(_props: ConsumerTabProps<'History'>) {
               </View>
               <View style={styles.cardRight}>
                 <Text style={[styles.cardAmount, { color: config.color }]}>
-                  {hi.type === 'created' ? '-' : hi.type === 'refund_review' ? '' : '+'}{hi.amount.toLocaleString()}
+                  {hi.type === 'created' ? '-' : hi.type === 'refund_review' ? '' : '+'}{formatKrwFromRlusd(hi.amount)}
                 </Text>
-                <Text style={styles.cardCurrency}>RLUSD</Text>
+                <Text style={styles.cardCurrency}>{formatRlusd(hi.amount)}</Text>
               </View>
             </View>
           );

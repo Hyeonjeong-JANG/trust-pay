@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { AppMessageModal } from '../../components/AppMessageModal';
+import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 
 export function ProfileScreen(_props: { route?: unknown; navigation?: unknown }) {
@@ -67,7 +68,7 @@ export function ProfileScreen(_props: { route?: unknown; navigation?: unknown })
       {/* XRPL 보호 원장 정보 */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>XRPL 보호 원장</Text>
-        <Text style={styles.sectionDesc}>보호 원장 증빙용 RLUSD와 Testnet 주소를 확인합니다</Text>
+        <Text style={styles.sectionDesc}>원화 금액과 보호 원장 증빙용 Testnet 주소를 확인합니다</Text>
         <View style={styles.card}>
           {isLoading ? (
             <ActivityIndicator size="small" color={colors.primary} />
@@ -75,9 +76,10 @@ export function ProfileScreen(_props: { route?: unknown; navigation?: unknown })
             <>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>증빙 잔액</Text>
-                <Text style={styles.infoValue}>
-                  {Number(balanceData.balance).toLocaleString()} RLUSD
-                </Text>
+                <View style={styles.infoValueBlock}>
+                  <Text style={styles.infoValue}>{formatKrwFromRlusd(balanceData.balance)}</Text>
+                  <Text style={styles.infoSubValue}>{formatRlusd(balanceData.balance)}</Text>
+                </View>
               </View>
               <View style={styles.divider} />
               <View style={styles.infoRow}>
@@ -110,7 +112,7 @@ export function ProfileScreen(_props: { route?: unknown; navigation?: unknown })
           </View>
           <View style={styles.divider} />
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>통화</Text>
+            <Text style={styles.infoLabel}>보조 단위</Text>
             <Text style={styles.infoValue}>RLUSD</Text>
           </View>
           <View style={styles.divider} />
@@ -209,6 +211,8 @@ const styles = StyleSheet.create({
   },
   infoLabel: { fontSize: font.size.md, color: colors.gray500 },
   infoValue: { fontSize: font.size.md, fontWeight: font.weight.semibold, color: colors.gray900 },
+  infoValueBlock: { alignItems: 'flex-end', flex: 1, marginLeft: spacing.md },
+  infoSubValue: { color: colors.gray400, fontSize: font.size.xs, marginTop: 2 },
   addressValue: {
     fontSize: font.size.sm,
     fontFamily: font.mono,

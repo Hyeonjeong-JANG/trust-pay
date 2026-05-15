@@ -40,6 +40,8 @@ describe('HistoryScreen', () => {
     expect(await findByText('보호 결제 시작')).toBeTruthy();
     expect(await findByText('정산 완료')).toBeTruthy();
     expect(await findByText('파워짐 헬스장')).toBeTruthy();
+    expect(await findByText('-₩810,000')).toBeTruthy();
+    expect(await findByText('600.00 RLUSD')).toBeTruthy();
     expect(queryByText('에스크로 생성')).toBeNull();
     expect(queryByText('릴리즈 완료')).toBeNull();
   });

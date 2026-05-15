@@ -61,7 +61,7 @@ describe('PaymentScreen', () => {
 
     expect(getByText('월 ₩135,000')).toBeTruthy();
     expect(getByText('100.00 RLUSD')).toBeTruthy();
-    expect(getByText(/총액은 6개월로 나뉘어 보호 원장에 보관되고/)).toBeTruthy();
+    expect(getByText(/총액은 6개월로 나뉘어 보호되고/)).toBeTruthy();
   });
 
   it('should explain account-approved TrustPay checkout as the main protected payment path', () => {
@@ -73,7 +73,7 @@ describe('PaymentScreen', () => {
     );
 
     expect(getByText('TrustPay 계좌 승인으로 결제')).toBeTruthy();
-    expect(getByText(/연결 계좌에서 앱 승인 후 선불금이 XRPL 보호 원장에 잠깁니다/)).toBeTruthy();
+    expect(getByText(/연결 계좌에서 앱 승인 후 선불금이 TrustPay 보호 상태로 전환됩니다/)).toBeTruthy();
     expect(getByText(/카드는 보조 옵션이며 현금이나 가게 단말기 직접 결제는 보호 대상이 아닙니다/)).toBeTruthy();
   });
 

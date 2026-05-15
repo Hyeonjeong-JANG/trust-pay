@@ -50,7 +50,7 @@ describe('OnboardingScreen', () => {
 
     expect(getByText('선불금을 월별로 보호')).toBeTruthy();
     expect(getByText('XRPL 보호 원장')).toBeTruthy();
-    expect(getByText('RLUSD 스테이블코인')).toBeTruthy();
+    expect(getByText('원화 우선 결제 확인')).toBeTruthy();
     expect(getByText('QR로 간편하게 시작')).toBeTruthy();
   });
 
@@ -60,6 +60,7 @@ describe('OnboardingScreen', () => {
     );
 
     expect(queryByText('데모 준비 완료')).toBeNull();
+    expect(getByText(/RLUSD는 보호 원장 증빙용 보조 단위로만 표시됩니다/)).toBeTruthy();
     expect(getByText(/사업자는 결제 QR만 만들고/)).toBeTruthy();
     expect(getByText(/손님은 계좌 승인만 하면 보호 결제가 시작됩니다/)).toBeTruthy();
   });

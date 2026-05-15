@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
 import { showErrorToast } from '../../utils/toast';
-import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
+import { formatKrwWithRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { ScreenProps } from '../../navigation/types';
 
@@ -76,7 +76,7 @@ export function ScanPaymentScreen({ navigation }: ScreenProps<'ScanPayment'>) {
         </TouchableOpacity>
         {mutation.data && (
           <Text style={styles.previewText}>
-            {mutation.data.businessName} · {formatKrwFromRlusd(mutation.data.totalAmount)} · {formatRlusd(mutation.data.totalAmount)}
+            {mutation.data.businessName} · {formatKrwWithRlusd(mutation.data.totalAmount)}
           </Text>
         )}
       </View>

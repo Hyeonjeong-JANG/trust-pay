@@ -97,8 +97,8 @@ describe('NotificationsScreen', () => {
 
     expect(await findByText('보호 결제 시작')).toBeTruthy();
     expect(await findByText('정산 완료')).toBeTruthy();
-    expect(await findByText(/계좌 승인 결제 후 파워짐 헬스장 보호 원장에 600 RLUSD가 잠겼습니다/)).toBeTruthy();
-    expect(await findByText(/100 RLUSD가 정산 완료되었습니다/)).toBeTruthy();
+    expect(await findByText(/파워짐 헬스장 보호 결제가 시작되었습니다. 보호 금액 ₩810,000 \(600.00 RLUSD\)/)).toBeTruthy();
+    expect(await findByText(/파워짐 헬스장 1월차 정산이 완료되었습니다. 정산액 ₩135,000 \(100.00 RLUSD\)/)).toBeTruthy();
   });
 
   it('should render business refund review notifications from dashboard data', async () => {

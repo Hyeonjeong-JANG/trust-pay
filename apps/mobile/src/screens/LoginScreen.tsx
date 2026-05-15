@@ -218,7 +218,7 @@ export function LoginScreen() {
             <Text style={styles.logoText}>TP</Text>
           </View>
           <Text style={styles.title}>TrustPay</Text>
-          <Text style={styles.subtitle}>XRPL 기반 RLUSD 선불 보호 서비스</Text>
+          <Text style={styles.subtitle}>원화 우선 선불 보호 서비스</Text>
         </View>
 
         <View style={styles.formCard}>
@@ -346,7 +346,7 @@ export function LoginScreen() {
 
         <Text style={styles.hint}>
           {role === 'consumer'
-            ? '첫 로그인 시 XRPL 지갑 + RLUSD 트러스트라인이 자동 생성됩니다'
+            ? '첫 로그인 시 원화 우선 표시와 보호 원장 증빙이 자동 준비됩니다'
             : '사업자는 국세청 사업자등록번호 인증 후 가입할 수 있습니다'}
         </Text>
       </ScrollView>

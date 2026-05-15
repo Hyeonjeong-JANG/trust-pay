@@ -5,7 +5,7 @@ import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { useAppStore } from '../../store/app';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import { formatKrwFromRlusd } from '../../utils/money';
+import { formatKrwFromRlusd, formatKrwWithRlusd } from '../../utils/money';
 import type { BusinessDashboard, ChargeRequest, EscrowRecord, RefundReviewRequest } from '@prepaid-shield/shared-types';
 
 type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
@@ -143,7 +143,7 @@ export function NotificationsScreen() {
         id: `${escrow.id}-created`,
         icon: '📝',
         title: '보호 결제 시작',
-        description: `계좌 승인 결제 후 ${bizName} 보호 원장에 ${escrow.totalAmount.toLocaleString()} RLUSD가 잠겼습니다.`,
+        description: `${bizName} 보호 결제가 시작되었습니다. 보호 금액 ${formatKrwWithRlusd(escrow.totalAmount)}`,
         timestamp: createdTs,
         isUnread: createdTs > lastViewed,
       });
@@ -157,7 +157,7 @@ export function NotificationsScreen() {
             id: `${entry.id}-released`,
             icon: '✅',
             title: '정산 완료',
-            description: `${bizName} ${entry.month}월차 ${Number(entry.amount).toLocaleString()} RLUSD가 정산 완료되었습니다.`,
+            description: `${bizName} ${entry.month}월차 정산이 완료되었습니다. 정산액 ${formatKrwWithRlusd(entry.amount)}`,
             timestamp: ts,
             isUnread: ts > lastViewed,
           });
@@ -170,7 +170,7 @@ export function NotificationsScreen() {
             id: `${entry.id}-refunded`,
             icon: '↩️',
             title: '환불 완료',
-            description: `${bizName} ${entry.month}월차 대기분 ${Number(entry.amount).toLocaleString()} RLUSD가 환불되었습니다.`,
+            description: `${bizName} ${entry.month}월차 대기 금액이 환불되었습니다. 환불액 ${formatKrwWithRlusd(entry.amount)}`,
             timestamp: ts,
             isUnread: ts > lastViewed,
           });

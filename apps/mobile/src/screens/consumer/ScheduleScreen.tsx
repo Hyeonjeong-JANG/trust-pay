@@ -12,7 +12,7 @@ import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { ErrorView } from '../../components/ErrorView';
 import { SummaryCardSkeleton, TimelineEntrySkeleton } from '../../components/Skeleton';
-import { formatKrwFromRlusd } from '../../utils/money';
+import { formatKrwFromRlusd, formatKrwWithRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowEntry, EscrowRecord } from '@prepaid-shield/shared-types';
 import type { ConsumerTabProps } from '../../navigation/types';
@@ -158,8 +158,8 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
                 </View>
                 <View style={styles.summaryDivider} />
                 <View style={styles.summaryItem}>
-                  <Text style={styles.summaryValue}>{totalAmount.toLocaleString()}</Text>
-                  <Text style={styles.summaryLabel}>RLUSD</Text>
+                  <Text style={styles.summaryValue}>{formatKrwFromRlusd(totalAmount)}</Text>
+                  <Text style={styles.summaryLabel}>{formatRlusd(totalAmount)}</Text>
                 </View>
               </View>
               <Text style={styles.summaryDesc}>
@@ -211,12 +211,12 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
                 <Text style={styles.cardBusiness}>{item.escrow.business?.name ?? '사업자'}</Text>
                 <View style={styles.cardBottom}>
                   <Text style={styles.cardMonth}>{item.entry.month}월차</Text>
-                  <Text style={styles.cardAmount}>{Number(item.entry.amount).toLocaleString()} RLUSD</Text>
+                  <Text style={styles.cardAmount}>{formatKrwWithRlusd(item.entry.amount)}</Text>
                 </View>
                 <Text style={styles.cardLedgerNote}>
                   {item.isPast
                     ? '정산 가능 시점 이후입니다. 사업자가 수령할 수 있습니다.'
-                    : '정산 가능 시점까지 보호 원장에 보관됩니다.'}
+                    : '정산 가능 시점까지 보호 상태로 보관됩니다.'}
                 </Text>
               </View>
             </View>

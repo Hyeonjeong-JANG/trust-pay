@@ -103,7 +103,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
       queryClient.invalidateQueries({ queryKey: ['balance'] });
-      showSuccessToast('보호 결제 시작 완료', '계좌 승인 후 XRPL 보호 원장에 잠깁니다.');
+      showSuccessToast('보호 결제 시작 완료', '계좌 승인 후 선불금이 TrustPay 보호 상태로 전환됩니다.');
       navigation.navigate('ConsumerTabs', { screen: 'Home' });
     },
     onError: (err: Error) => {
@@ -168,7 +168,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           <Text style={styles.protectionTitle}>카카오페이처럼 앱에서 승인하면 선불금이 보호됩니다</Text>
           <View style={styles.protectionRow}>
             <Text style={styles.protectionBadge}>메인</Text>
-            <Text style={styles.protectionText}>연결 계좌에서 앱 승인 후 선불금이 XRPL 보호 원장에 잠깁니다</Text>
+            <Text style={styles.protectionText}>연결 계좌에서 앱 승인 후 선불금이 TrustPay 보호 상태로 전환됩니다</Text>
           </View>
           <View style={styles.protectionRow}>
             <Text style={[styles.protectionBadge, styles.protectionBadgeMuted]}>보조</Text>
@@ -302,7 +302,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           {effectiveEscrowType === 'monthly' ? (
             <>
               <Text style={styles.infoDesc}>
-                총액은 {effectiveMonths || '0'}개월로 나뉘어 보호 원장에 보관되고, 정산 가능 시점 이후 매월 {formatKrw(monthlyAmountKrw)}가 {businessName}에게 정산됩니다
+                총액은 {effectiveMonths || '0'}개월로 나뉘어 보호되고, 정산 가능 시점 이후 매월 {formatKrw(monthlyAmountKrw)}가 {businessName}에게 정산됩니다
               </Text>
               <Text style={styles.infoHint}>취소 시 아직 대기 중인 월차는 소비자에게 환불됩니다</Text>
             </>

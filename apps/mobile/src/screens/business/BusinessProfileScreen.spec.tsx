@@ -58,7 +58,8 @@ describe('BusinessProfileScreen', () => {
     );
 
     expect(await findByText('파워짐')).toBeTruthy();
-    expect(await findByText('1,200 RLUSD')).toBeTruthy();
+    expect(await findByText('₩1,620,000')).toBeTruthy();
+    expect(await findByText('1,200.00 RLUSD')).toBeTruthy();
     fireEvent.press(await findByText('로그아웃'));
 
     await waitFor(() => {
@@ -91,7 +92,8 @@ describe('BusinessProfileScreen', () => {
     expect(await findByText('사업자 정보')).toBeTruthy();
     expect(await findByText('123-45-67890')).toBeTruthy();
     expect(await findByText('국세청 데모 인증 완료')).toBeTruthy();
-    expect(await findByText('1,200 RLUSD')).toBeTruthy();
+    expect(await findByText('₩1,620,000')).toBeTruthy();
+    expect(await findByText('1,200.00 RLUSD')).toBeTruthy();
     expect(await findByText('차감 메뉴 등록')).toBeTruthy();
 
     fireEvent.changeText(await findByPlaceholderText('예: PT 1회'), 'PT 1회');

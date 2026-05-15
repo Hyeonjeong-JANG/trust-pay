@@ -46,7 +46,7 @@ describe('LoginScreen', () => {
   it('should render title and subtitle', () => {
     const { getByText } = renderWithProviders(<LoginScreen />);
     expect(getByText('TrustPay')).toBeTruthy();
-    expect(getByText('XRPL 기반 RLUSD 선불 보호 서비스')).toBeTruthy();
+    expect(getByText('원화 우선 선불 보호 서비스')).toBeTruthy();
   });
 
   it('should render role selector with 소비자 and 사업자', () => {
@@ -71,7 +71,7 @@ describe('LoginScreen', () => {
   it('should show consumer hint when consumer role selected', () => {
     const { getByText } = renderWithProviders(<LoginScreen />);
     expect(
-      getByText('첫 로그인 시 XRPL 지갑 + RLUSD 트러스트라인이 자동 생성됩니다'),
+      getByText('첫 로그인 시 원화 우선 표시와 보호 원장 증빙이 자동 준비됩니다'),
     ).toBeTruthy();
   });
 

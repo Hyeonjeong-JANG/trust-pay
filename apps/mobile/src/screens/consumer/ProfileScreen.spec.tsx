@@ -33,7 +33,8 @@ describe('ProfileScreen', () => {
 
   it('should render balance and XRPL address', async () => {
     const { findByText } = renderWithProviders(<ProfileScreen navigation={{} as any} route={{} as any} />);
-    expect(await findByText('5,000 RLUSD')).toBeTruthy();
+    expect(await findByText('₩6,750,000')).toBeTruthy();
+    expect(await findByText('5,000.00 RLUSD')).toBeTruthy();
     expect(await findByText('주소 복사')).toBeTruthy();
   });
 
@@ -54,7 +55,8 @@ describe('ProfileScreen', () => {
     const { findAllByText, findByText } = renderWithProviders(<ProfileScreen navigation={{} as any} route={{} as any} />);
     expect(await findByText('XRPL Testnet')).toBeTruthy();
     expect((await findAllByText('XRPL 보호 원장')).length).toBeGreaterThan(0);
-    expect(await findByText(/보호 원장 증빙용 RLUSD와 Testnet 주소를 확인/)).toBeTruthy();
+    expect(await findByText(/원화 금액과 보호 원장 증빙용 Testnet 주소를 확인/)).toBeTruthy();
+    expect(await findByText('보조 단위')).toBeTruthy();
   });
 
   it('should keep logout inside the profile screen', async () => {

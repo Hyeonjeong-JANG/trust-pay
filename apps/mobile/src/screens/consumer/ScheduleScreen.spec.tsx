@@ -40,7 +40,7 @@ describe('ScheduleScreen', () => {
         { id: 'en-2', month: 2, amount: '1000', status: 'released', finishAfter: 830607895 },
       ],
     }]);
-    const { findByText } = renderWithProviders(<ScheduleScreen navigation={{} as any} route={{} as any} />);
+    const { findAllByText, findByText } = renderWithProviders(<ScheduleScreen navigation={{} as any} route={{} as any} />);
     expect(await findByText('테스트카페')).toBeTruthy();
     expect(await findByText('1월차')).toBeTruthy();
     expect(await findByText(/사업자가 수령할 수 있습니다/)).toBeTruthy();
@@ -56,9 +56,11 @@ describe('ScheduleScreen', () => {
         { id: 'en-2', month: 2, amount: '1000', status: 'pending', finishAfter: 830607895 },
       ],
     }]);
-    const { findByText } = renderWithProviders(<ScheduleScreen navigation={{} as any} route={{} as any} />);
+    const { findAllByText, findByText } = renderWithProviders(<ScheduleScreen navigation={{} as any} route={{} as any} />);
     expect(await findByText('2')).toBeTruthy(); // 2건
-    expect(await findByText('2,000')).toBeTruthy(); // 2000 RLUSD
+    expect(await findByText('₩2,700,000')).toBeTruthy();
+    expect(await findByText('2,000.00 RLUSD')).toBeTruthy();
+    expect((await findAllByText('₩1,350,000 (1,000.00 RLUSD)')).length).toBeGreaterThan(0);
   });
 
   it('should summarize prepaid vouchers as balance instead of remaining counts', async () => {

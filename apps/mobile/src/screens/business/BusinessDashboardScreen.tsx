@@ -214,8 +214,9 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
               <View style={styles.balanceCard}>
                 <Text style={styles.balanceLabel}>TrustPay 정산 원장</Text>
                 <Text style={styles.balanceValue}>
-                  수령 가능 {Number(balanceData.balance).toLocaleString()} RLUSD
+                  수령 가능 {formatKrwFromRlusd(balanceData.balance)}
                 </Text>
+                <Text style={styles.balanceSub}>{formatRlusd(balanceData.balance)}</Text>
                 <Text style={styles.balanceAddr}>
                   원장 주소 {balanceData.xrplAddress.slice(0, 8)}...{balanceData.xrplAddress.slice(-6)}
                 </Text>
@@ -335,7 +336,7 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
 
             <Text style={styles.settlementHint}>
               {filteredEscrows.some((e) => e.escrowType === 'prepaid')
-                ? '이미 보호 원장에 잠긴 금액권에서 실제 사용금액 차감 요청을 보냅니다. 소비자 승인 후 잔액에서 정산됩니다'
+                ? '이미 보호된 금액권에서 실제 사용금액 차감 요청을 보냅니다. 소비자 승인 후 잔액에서 정산됩니다'
                 : '정산 가능한 월차만 자동 처리됩니다'}
             </Text>
             <Text style={styles.sectionTitle}>
@@ -435,6 +436,12 @@ const styles = StyleSheet.create({
     fontSize: font.size.xs,
     color: 'rgba(255,255,255,0.5)',
     fontFamily: font.mono,
+  },
+  balanceSub: {
+    color: 'rgba(255,255,255,0.76)',
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    marginBottom: spacing.xs,
   },
   summaryRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl },
   summaryCard: {

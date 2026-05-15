@@ -16,7 +16,7 @@ import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
 import { ErrorView } from '../../components/ErrorView';
 import { useBusinessMenuStore } from '../../store/businessMenus';
-import { formatKrwFromRlusd, formatRlusd, krwToRlusd } from '../../utils/money';
+import { formatKrwFromRlusd, formatKrwWithRlusd, formatRlusd, krwToRlusd } from '../../utils/money';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { colors, font, radius, shadow, spacing } from '../../theme';
 import type { ScreenProps } from '../../navigation/types';
@@ -438,7 +438,7 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                   >
                     <Text style={styles.chargeRequestButtonText}>선택 항목 승인 요청</Text>
                     {selectedChargeOption && (
-                      <Text style={styles.chargeRequestButtonSub}>{formatRlusd(selectedChargeOption.amount)}</Text>
+                      <Text style={styles.chargeRequestButtonSub}>{formatKrwWithRlusd(selectedChargeOption.amount)}</Text>
                     )}
                   </TouchableOpacity>
                 )}
@@ -470,9 +470,10 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                       {STATUS_KO[item.status] ?? item.status}
                     </Text>
                   </View>
-                </View>
-                <View style={styles.entryBottom}>
-                  <Text style={styles.entryAmount}>{formatRlusd(item.amount)}</Text>
+              </View>
+              <View style={styles.entryBottom}>
+                  <Text style={styles.entryAmount}>{formatKrwFromRlusd(item.amount)}</Text>
+                  <Text style={styles.entryRlusd}>{formatRlusd(item.amount)}</Text>
                   {item.txHash && (
                     <Text style={styles.txHash} numberOfLines={1}>
                       정산 증빙: {item.txHash}

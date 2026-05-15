@@ -42,6 +42,10 @@ export function formatRlusd(value: number | string): string {
   })} RLUSD`;
 }
 
+export function formatKrwWithRlusd(value: number | string): string {
+  return `${formatKrwFromRlusd(value)} (${formatRlusd(value)})`;
+}
+
 export function getWholeUnitCount(total: number, unit: number): number | null {
   if (!Number.isFinite(total) || !Number.isFinite(unit) || total <= 0 || unit <= 0) return null;
   const count = total / unit;

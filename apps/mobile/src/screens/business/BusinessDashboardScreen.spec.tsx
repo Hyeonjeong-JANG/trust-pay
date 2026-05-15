@@ -124,7 +124,9 @@ describe('BusinessDashboardScreen', () => {
     const { findAllByText, findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
     expect(await findByText(/정산 가능한 월차만 자동 처리/)).toBeTruthy();
+    expect(await findByText('수령 가능 ₩1,620,000')).toBeTruthy();
     expect((await findAllByText('100.00 RLUSD')).length).toBeGreaterThan(0);
+    expect(await findByText('1,200.00 RLUSD')).toBeTruthy();
     expect(queryByText('1월차 수령 가능 (₩135,000)')).toBeNull();
     await waitFor(() => {
       expect(api.finishEscrow).toHaveBeenCalledWith('e-1', 1);
@@ -266,7 +268,7 @@ describe('BusinessDashboardScreen', () => {
 
     const { findByText, queryByText, queryByPlaceholderText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
-    expect(await findByText(/이미 보호 원장에 잠긴 금액권에서 실제 사용금액 차감 요청을 보냅니다/)).toBeTruthy();
+    expect(await findByText(/이미 보호된 금액권에서 실제 사용금액 차감 요청을 보냅니다/)).toBeTruthy();
     expect(await findByText('사용 ₩33,750 · 잔액 ₩168,750')).toBeTruthy();
     expect(await findByText('25.00 RLUSD 사용 · 125.00 RLUSD 잔액')).toBeTruthy();
     expect(queryByText(/\/회/)).toBeNull();
