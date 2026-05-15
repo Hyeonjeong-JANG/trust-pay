@@ -31,6 +31,17 @@ function renderWithProviders(ui: React.ReactElement) {
 describe('BusinessCreatePaymentScreen', () => {
   beforeEach(() => jest.clearAllMocks());
 
+  it('should return to the merchant dashboard from the QR creation task screen', async () => {
+    const navigation = { navigate: jest.fn() };
+    const { findByText } = renderWithProviders(
+      <BusinessCreatePaymentScreen route={{} as any} navigation={navigation as any} />,
+    );
+
+    fireEvent.press(await findByText('뒤로'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('Dashboard');
+  });
+
   it('should create a monthly merchant QR from only amount and month count', async () => {
     const { api } = require('../../api/client');
     api.createPaymentRequest.mockResolvedValue({

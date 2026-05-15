@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import Toast from 'react-native-toast-message';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { HeaderBackButton } from './src/components/HeaderBackButton';
 import { NetworkBanner } from './src/components/NetworkBanner';
 import { RealtimeNotificationCenter } from './src/components/RealtimeNotificationCenter';
 import { useAuthStore } from './src/store/auth';
@@ -42,6 +43,7 @@ const queryClient = new QueryClient();
 
 const stackScreenOptions = {
   headerStyle: { backgroundColor: colors.white },
+  headerLeft: () => <HeaderBackButton />,
   headerTitleStyle: { fontWeight: font.weight.semibold, fontSize: font.size.lg, color: colors.gray900 },
   headerShadowVisible: false,
   headerTintColor: colors.primary,

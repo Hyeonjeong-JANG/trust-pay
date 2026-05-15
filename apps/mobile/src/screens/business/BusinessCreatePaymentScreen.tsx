@@ -111,7 +111,7 @@ function DateInput(props: DateInputProps) {
   return Platform.OS === 'web' ? <WebDateInput {...props} /> : <NativeDateInput {...props} />;
 }
 
-export function BusinessCreatePaymentScreen(_props: BusinessTabProps<'BusinessCreatePayment'>) {
+export function BusinessCreatePaymentScreen({ navigation }: BusinessTabProps<'BusinessCreatePayment'>) {
   const userId = useAuthStore((s) => s.userId);
   const queryClient = useQueryClient();
   const [qrPaymentModel, setQrPaymentModel] = useState<QrPaymentModel>('monthly');
@@ -186,6 +186,16 @@ export function BusinessCreatePaymentScreen(_props: BusinessTabProps<'BusinessCr
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.heroCard}>
+        <TouchableOpacity
+          accessibilityLabel="대시보드로 뒤로 가기"
+          accessibilityRole="button"
+          activeOpacity={0.75}
+          onPress={() => navigation.navigate('Dashboard')}
+          style={styles.backButton}
+        >
+          <Text style={styles.backIcon}>‹</Text>
+          <Text style={styles.backText}>뒤로</Text>
+        </TouchableOpacity>
         <Text style={styles.eyebrow}>사업자 결제 생성</Text>
         <Text style={styles.title}>결제 QR 만들기</Text>
         <Text style={styles.desc}>사업자가 결제 내용을 먼저 만들고, 손님은 QR을 스캔해 계좌 승인만 합니다.</Text>
@@ -334,6 +344,27 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     marginBottom: spacing.lg,
     ...shadow.md,
+  },
+  backButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: radius.full,
+    flexDirection: 'row',
+    marginBottom: spacing.md,
+    minHeight: 36,
+    paddingHorizontal: spacing.sm,
+  },
+  backIcon: {
+    color: colors.white,
+    fontSize: 24,
+    lineHeight: 26,
+    marginRight: 2,
+  },
+  backText: {
+    color: colors.white,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.bold,
   },
   eyebrow: {
     fontSize: font.size.xs,
