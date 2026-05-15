@@ -144,6 +144,19 @@ describe('LoginScreen', () => {
     expect(getByPlaceholderText('123456').props.value).toBe('');
   });
 
+  it('should show request-code errors in an in-app modal', async () => {
+    const { api } = require('../api/client');
+    api.requestCode.mockRejectedValue({ code: 'NETWORK', userMessage: '네트워크에 연결할 수 없습니다.' });
+
+    const { getByText, getByPlaceholderText, findByText } = renderWithProviders(<LoginScreen />);
+
+    fireEvent.changeText(getByPlaceholderText('전화번호 또는 이메일'), '010-1234-5678');
+    fireEvent.press(getByText('인증코드 받기'));
+
+    expect(await findByText('네트워크 오류')).toBeTruthy();
+    expect(await findByText('네트워크에 연결할 수 없습니다.')).toBeTruthy();
+  });
+
   it('should verify OTP and store the signed session token', async () => {
     const { api } = require('../api/client');
     api.requestCode.mockResolvedValue({ delivery: 'demo', code: '123456', expiresInSeconds: 300 });
@@ -259,6 +272,8 @@ describe('LoginScreen', () => {
     await waitFor(() => {
       expect(api.verifyBusinessRegistrationNumber).toHaveBeenCalledWith({ registrationNumber: '1234567890' });
     });
+    expect(await findByText('사업자등록번호 인증 실패')).toBeTruthy();
+    expect(await findByText('국세청 사업자등록번호 인증을 완료할 수 없어 TrustPay 검토로 진행합니다.')).toBeTruthy();
     expect(queryByText('데모 국세청 인증 완료')).toBeNull();
   });
 

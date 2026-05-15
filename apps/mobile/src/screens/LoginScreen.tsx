@@ -6,13 +6,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { AppMessageModal, type AppMessageTone } from '../components/AppMessageModal';
 import { useAuthStore } from '../store/auth';
 import { colors, spacing, radius, font, shadow } from '../theme';
 
@@ -103,8 +103,12 @@ export function LoginScreen() {
   const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState('');
   const [isBusinessNumberVerified, setBusinessNumberVerified] = useState(false);
   const [businessVerificationLabel, setBusinessVerificationLabel] = useState('데모 국세청 인증 완료');
+  const [messageModal, setMessageModal] = useState<{ title: string; message: string; tone: AppMessageTone } | null>(null);
 
   const authPayload = () => authPayloadFromIdentifier(identifier, role);
+  const showMessage = (title: string, message: string, tone: AppMessageTone = 'danger') => {
+    setMessageModal({ title, message, tone });
+  };
 
   const resetCode = () => {
     setCode('');
@@ -127,7 +131,7 @@ export function LoginScreen() {
     onError: (err: Error) => {
       const apiErr = err as import('../api/client').ApiError;
       const title = apiErr.code === 'NETWORK' ? '네트워크 오류' : '인증코드 요청 실패';
-      Alert.alert(title, apiErr.userMessage ?? err.message);
+      showMessage(title, apiErr.userMessage ?? err.message);
     },
   });
 
@@ -136,7 +140,7 @@ export function LoginScreen() {
     onSuccess: (data) => {
       if (data.status === 'unavailable') {
         setBusinessNumberVerified(false);
-        Alert.alert('사업자등록번호 인증 실패', data.message);
+        showMessage('사업자등록번호 인증 실패', data.message);
         return;
       }
       setBusinessNumberVerified(true);
@@ -144,7 +148,7 @@ export function LoginScreen() {
     },
     onError: (err: Error) => {
       const apiErr = err as import('../api/client').ApiError;
-      Alert.alert('사업자등록번호 인증 실패', apiErr.userMessage ?? err.message);
+      showMessage('사업자등록번호 인증 실패', apiErr.userMessage ?? err.message);
     },
   });
 
@@ -169,7 +173,7 @@ export function LoginScreen() {
     onError: (err: Error) => {
       const apiErr = err as import('../api/client').ApiError;
       const title = apiErr.code === 'NETWORK' ? '네트워크 오류' : '로그인 실패';
-      Alert.alert(title, apiErr.userMessage ?? err.message);
+      showMessage(title, apiErr.userMessage ?? err.message);
     },
   });
 
@@ -346,6 +350,13 @@ export function LoginScreen() {
             : '사업자는 국세청 사업자등록번호 인증 후 가입할 수 있습니다'}
         </Text>
       </ScrollView>
+      <AppMessageModal
+        visible={!!messageModal}
+        title={messageModal?.title ?? ''}
+        message={messageModal?.message ?? ''}
+        tone={messageModal?.tone ?? 'danger'}
+        onClose={() => setMessageModal(null)}
+      />
     </KeyboardAvoidingView>
   );
 }

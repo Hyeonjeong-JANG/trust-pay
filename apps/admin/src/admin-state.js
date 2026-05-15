@@ -35,6 +35,11 @@ const TERMINAL_REFUND_REVIEW_STATUSES = new Set(['platform_approved', 'rejected'
 const NEEDS_ACTION_STATUSES = ['platform_review', 'merchant_responded', 'merchant_review', 'platform_investigation'];
 const WAITING_MERCHANT_STATUSES = ['merchant_response_requested'];
 const RESOLVED_STATUSES = ['platform_approved', 'rejected', 'refunded'];
+const REFUND_DECISION_META = {
+  approve: { label: '환불 승인', reasonRequired: false, minLength: 0 },
+  reject: { label: '환불 거절', reasonRequired: true, minLength: 5 },
+  investigate: { label: '추가 조사', reasonRequired: true, minLength: 5 },
+};
 
 function isLocalHost(hostname) {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
@@ -64,6 +69,24 @@ export function getApiBase(configuredBase = '/api', hostname = globalThis.locati
 
 export function getStatusLabel(status) {
   return STATUS_LABELS[status] ?? status;
+}
+
+export function getRefundDecisionMeta(decision) {
+  return REFUND_DECISION_META[decision] ?? REFUND_DECISION_META.investigate;
+}
+
+export function validateRefundDecisionReason(decision, reason = '') {
+  const meta = getRefundDecisionMeta(decision);
+  const trimmed = String(reason ?? '').trim();
+  if (meta.reasonRequired && trimmed.length < meta.minLength) {
+    return `결정 사유는 ${meta.minLength}자 이상 입력해야 합니다.`;
+  }
+  return '';
+}
+
+export function buildRefundDecisionPayload(decision, reason = '') {
+  const trimmed = String(reason ?? '').trim();
+  return trimmed ? { decision, reason: trimmed } : { decision };
 }
 
 export function getQueueFetchStatuses(status) {

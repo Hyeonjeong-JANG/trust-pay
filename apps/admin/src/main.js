@@ -1,4 +1,4 @@
-import { adminTabs, buildAdminAuthHeaders, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, visibleQueueStatuses } from './admin-state.js';
+import { adminTabs, buildAdminAuthHeaders, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js';
 
 const state = {
   apiBase: getApiBase(window.TRUSTPAY_ADMIN_API_BASE || '/api', window.location.hostname),
@@ -12,6 +12,7 @@ const state = {
   selectedId: null,
   status: 'needs_action',
   activeTab: sessionStorage.getItem('trustpay-admin-tab') || 'dashboard',
+  decisionModal: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -230,6 +231,53 @@ function renderDecisionButtons() {
   `;
 }
 
+function closeDecisionModal() {
+  state.decisionModal = null;
+  renderDecisionModal();
+}
+
+function openDecisionModal(id, decision) {
+  state.decisionModal = { id, decision, error: '' };
+  renderDecisionModal();
+}
+
+function renderDecisionModal() {
+  const root = $('#modal-root');
+  if (!root) return;
+  if (!state.decisionModal) {
+    root.innerHTML = '';
+    return;
+  }
+
+  const { decision, error } = state.decisionModal;
+  const meta = getRefundDecisionMeta(decision);
+  const helper = meta.reasonRequired
+    ? `${meta.label} 사유를 ${meta.minLength}자 이상 남겨주세요.`
+    : '환불 승인은 사유 없이 처리할 수 있습니다. 운영 기록이 필요하면 선택으로 남겨주세요.';
+  root.innerHTML = `
+    <div class="modal-backdrop decision-modal" role="presentation">
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="decision-modal-title">
+        <div class="modal-kicker">환불/분쟁 최종 처리</div>
+        <h2 id="decision-modal-title">${escapeHtml(meta.label)}</h2>
+        <p>${escapeHtml(helper)}</p>
+        <label for="decision-reason">운영 기록${meta.reasonRequired ? ' (필수)' : ' (선택)'}</label>
+        <textarea id="decision-reason" maxlength="500" placeholder="결정 근거, 참고한 사업자 소명, 추가 조사 범위를 입력하세요."></textarea>
+        ${error ? `<div class="modal-error">${escapeHtml(error)}</div>` : ''}
+        <div class="modal-actions">
+          <button id="cancel-decision" type="button">취소</button>
+          <button id="submit-decision" class="primary" type="button">${escapeHtml(meta.label)} 처리</button>
+        </div>
+      </section>
+    </div>
+  `;
+  $('#cancel-decision')?.addEventListener('click', closeDecisionModal);
+  $('.decision-modal')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) closeDecisionModal();
+  });
+  $('#submit-decision')?.addEventListener('click', submitDecisionModal);
+  $('#decision-reason')?.focus();
+}
+
 function renderActionPanel(review, summary) {
   switch (getReviewActionMode(review)) {
     case 'awaiting_merchant':
@@ -312,9 +360,9 @@ function renderDetail(review) {
   `;
 
   $('#request-merchant')?.addEventListener('click', () => requestMerchant(review.id));
-  $('#approve-review')?.addEventListener('click', () => resolveReview(review.id, 'approve'));
-  $('#reject-review')?.addEventListener('click', () => resolveReview(review.id, 'reject'));
-  $('#investigate-review')?.addEventListener('click', () => resolveReview(review.id, 'investigate'));
+  $('#approve-review')?.addEventListener('click', () => openDecisionModal(review.id, 'approve'));
+  $('#reject-review')?.addEventListener('click', () => openDecisionModal(review.id, 'reject'));
+  $('#investigate-review')?.addEventListener('click', () => openDecisionModal(review.id, 'investigate'));
 }
 
 async function loadReviews() {
@@ -451,18 +499,24 @@ async function requestMerchant(id) {
   await loadReviews();
 }
 
-async function resolveReview(id, decision) {
-  const labels = { approve: '환불 승인', reject: '환불 거절', investigate: '추가 조사' };
-  const reason = window.prompt(`${labels[decision]} 사유를 입력하세요.`);
-  if (!reason || reason.trim().length < 5) {
-    setStatus('결정 사유는 5자 이상 입력해야 합니다.', 'warn');
+async function submitDecisionModal() {
+  if (!state.decisionModal) return;
+  const { id, decision } = state.decisionModal;
+  const meta = getRefundDecisionMeta(decision);
+  const reason = $('#decision-reason')?.value.trim() ?? '';
+  const validationError = validateRefundDecisionReason(decision, reason);
+  if (validationError) {
+    state.decisionModal = { ...state.decisionModal, error: validationError };
+    renderDecisionModal();
     return;
   }
+  const body = buildRefundDecisionPayload(decision, reason);
   await adminRequest(`/admin/refund-reviews/${id}/resolve`, {
     method: 'POST',
-    body: JSON.stringify({ decision, reason: reason.trim() }),
+    body: JSON.stringify(body),
   });
-  setStatus(`${labels[decision]} 처리했습니다.`, 'ok');
+  setStatus(`${meta.label} 처리했습니다.`, 'ok');
+  closeDecisionModal();
   await loadReviews();
 }
 

@@ -1,19 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   ScrollView,
   RefreshControl,
-  Platform,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
+import { AppMessageModal } from '../../components/AppMessageModal';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 
 export function ProfileScreen(_props: { route?: unknown; navigation?: unknown }) {
@@ -22,6 +21,7 @@ export function ProfileScreen(_props: { route?: unknown; navigation?: unknown })
   const role = useAuthStore((s) => s.role);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const queryClient = useQueryClient();
+  const [messageModal, setMessageModal] = useState<{ title: string; message: string } | null>(null);
 
   const { data: balanceData, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['balance', userId],
@@ -33,7 +33,7 @@ export function ProfileScreen(_props: { route?: unknown; navigation?: unknown })
   const copyAddress = async () => {
     if (balanceData?.xrplAddress) {
       await Clipboard.setStringAsync(balanceData.xrplAddress);
-      Alert.alert('복사됨', 'XRPL 주소가 클립보드에 복사되었습니다.');
+      setMessageModal({ title: '복사됨', message: 'XRPL 주소가 클립보드에 복사되었습니다.' });
     }
   };
 
@@ -43,6 +43,7 @@ export function ProfileScreen(_props: { route?: unknown; navigation?: unknown })
   };
 
   return (
+    <>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
@@ -127,6 +128,14 @@ export function ProfileScreen(_props: { route?: unknown; navigation?: unknown })
         </TouchableOpacity>
       </View>
     </ScrollView>
+    <AppMessageModal
+      visible={!!messageModal}
+      title={messageModal?.title ?? ''}
+      message={messageModal?.message ?? ''}
+      tone="success"
+      onClose={() => setMessageModal(null)}
+    />
+    </>
   );
 }
 

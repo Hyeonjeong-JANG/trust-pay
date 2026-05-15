@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   ScrollView,
   RefreshControl,
@@ -16,6 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { useBusinessMenuStore } from '../../store/businessMenus';
+import { AppMessageModal } from '../../components/AppMessageModal';
 import { formatKrwFromRlusd, krwToRlusd } from '../../utils/money';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { colors, spacing, radius, font, shadow } from '../../theme';
@@ -37,6 +37,7 @@ export function BusinessProfileScreen(_props: { route?: unknown; navigation?: un
   const queryClient = useQueryClient();
   const [menuName, setMenuName] = useState('');
   const [menuAmount, setMenuAmount] = useState('');
+  const [messageModal, setMessageModal] = useState<{ title: string; message: string } | null>(null);
   const menus = userId ? menusByBusinessId[userId] ?? EMPTY_MENUS : EMPTY_MENUS;
 
   const { data: balanceData, isLoading, refetch, isRefetching } = useQuery({
@@ -56,7 +57,7 @@ export function BusinessProfileScreen(_props: { route?: unknown; navigation?: un
   const copyAddress = async () => {
     if (balanceData?.xrplAddress) {
       await Clipboard.setStringAsync(balanceData.xrplAddress);
-      Alert.alert('복사됨', 'XRPL 주소가 클립보드에 복사되었습니다.');
+      setMessageModal({ title: '복사됨', message: 'XRPL 주소가 클립보드에 복사되었습니다.' });
     }
   };
 
@@ -79,6 +80,7 @@ export function BusinessProfileScreen(_props: { route?: unknown; navigation?: un
   };
 
   return (
+    <>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
@@ -226,6 +228,14 @@ export function BusinessProfileScreen(_props: { route?: unknown; navigation?: un
         </TouchableOpacity>
       </View>
     </ScrollView>
+    <AppMessageModal
+      visible={!!messageModal}
+      title={messageModal?.title ?? ''}
+      message={messageModal?.message ?? ''}
+      tone="success"
+      onClose={() => setMessageModal(null)}
+    />
+    </>
   );
 }
 

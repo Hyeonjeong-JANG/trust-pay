@@ -1,6 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { adminResolveRefundReviewSchema } from '@prepaid-shield/validators';
 
 const adminUser = { userId: 'admin-1', role: 'admin' as const, name: 'TrustPay 운영자' };
 const businessUser = { userId: 'business-1', role: 'business' as const, name: '사업자' };
@@ -212,6 +213,36 @@ describe('AdminService', () => {
       }),
     }));
     expect(result.status).toBe('platform_approved');
+  });
+
+  it('allows refund approval without forcing an operator-entered reason', async () => {
+    prisma.refundReviewRequest.findUnique.mockResolvedValue({ id: 'refund-review-1', status: 'platform_review' });
+    prisma.refundReviewRequest.update.mockResolvedValue({
+      id: 'refund-review-1',
+      status: 'platform_approved',
+      adminResolutionReason: null,
+      photoDataUrlsJson: null,
+    });
+
+    const result = await service.resolveRefundReview(adminUser, 'refund-review-1', {
+      decision: 'approve',
+    } as any);
+
+    expect(prisma.refundReviewRequest.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'platform_approved',
+        adminResolutionReason: null,
+        resolvedAt: expect.any(Date),
+      }),
+    }));
+    expect(result.status).toBe('platform_approved');
+  });
+
+  it('validates refund resolution reasons by decision type', () => {
+    expect(adminResolveRefundReviewSchema.safeParse({ decision: 'approve' }).success).toBe(true);
+    expect(adminResolveRefundReviewSchema.safeParse({ decision: 'reject' }).success).toBe(false);
+    expect(adminResolveRefundReviewSchema.safeParse({ decision: 'investigate', reason: '짧음' }).success).toBe(false);
+    expect(adminResolveRefundReviewSchema.safeParse({ decision: 'reject', reason: '사업자 소명과 이용 내역상 환불 대상이 아닙니다.' }).success).toBe(true);
   });
 
   it('throws when the refund review case does not exist', async () => {

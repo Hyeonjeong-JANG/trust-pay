@@ -67,6 +67,21 @@ describe('BusinessProfileScreen', () => {
     });
   });
 
+  it('should show an in-app modal after copying the business XRPL address', async () => {
+    const Clipboard = require('expo-clipboard');
+    const { findByText } = renderWithProviders(
+      <BusinessProfileScreen route={{} as any} navigation={{} as any} />,
+    );
+
+    fireEvent.press(await findByText('주소 복사'));
+
+    await waitFor(() => {
+      expect(Clipboard.setStringAsync).toHaveBeenCalledWith('rBusiness123456');
+    });
+    expect(await findByText('복사됨')).toBeTruthy();
+    expect(await findByText('XRPL 주소가 클립보드에 복사되었습니다.')).toBeTruthy();
+  });
+
   it('should manage multiple prepaid charge menus from store management', async () => {
     const { findByPlaceholderText, findByText } = renderWithProviders(
       <BusinessProfileScreen route={{} as any} navigation={{} as any} />,

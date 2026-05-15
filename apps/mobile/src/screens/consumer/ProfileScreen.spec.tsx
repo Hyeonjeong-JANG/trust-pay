@@ -37,6 +37,19 @@ describe('ProfileScreen', () => {
     expect(await findByText('주소 복사')).toBeTruthy();
   });
 
+  it('should show an in-app modal after copying the XRPL address', async () => {
+    const Clipboard = require('expo-clipboard');
+    const { findByText } = renderWithProviders(<ProfileScreen navigation={{} as any} route={{} as any} />);
+
+    fireEvent.press(await findByText('주소 복사'));
+
+    await waitFor(() => {
+      expect(Clipboard.setStringAsync).toHaveBeenCalledWith('rTest12345678');
+    });
+    expect(await findByText('복사됨')).toBeTruthy();
+    expect(await findByText('XRPL 주소가 클립보드에 복사되었습니다.')).toBeTruthy();
+  });
+
   it('should render app info section', async () => {
     const { findByText } = renderWithProviders(<ProfileScreen navigation={{} as any} route={{} as any} />);
     expect(await findByText('XRPL Testnet')).toBeTruthy();

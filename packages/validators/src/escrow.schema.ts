@@ -110,7 +110,16 @@ export const adminRequestMerchantResponseSchema = z.object({
 
 export const adminResolveRefundReviewSchema = z.object({
   decision: z.enum(['approve', 'reject', 'investigate']),
-  reason: z.string().trim().min(5, 'Resolution reason must be at least 5 characters').max(500, 'Resolution reason must be at most 500 characters'),
+  reason: z.string().trim().max(500, 'Resolution reason must be at most 500 characters').optional(),
+}).superRefine((value, ctx) => {
+  if (value.decision === 'approve') return;
+  if (!value.reason || value.reason.length < 5) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['reason'],
+      message: 'Resolution reason must be at least 5 characters',
+    });
+  }
 });
 
 export const merchantRefundReviewResponseSchema = z.object({

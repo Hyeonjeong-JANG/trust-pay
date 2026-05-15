@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { adminTabs, buildAdminAuthHeaders, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, visibleQueueStatuses } from './admin-state.js';
+import { adminTabs, buildAdminAuthHeaders, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js';
 
 test('getApiBase resolves local and deployed admin API roots', () => {
   assert.equal(getApiBase('/api', 'localhost'), 'http://localhost:3000');
@@ -80,6 +80,40 @@ test('admin refund detail renders a timeline and status-specific action modes', 
   assert.match(js, /class="review-timeline"/);
   assert.match(js, /case 'needs_decision'/);
   assert.match(js, /case 'awaiting_merchant'/);
+});
+
+test('admin refund decisions use an in-app modal instead of native browser dialogs', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(js, /window\.prompt|window\.alert|window\.confirm|\bprompt\(|\balert\(|\bconfirm\(/);
+  assert.match(js, /renderDecisionModal/);
+  assert.match(js, /decision-modal/);
+});
+
+test('refund decision reason policy only requires reasons for adverse or investigative outcomes', () => {
+  assert.deepEqual(getRefundDecisionMeta('approve'), {
+    label: '환불 승인',
+    reasonRequired: false,
+    minLength: 0,
+  });
+  assert.deepEqual(getRefundDecisionMeta('reject'), {
+    label: '환불 거절',
+    reasonRequired: true,
+    minLength: 5,
+  });
+  assert.deepEqual(getRefundDecisionMeta('investigate'), {
+    label: '추가 조사',
+    reasonRequired: true,
+    minLength: 5,
+  });
+});
+
+test('refund decision helper omits blank approval reasons and blocks short adverse reasons', () => {
+  assert.deepEqual(buildRefundDecisionPayload('approve', ''), { decision: 'approve' });
+  assert.deepEqual(buildRefundDecisionPayload('approve', '  운영자 기록  '), { decision: 'approve', reason: '운영자 기록' });
+  assert.equal(validateRefundDecisionReason('approve', ''), '');
+  assert.equal(validateRefundDecisionReason('reject', '짧음'), '결정 사유는 5자 이상 입력해야 합니다.');
+  assert.equal(validateRefundDecisionReason('investigate', '현장 확인 필요'), '');
 });
 
 test('adminTabs defines standard operations sections', () => {

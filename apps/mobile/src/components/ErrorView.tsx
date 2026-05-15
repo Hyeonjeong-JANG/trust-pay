@@ -29,7 +29,7 @@ export function ErrorView({ error, onRetry }: ErrorViewProps) {
   );
 }
 
-/** Format error for Alert.alert — returns Korean user-friendly message */
+/** Format errors for Korean user-facing surfaces. */
 export function getErrorMessage(error: Error): string {
   const apiError = error as ApiError;
   return apiError.userMessage ?? error.message ?? '오류가 발생했습니다.';

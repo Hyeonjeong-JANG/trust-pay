@@ -147,7 +147,7 @@ export class AdminService {
       where: { id },
       data: {
         status,
-        adminResolutionReason: dto.reason,
+        adminResolutionReason: dto.reason ?? null,
         resolvedAt: dto.decision === 'investigate' ? null : new Date(),
       },
       include: this.refundReviewInclude(),
