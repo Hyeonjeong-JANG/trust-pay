@@ -48,21 +48,23 @@ describe('OnboardingScreen', () => {
       <OnboardingScreen navigation={mockNavigation} route={mockRoute} />,
     );
 
-    expect(getByText('선불금을 월별로 보호')).toBeTruthy();
-    expect(getByText('XRPL 보호 원장')).toBeTruthy();
-    expect(getByText('원화 우선 결제 확인')).toBeTruthy();
-    expect(getByText('QR로 간편하게 시작')).toBeTruthy();
+    expect(getByText('선불금, 한 번에 넘기지 않아요')).toBeTruthy();
+    expect(getByText('폐업해도 남은 금액은 지켜요')).toBeTruthy();
+    expect(getByText('원화로 먼저 확인해요')).toBeTruthy();
+    expect(getByText('QR 결제로 신뢰까지 전달')).toBeTruthy();
   });
 
-  it('should explain the service benefit instead of demo readiness', () => {
+  it('should explain customer-facing service benefits instead of implementation details', () => {
     const { getByText, queryByText } = render(
       <OnboardingScreen navigation={mockNavigation} route={mockRoute} />,
     );
 
     expect(queryByText('데모 준비 완료')).toBeNull();
-    expect(getByText(/RLUSD는 보호 원장 증빙용 보조 단위로만 표시됩니다/)).toBeTruthy();
-    expect(getByText(/사업자는 결제 QR만 만들고/)).toBeTruthy();
-    expect(getByText(/손님은 계좌 승인만 하면 보호 결제가 시작됩니다/)).toBeTruthy();
+    expect(queryByText('XRPL 보호 원장')).toBeNull();
+    expect(getByText(/결제 금액은 이용 기간별로 나뉘어 보호되고/)).toBeTruthy();
+    expect(getByText(/아직 이용하지 않은 금액은 환불 가능한 보호 잔액으로 남습니다/)).toBeTruthy();
+    expect(getByText(/RLUSD 원장 기록은 증빙용으로만 확인합니다/)).toBeTruthy();
+    expect(getByText(/보호 결제가 시작되어 안심하고 장기 결제할 수 있습니다/)).toBeTruthy();
   });
 
   it('should show skip button', () => {
@@ -97,12 +99,8 @@ describe('OnboardingScreen', () => {
       <OnboardingScreen navigation={mockNavigation} route={mockRoute} />,
     );
 
-    expect(
-      getByText(/이미 이용한 월차만 사업자에게 정산되고/),
-    ).toBeTruthy();
-    expect(
-      getByText(/정산 가능 시점 이후 월별 흐름/),
-    ).toBeTruthy();
+    expect(getByText(/이용한 달의 금액만 사업자에게 정산됩니다/)).toBeTruthy();
+    expect(getByText(/서비스가 중단되면/)).toBeTruthy();
   });
 
   it('should center onboarding content against the whole screen while preserving footer controls', () => {

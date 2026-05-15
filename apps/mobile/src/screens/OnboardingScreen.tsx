@@ -27,26 +27,26 @@ const SLIDES: Slide[] = [
   {
     key: '1',
     illustration: <ShieldIllustration size={120} />,
-    title: '선불금을 월별로 보호',
-    desc: '이미 이용한 월차만 사업자에게 정산되고\n남은 월차는 취소 시 환불할 수 있습니다.',
+    title: '선불금, 한 번에 넘기지 않아요',
+    desc: '결제 금액은 이용 기간별로 나뉘어 보호되고\n이용한 달의 금액만 사업자에게 정산됩니다.',
   },
   {
     key: '2',
     illustration: <EscrowIllustration size={120} />,
-    title: 'XRPL 보호 원장',
-    desc: 'XRP Ledger Testnet의 보호 원장에 각 월차를 보관합니다.\n정산 가능 시점 이후 월별 흐름이 원장에 남습니다.',
+    title: '폐업해도 남은 금액은 지켜요',
+    desc: '서비스가 중단되면 아직 이용하지 않은 금액은\n환불 가능한 보호 잔액으로 남습니다.',
   },
   {
     key: '3',
     illustration: <StablecoinIllustration size={120} />,
-    title: '원화 우선 결제 확인',
-    desc: '앱에서는 원화 금액을 먼저 확인하고\nRLUSD는 보호 원장 증빙용 보조 단위로만 표시됩니다.',
+    title: '원화로 먼저 확인해요',
+    desc: '결제 금액과 환불 가능액은 원화로 먼저 보여주고\nRLUSD 원장 기록은 증빙용으로만 확인합니다.',
   },
   {
     key: '4',
     illustration: <RocketIllustration size={120} />,
-    title: 'QR로 간편하게 시작',
-    desc: '사업자는 결제 QR만 만들고\n손님은 계좌 승인만 하면 보호 결제가 시작됩니다.',
+    title: 'QR 결제로 신뢰까지 전달',
+    desc: '사업자는 QR만 만들고 손님은 계좌 승인만 하면\n보호 결제가 시작되어 안심하고 장기 결제할 수 있습니다.',
   },
 ];
 
