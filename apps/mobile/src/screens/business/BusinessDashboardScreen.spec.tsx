@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BusinessDashboardScreen } from './BusinessDashboardScreen';
 
 jest.mock('../../utils/toast', () => ({
@@ -68,6 +68,34 @@ describe('BusinessDashboardScreen', () => {
 
       await waitFor(() => expect(api.getBusinessDashboard).toHaveBeenCalledTimes(2));
     } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should pause dashboard polling while the app is backgrounded', async () => {
+    jest.useFakeTimers();
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 0,
+      totalPending: 0,
+      escrows: [],
+    });
+
+    try {
+      renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+      await waitFor(() => expect(api.getBusinessDashboard).toHaveBeenCalledTimes(1));
+
+      act(() => {
+        focusManager.setFocused(false);
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(10000);
+      });
+
+      expect(api.getBusinessDashboard).toHaveBeenCalledTimes(1);
+    } finally {
+      focusManager.setFocused(undefined);
       jest.useRealTimers();
     }
   });

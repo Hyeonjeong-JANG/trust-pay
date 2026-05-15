@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RealtimeNotificationCenter } from './RealtimeNotificationCenter';
 
 const mockAuthState = { role: 'consumer' as 'consumer' | 'business' | null, userId: 'c-1' };
@@ -74,6 +74,31 @@ describe('RealtimeNotificationCenter', () => {
     fireEvent.press(await screen.findByText('확인'));
     expect(screen.queryByText('차감 승인 요청 도착')).toBeNull();
     expect(mockAppState.markRealtimeNotificationSeen).toHaveBeenCalledWith('consumer-charge-charge-1');
+  });
+
+  it('should pause full consumer escrow polling while the app is backgrounded', async () => {
+    jest.useFakeTimers();
+    const { api } = require('../api/client');
+    api.getConsumerEscrows.mockResolvedValue([]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+
+    try {
+      renderWithClient(client);
+
+      await waitFor(() => expect(api.getConsumerEscrows).toHaveBeenCalledTimes(1));
+
+      act(() => {
+        focusManager.setFocused(false);
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(8000);
+      });
+
+      expect(api.getConsumerEscrows).toHaveBeenCalledTimes(1);
+    } finally {
+      focusManager.setFocused(undefined);
+      jest.useRealTimers();
+    }
   });
 
   it('should show a popup when a business charge request is approved', async () => {

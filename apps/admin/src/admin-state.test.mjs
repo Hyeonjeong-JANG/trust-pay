@@ -427,6 +427,28 @@ test('admin login flow checks credentials before rendering any tab', () => {
   assert.match(loadActiveTab, /renderAdminShell\(\);/);
 });
 
+test('admin requests abort stuck operations and clear timeout handles', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  const adminRequestBlock = js.slice(js.indexOf('async function adminRequest'), js.indexOf('function setStatus'));
+
+  assert.match(adminRequestBlock, /AbortController/);
+  assert.match(adminRequestBlock, /ADMIN_REQUEST_TIMEOUT_MS/);
+  assert.match(adminRequestBlock, /setTimeout\(\(\) => controller\.abort\(\), ADMIN_REQUEST_TIMEOUT_MS\)/);
+  assert.match(adminRequestBlock, /signal: controller\.signal/);
+  assert.match(adminRequestBlock, /return await res\.json\(\)/);
+  assert.match(adminRequestBlock, /clearTimeout\(timeoutId\)/);
+});
+
+test('admin stale refund queue responses cannot replace newer filters', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  const loadReviewsBlock = js.slice(js.indexOf('async function loadReviews'), js.indexOf('async function fetchReviewsForFilter'));
+
+  assert.match(js, /let reviewLoadSeq = 0/);
+  assert.match(loadReviewsBlock, /const loadSeq = \+\+reviewLoadSeq/);
+  assert.match(loadReviewsBlock, /if \(loadSeq !== reviewLoadSeq\) return/);
+  assert.ok(loadReviewsBlock.indexOf('if (loadSeq !== reviewLoadSeq) return') < loadReviewsBlock.indexOf('state.reviews = reviews'));
+});
+
 test('admin login submit always enters the dashboard tab', () => {
   const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
   const submitHandler = js.slice(js.indexOf('function boot()'), js.indexOf('boot();'));
@@ -447,5 +469,12 @@ test('getAdminRequestErrorMessage explains fetch failures in operator terms', ()
   assert.equal(
     getAdminRequestErrorMessage(new Error('Failed to fetch')),
     'API 서버에 연결할 수 없습니다. API 실행 상태와 CORS 설정을 확인하세요.',
+  );
+});
+
+test('getAdminRequestErrorMessage explains admin request timeouts', () => {
+  assert.equal(
+    getAdminRequestErrorMessage({ name: 'AbortError', message: 'The operation was aborted.' }),
+    '운영 API 응답이 지연되고 있습니다. 잠시 후 다시 시도하세요.',
   );
 });

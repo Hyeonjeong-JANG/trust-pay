@@ -4,10 +4,11 @@ import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import Toast from 'react-native-toast-message';
+import { createMobileQueryClient } from './src/queryClient';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { HeaderBackButton } from './src/components/HeaderBackButton';
 import { NetworkBanner } from './src/components/NetworkBanner';
@@ -39,7 +40,7 @@ SplashScreen.preventAutoHideAsync();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const ConsumerTab = createBottomTabNavigator<ConsumerTabParamList>();
 const BusinessTab = createBottomTabNavigator<BusinessTabParamList>();
-const queryClient = new QueryClient();
+const queryClient = createMobileQueryClient();
 
 const stackScreenOptions = {
   headerStyle: { backgroundColor: colors.white },

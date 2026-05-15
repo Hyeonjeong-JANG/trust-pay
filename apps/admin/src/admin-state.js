@@ -216,6 +216,9 @@ export function safeDataImageSrc(value) {
 
 export function getAdminRequestErrorMessage(error) {
   const message = error?.message || String(error ?? '');
+  if (error?.name === 'AbortError') {
+    return '운영 API 응답이 지연되고 있습니다. 잠시 후 다시 시도하세요.';
+  }
   if (message === 'Failed to fetch' || message.includes('NetworkError')) {
       return 'API 서버에 연결할 수 없습니다. API 실행 상태와 CORS 설정을 확인하세요.';
   }

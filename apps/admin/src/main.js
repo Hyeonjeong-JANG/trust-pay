@@ -15,22 +15,31 @@ const state = {
   decisionModal: null,
 };
 
+const ADMIN_REQUEST_TIMEOUT_MS = 10_000;
 const $ = (selector) => document.querySelector(selector);
+let reviewLoadSeq = 0;
 
 function authHeaders() {
   return buildAdminAuthHeaders(state.adminId, state.adminSecret);
 }
 
 async function adminRequest(path, options = {}) {
-  const res = await fetch(`${state.apiBase}${path}`, {
-    ...options,
-    headers: { ...authHeaders(), ...(options.headers || {}) },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(body.message || '운영 API 요청에 실패했습니다.');
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ADMIN_REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${state.apiBase}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: { ...authHeaders(), ...(options.headers || {}) },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ message: res.statusText }));
+      throw new Error(body.message || '운영 API 요청에 실패했습니다.');
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return res.json();
 }
 
 function setStatus(message, tone = 'neutral') {
@@ -474,12 +483,16 @@ function renderDetail(review) {
 }
 
 async function loadReviews() {
+  const loadSeq = ++reviewLoadSeq;
+  const status = state.status;
   renderRefundLayout();
   setStatus('환불 검토 목록을 불러오는 중...');
-  state.reviews = await fetchReviewsForFilter(state.status);
+  const reviews = await fetchReviewsForFilter(status);
+  if (loadSeq !== reviewLoadSeq) return;
+  state.reviews = reviews;
   renderFilters();
   renderQueue();
-  setStatus(`${getStatusLabel(state.status)} ${state.reviews.length}건`, 'ok');
+  setStatus(`${getStatusLabel(status)} ${state.reviews.length}건`, 'ok');
 }
 
 async function fetchReviewsForFilter(status) {

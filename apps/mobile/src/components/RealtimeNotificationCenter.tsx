@@ -162,7 +162,6 @@ export function RealtimeNotificationCenter() {
     queryFn: () => api.getConsumerEscrows(userId!),
     enabled: role === 'consumer' && !!userId,
     refetchInterval: 4000,
-    refetchIntervalInBackground: true,
   });
 
   const { data: businessDashboard } = useQuery({
@@ -170,7 +169,6 @@ export function RealtimeNotificationCenter() {
     queryFn: () => api.getBusinessDashboard(userId!),
     enabled: role === 'business' && !!userId,
     refetchInterval: 4000,
-    refetchIntervalInBackground: true,
   });
 
   const events = role === 'business'
