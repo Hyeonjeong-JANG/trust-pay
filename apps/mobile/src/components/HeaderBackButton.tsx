@@ -51,5 +51,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 44,
     textAlign: 'center',
+    transform: [{ translateY: -2.5 }],
   },
 });

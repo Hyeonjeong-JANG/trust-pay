@@ -51,6 +51,13 @@ describe('HeaderBackButton', () => {
     expect(iconStyle.lineHeight).toBe(44);
   });
 
+  it('should optically lift the chevron halfway between the unadjusted and raised positions', () => {
+    const { getByText } = render(<HeaderBackButton />);
+    const iconStyle = StyleSheet.flatten(getByText('‹').props.style);
+
+    expect(iconStyle.transform).toContainEqual({ translateY: -2.5 });
+  });
+
   it('should fall back to the consumer home tab when there is no stack history', () => {
     mockNavigation.canGoBack.mockReturnValue(false);
     const { getByLabelText } = render(<HeaderBackButton />);
