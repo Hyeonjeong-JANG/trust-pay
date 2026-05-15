@@ -49,6 +49,7 @@ const styles = StyleSheet.create({
   icon: {
     color: colors.primary,
     fontSize: 28,
-    lineHeight: 30,
+    lineHeight: 44,
+    textAlign: 'center',
   },
 });

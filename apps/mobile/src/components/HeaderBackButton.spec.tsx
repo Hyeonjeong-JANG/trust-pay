@@ -44,6 +44,13 @@ describe('HeaderBackButton', () => {
     expect(buttonStyle.minHeight).toBeGreaterThanOrEqual(44);
   });
 
+  it('should vertically center the chevron within the header touch target', () => {
+    const { getByText } = render(<HeaderBackButton />);
+    const iconStyle = StyleSheet.flatten(getByText('‹').props.style);
+
+    expect(iconStyle.lineHeight).toBe(44);
+  });
+
   it('should fall back to the consumer home tab when there is no stack history', () => {
     mockNavigation.canGoBack.mockReturnValue(false);
     const { getByLabelText } = render(<HeaderBackButton />);
