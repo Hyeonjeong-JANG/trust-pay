@@ -51,7 +51,7 @@ const SLIDES: Slide[] = [
 ];
 
 export function OnboardingScreen({ navigation }: ScreenProps<'Onboarding'>) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const setHasSeenOnboarding = useAppStore((s) => s.setHasSeenOnboarding);
@@ -83,16 +83,19 @@ export function OnboardingScreen({ navigation }: ScreenProps<'Onboarding'>) {
       )}
 
       <FlatList
+        testID="onboarding-slides"
         ref={flatListRef}
         data={SLIDES}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
+        style={s.slides}
+        contentContainerStyle={s.slidesContent}
         keyExtractor={(item) => item.key}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         renderItem={({ item }) => (
-          <View testID="onboarding-slide" style={[s.slide, { width }]}>
+          <View testID="onboarding-slide" style={[s.slide, { width, minHeight: height }]}>
             <View testID="onboarding-content" style={s.contentWrap}>
               <View style={s.illustrationWrap}>{item.illustration}</View>
               <Text style={s.slideTitle}>{item.title}</Text>
@@ -144,6 +147,12 @@ const s = StyleSheet.create({
     fontSize: font.size.md,
     color: colors.gray400,
     fontWeight: font.weight.medium,
+  },
+  slides: {
+    flex: 1,
+  },
+  slidesContent: {
+    flexGrow: 1,
   },
   slide: {
     flex: 1,

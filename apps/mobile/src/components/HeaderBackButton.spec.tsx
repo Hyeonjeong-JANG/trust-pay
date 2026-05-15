@@ -26,9 +26,10 @@ describe('HeaderBackButton', () => {
 
   it('should go back when stack history exists', () => {
     mockNavigation.canGoBack.mockReturnValue(true);
-    const { getByText } = render(<HeaderBackButton />);
+    const { getByLabelText, queryByText } = render(<HeaderBackButton />);
 
-    fireEvent.press(getByText('뒤로'));
+    expect(queryByText('뒤로')).toBeNull();
+    fireEvent.press(getByLabelText('뒤로 가기'));
 
     expect(mockNavigation.goBack).toHaveBeenCalled();
     expect(mockNavigation.navigate).not.toHaveBeenCalled();
@@ -36,9 +37,9 @@ describe('HeaderBackButton', () => {
 
   it('should fall back to the consumer home tab when there is no stack history', () => {
     mockNavigation.canGoBack.mockReturnValue(false);
-    const { getByText } = render(<HeaderBackButton />);
+    const { getByLabelText } = render(<HeaderBackButton />);
 
-    fireEvent.press(getByText('뒤로'));
+    fireEvent.press(getByLabelText('뒤로 가기'));
 
     expect(mockNavigation.navigate).toHaveBeenCalledWith('ConsumerTabs', { screen: 'Home' });
   });
@@ -46,9 +47,9 @@ describe('HeaderBackButton', () => {
   it('should fall back to the merchant dashboard when there is no stack history', () => {
     mockAuthState.role = 'business';
     mockNavigation.canGoBack.mockReturnValue(false);
-    const { getByText } = render(<HeaderBackButton />);
+    const { getByLabelText } = render(<HeaderBackButton />);
 
-    fireEvent.press(getByText('뒤로'));
+    fireEvent.press(getByLabelText('뒤로 가기'));
 
     expect(mockNavigation.navigate).toHaveBeenCalledWith('BusinessTabs', { screen: 'Dashboard' });
   });

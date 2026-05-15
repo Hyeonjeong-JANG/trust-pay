@@ -194,7 +194,6 @@ export function BusinessCreatePaymentScreen({ navigation }: BusinessTabProps<'Bu
           style={styles.backButton}
         >
           <Text style={styles.backIcon}>‹</Text>
-          <Text style={styles.backText}>뒤로</Text>
         </TouchableOpacity>
         <Text style={styles.eyebrow}>사업자 결제 생성</Text>
         <Text style={styles.title}>결제 QR 만들기</Text>
@@ -351,20 +350,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.16)',
     borderRadius: radius.full,
     flexDirection: 'row',
+    justifyContent: 'center',
     marginBottom: spacing.md,
+    minWidth: 36,
     minHeight: 36,
-    paddingHorizontal: spacing.sm,
   },
   backIcon: {
     color: colors.white,
     fontSize: 24,
     lineHeight: 26,
-    marginRight: 2,
-  },
-  backText: {
-    color: colors.white,
-    fontSize: font.size.sm,
-    fontWeight: font.weight.bold,
   },
   eyebrow: {
     fontSize: font.size.xs,

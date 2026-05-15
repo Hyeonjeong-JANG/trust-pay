@@ -110,9 +110,16 @@ describe('OnboardingScreen', () => {
       <OnboardingScreen navigation={mockNavigation} route={mockRoute} />,
     );
 
+    expect(getByTestId('onboarding-slides').props.style).toEqual(
+      expect.objectContaining({ flex: 1 }),
+    );
+    expect(getByTestId('onboarding-slides').props.contentContainerStyle).toEqual(
+      expect.objectContaining({ flexGrow: 1 }),
+    );
     expect(getAllByTestId('onboarding-slide')[0].props.style).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ justifyContent: 'center' }),
+        expect.objectContaining({ minHeight: expect.any(Number) }),
       ]),
     );
     expect(getAllByTestId('onboarding-content')[0].props.style).toEqual(

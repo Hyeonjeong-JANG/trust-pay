@@ -3,7 +3,7 @@ import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../store/auth';
-import { colors, font, spacing } from '../theme';
+import { colors, spacing } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
 
 export function HeaderBackButton() {
@@ -33,7 +33,6 @@ export function HeaderBackButton() {
       style={styles.button}
     >
       <Text style={styles.icon}>‹</Text>
-      <Text style={styles.label}>뒤로</Text>
     </TouchableOpacity>
   );
 }
@@ -50,11 +49,5 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 28,
     lineHeight: 30,
-    marginRight: 2,
-  },
-  label: {
-    color: colors.primary,
-    fontSize: font.size.sm,
-    fontWeight: font.weight.semibold,
   },
 });

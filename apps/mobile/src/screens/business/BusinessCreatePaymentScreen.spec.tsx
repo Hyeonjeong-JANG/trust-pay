@@ -33,11 +33,12 @@ describe('BusinessCreatePaymentScreen', () => {
 
   it('should return to the merchant dashboard from the QR creation task screen', async () => {
     const navigation = { navigate: jest.fn() };
-    const { findByText } = renderWithProviders(
+    const { findByLabelText, queryByText } = renderWithProviders(
       <BusinessCreatePaymentScreen route={{} as any} navigation={navigation as any} />,
     );
 
-    fireEvent.press(await findByText('뒤로'));
+    expect(queryByText('뒤로')).toBeNull();
+    fireEvent.press(await findByLabelText('대시보드로 뒤로 가기'));
 
     expect(navigation.navigate).toHaveBeenCalledWith('Dashboard');
   });
