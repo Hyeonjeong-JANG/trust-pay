@@ -39,6 +39,7 @@ function renderWithClient(client: QueryClient) {
 async function flushEffects() {
   await act(async () => {
     await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }
 
@@ -127,6 +128,51 @@ describe('RealtimeNotificationCenter', () => {
 
     expect(await screen.findByText('차감 정산 완료')).toBeTruthy();
     expect(await screen.findByText('김민수님이 브런치 세트 ₩20,250 차감을 승인했습니다.')).toBeTruthy();
+  });
+
+  it('should not show existing business events as popups on initial dashboard load', async () => {
+    const { api } = require('../api/client');
+    mockAuthState.role = 'business';
+    mockAuthState.userId = 'b-1';
+    let resolveDashboard: (value: any) => void = () => {};
+    api.getBusinessDashboard.mockImplementation(() => new Promise((resolve) => {
+      resolveDashboard = resolve;
+    }));
+    const existingDashboard = {
+      business: { id: 'b-1', name: '카페' },
+      escrows: [{
+        id: 'e-existing',
+        status: 'active',
+        totalAmount: 150,
+        consumer: { name: '김민수' },
+        chargeRequests: [{ id: 'charge-existing', menuName: '브런치 세트', amount: 15, status: 'settled' }],
+        entries: [],
+        refundReviewRequests: [{
+          id: 'refund-existing',
+          status: 'merchant_response_requested',
+          refundableAmount: 10,
+          merchantNotice: '기존 환불 검토입니다.',
+          requestedAt: new Date().toISOString(),
+        }],
+      }],
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    const screen = renderWithClient(client);
+
+    await waitFor(() => expect(api.getBusinessDashboard).toHaveBeenCalledWith('b-1'));
+    await flushEffects();
+
+    await act(async () => {
+      resolveDashboard(existingDashboard);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await waitFor(() => expect(client.getQueryData(['businessDashboard', 'b-1'])).toBeTruthy());
+    await flushEffects();
+
+    await expect(screen.findByText('환불 검토 요청 도착', {}, { timeout: 100 })).rejects.toThrow();
+    expect(screen.queryByText('보호 결제 승인')).toBeNull();
+    expect(screen.queryByText('차감 정산 완료')).toBeNull();
   });
 
   it('should show a popup when a business charge request is rejected', async () => {
@@ -231,7 +277,7 @@ describe('RealtimeNotificationCenter', () => {
     expect(screen.queryByText(/2주 넘게 문을 열지 않아/)).toBeNull();
   });
 
-  it('should show a popup when a consumer approves a new protected payment', async () => {
+  it('should keep approved protected payments on the dashboard without interrupting merchants with a popup', async () => {
     const { api } = require('../api/client');
     mockAuthState.role = 'business';
     mockAuthState.userId = 'b-1';
@@ -257,8 +303,10 @@ describe('RealtimeNotificationCenter', () => {
       });
     });
 
-    expect(await screen.findByText('보호 결제 승인')).toBeTruthy();
-    expect(await screen.findByText('이서연님이 ₩202,500 보호 결제를 승인했습니다.')).toBeTruthy();
+    await flushEffects();
+
+    expect(screen.queryByText('보호 결제 승인')).toBeNull();
+    expect(screen.queryByText('이서연님이 ₩202,500 보호 결제를 승인했습니다.')).toBeNull();
   });
 
   it('should not show a previously confirmed popup after remounting', async () => {

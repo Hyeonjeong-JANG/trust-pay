@@ -63,14 +63,6 @@ export function buildBusinessRealtimeEvents(dashboard?: BusinessDashboard): Real
   if (!dashboard) return [];
   return (dashboard.escrows as EscrowWithConsumer[]).flatMap((escrow) => {
     const consumerName = escrow.consumer?.name ?? '손님';
-    const escrowEvents: RealtimeEvent[] = escrow.status === 'active'
-      ? [{
-          id: `business-escrow-${escrow.id}`,
-          title: '보호 결제 승인',
-          body: `${consumerName}님이 ${formatKrwFromRlusd(escrow.totalAmount)} 보호 결제를 승인했습니다.`,
-          detail: formatRlusd(escrow.totalAmount),
-        }]
-      : [];
     const chargeEvents = (escrow.chargeRequests ?? [])
       .flatMap((request: ChargeRequest) => {
         if (request.status === 'settled') {
@@ -99,13 +91,14 @@ export function buildBusinessRealtimeEvents(dashboard?: BusinessDashboard): Real
         body: `${consumerName}님이 ${formatKrwFromRlusd(request.refundableAmount)} 환불 검토를 요청했습니다.`,
         detail: request.merchantNotice ?? undefined,
       }));
-    return [...escrowEvents, ...chargeEvents, ...refundEvents];
+    return [...chargeEvents, ...refundEvents];
   });
 }
 
 function useRealtimeEventQueue(
   events: RealtimeEvent[],
   scopeKey: string,
+  isReady: boolean,
   seenIds: string[],
   markSeen: (id: string) => void,
 ) {
@@ -128,6 +121,7 @@ function useRealtimeEventQueue(
   }, [seenIds]);
 
   useEffect(() => {
+    if (!isReady) return;
     if (!initializedRef.current) {
       seenRef.current = new Set([...seenIds, ...events.map((event) => event.id)]);
       initializedRef.current = true;
@@ -141,7 +135,7 @@ function useRealtimeEventQueue(
       notifySystem(event);
     }
     setQueue((current) => [...current, ...nextEvents]);
-  }, [events, seenIds]);
+  }, [events, isReady, seenIds]);
 
   const dismiss = () => setQueue((current) => {
     const [dismissed, ...rest] = current;
@@ -174,9 +168,15 @@ export function RealtimeNotificationCenter() {
   const events = role === 'business'
     ? buildBusinessRealtimeEvents(businessDashboard)
     : buildConsumerRealtimeEvents((consumerEscrows ?? []) as EscrowWithBusiness[]);
+  const isEventSourceReady = role === 'business'
+    ? businessDashboard !== undefined
+    : role === 'consumer'
+      ? consumerEscrows !== undefined
+      : false;
   const { activeEvent, dismiss } = useRealtimeEventQueue(
     events,
     `${role ?? 'none'}:${userId ?? 'none'}`,
+    isEventSourceReady,
     seenIds,
     markSeen,
   );

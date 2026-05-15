@@ -470,7 +470,6 @@ const styles = StyleSheet.create({
   submitButtonText: { color: colors.white, fontWeight: font.weight.semibold, fontSize: font.size.sm },
   buttonDisabled: { opacity: 0.5 },
   generatedQrBox: {
-    flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.white,
     borderRadius: radius.lg,
@@ -479,13 +478,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     ...shadow.sm,
   },
-  generatedQrInfo: { flex: 1 },
-  generatedQrLabel: { fontSize: font.size.xs, color: colors.gray500, marginBottom: 2 },
+  generatedQrInfo: { alignItems: 'center' },
+  generatedQrLabel: { fontSize: font.size.xs, color: colors.gray500, marginBottom: 2, textAlign: 'center' },
   generatedQrCode: {
     fontSize: font.size.xl,
     fontWeight: font.weight.bold,
     color: colors.gray900,
     fontFamily: font.mono,
+    textAlign: 'center',
   },
-  generatedQrHint: { fontSize: font.size.xs, color: colors.gray500, marginTop: spacing.xs, lineHeight: 18 },
+  generatedQrHint: { fontSize: font.size.xs, color: colors.gray500, marginTop: spacing.xs, lineHeight: 18, textAlign: 'center' },
 });

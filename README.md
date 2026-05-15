@@ -43,12 +43,14 @@ XRPL 통합 상세: [`docs/XRPL-INTEGRATION.md`](docs/XRPL-INTEGRATION.md)
 - Consumer: `010-2000-0001`
 - Business: `010-1000-0002`
 
-1. 소비자 `010-2000-0001`로 로그인합니다.
-2. 대시보드에서 진행중, 완료, 환불된 에스크로를 확인합니다.
-3. 파워짐 헬스장 에스크로 상세에서 6개월 중 3개월 released, 3개월 pending 상태를 확인합니다.
-4. 정상어학원을 선택해 300 RLUSD, 3개월 에스크로를 생성합니다.
-5. 사업자 `010-1000-0002`로 로그인해 pending 월 정산을 실행합니다.
-6. 소비자 화면에서 pending 엔트리 환불 흐름을 설명합니다.
+1. 소비자 `010-2000-0001`로 로그인해 홈에서 `전체` 필터를 선택합니다.
+2. 파워짐 피트니스 진행중, 강남 블루보틀 완료, 헤어살롱 루나 환불/취소 상태를 확인합니다.
+3. 보호 결제 상세에서 월별 released/pending/refunded 상태와 XRPL 증빙 링크를 보여줍니다.
+4. 사업자 `010-1000-0002`로 로그인해 `새 보호 결제 만들기`에서 QR을 생성합니다.
+5. 소비자로 다시 로그인해 `QR 스캔 결제`에 방금 생성된 `TP-...` 코드를 입력하고 PIN `123456`으로 계좌 승인을 완료합니다.
+6. 새 보호 결제가 소비자/사업자 대시보드에 반영되는 것을 확인하고, pending 미이용분 환불 보호를 설명합니다.
+
+QR 생성 자체는 비용이 들지 않습니다. QR은 결제 요청 딥링크를 인코딩하는 이미지이며, 비용이 발생하는 지점은 실제 XRPL 트랜잭션을 제출할 때입니다. Demo Mode의 tx hash는 UX 시연용이며 실제 Testnet 증빙은 문서와 검증 스크립트로 분리합니다.
 
 상세 시나리오: [`docs/DEMO-SCENARIO.md`](docs/DEMO-SCENARIO.md)
 
@@ -126,6 +128,7 @@ pnpm demo:mobile
 ```
 
 Expo에서 iOS Simulator, Android Emulator, 또는 Expo Go로 실행합니다.
+Expo Web 포트를 `8081`이 아닌 값으로 바꿔 실행할 경우 API를 `CORS_ORIGIN=http://localhost:<port> pnpm demo:api` 형태로 시작합니다.
 
 ## 주요 API
 

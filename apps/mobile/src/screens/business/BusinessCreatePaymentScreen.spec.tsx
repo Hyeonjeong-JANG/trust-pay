@@ -112,7 +112,8 @@ describe('BusinessCreatePaymentScreen', () => {
     fireEvent.changeText(await findByPlaceholderText('예: 6'), '6');
     fireEvent.press(await findByText('QR 결제 만들기'));
 
-    expect(await findByLabelText('TP-123456 실제 결제 QR')).toBeTruthy();
+    expect(await findByLabelText('TP-123456 실제 결제 QR, 스캔하면 결제 요청을 불러옵니다')).toBeTruthy();
+    expect(await findByText('SCAN')).toBeTruthy();
     expect(queryByTestId('generated-qr-placeholder-grid')).toBeNull();
     expect(await findByText('QR 코드나 결제 코드를 손님에게 보여주세요.')).toBeTruthy();
   });
