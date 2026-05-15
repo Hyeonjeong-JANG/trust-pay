@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationsScreen } from './NotificationsScreen';
 
@@ -101,6 +101,30 @@ describe('NotificationsScreen', () => {
     expect(await findByText(/파워짐 헬스장 1월차 정산이 완료되었습니다. 정산액 ₩135,000 \(100.00 RLUSD\)/)).toBeTruthy();
   });
 
+  it('should open the consumer escrow detail when a consumer notification is pressed', async () => {
+    const { api } = require('../../api/client');
+    const navigation = { navigate: jest.fn() };
+    api.getConsumerEscrows.mockResolvedValue([
+      {
+        id: 'e-consumer-target',
+        totalAmount: 600,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        business: { name: '파워짐 헬스장' },
+        entries: [],
+      },
+    ]);
+
+    const { findByText } = renderWithProviders(
+      React.createElement(NotificationsScreen as any, { navigation }),
+    );
+
+    fireEvent.press(await findByText('보호 결제 시작'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('EscrowDetail', { id: 'e-consumer-target' });
+  });
+
   it('should render business refund review notifications from dashboard data', async () => {
     const { api } = require('../../api/client');
     mockAuthState.role = 'business';
@@ -130,6 +154,36 @@ describe('NotificationsScreen', () => {
     expect(await findByText('환불 검토 요청')).toBeTruthy();
     expect(await findByText(/김민수님이 ₩13,500 환불 검토를 요청했습니다/)).toBeTruthy();
     expect(await findByText(/고객이 장기 휴업을 주장했습니다/)).toBeTruthy();
+  });
+
+  it('should open the business escrow detail when a business notification is pressed', async () => {
+    const { api } = require('../../api/client');
+    const navigation = { navigate: jest.fn() };
+    mockAuthState.role = 'business';
+    mockAuthState.userId = 'business-1';
+    api.getBusinessDashboard.mockResolvedValue({
+      business: { id: 'business-1', name: '파워짐' },
+      escrows: [
+        {
+          id: 'e-business-target',
+          status: 'active',
+          totalAmount: 600,
+          createdAt: new Date().toISOString(),
+          consumer: { name: '김민수' },
+          entries: [],
+          chargeRequests: [],
+          refundReviewRequests: [],
+        },
+      ],
+    });
+
+    const { findByText } = renderWithProviders(
+      React.createElement(NotificationsScreen as any, { navigation }),
+    );
+
+    fireEvent.press(await findByText('보호 결제 승인'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('BusinessEscrowDetail', { id: 'e-business-target' });
   });
 
   it('should render platform-review refund notifications without consumer evidence for businesses', async () => {

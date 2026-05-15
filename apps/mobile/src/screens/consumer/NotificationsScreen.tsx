@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
@@ -7,6 +7,7 @@ import { useAppStore } from '../../store/app';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import { formatKrwFromRlusd, formatKrwWithRlusd } from '../../utils/money';
 import type { BusinessDashboard, ChargeRequest, EscrowRecord, RefundReviewRequest } from '@prepaid-shield/shared-types';
+import type { ScreenProps } from '../../navigation/types';
 
 type EscrowWithBusiness = EscrowRecord & { business?: { name: string } };
 type EscrowWithConsumer = EscrowRecord & { consumer?: { name: string } };
@@ -18,6 +19,7 @@ interface NotificationItem {
   description: string;
   timestamp: number;
   isUnread: boolean;
+  target: { screen: 'EscrowDetail' | 'BusinessEscrowDetail'; id: string };
 }
 
 const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
@@ -49,7 +51,7 @@ function formatRelativeTime(ts: number): string {
   return `${months}개월 전`;
 }
 
-export function NotificationsScreen() {
+export function NotificationsScreen({ navigation }: Partial<ScreenProps<'Notifications'>> = {}) {
   const userId = useAuthStore((s) => s.userId);
   const role = useAuthStore((s) => s.role);
   const lastViewed = useAppStore((s) => s.notificationsLastViewed);
@@ -86,6 +88,7 @@ export function NotificationsScreen() {
             description: `${consumerName}님이 ${formatKrwFromRlusd(escrow.totalAmount)} 보호 결제를 승인했습니다.`,
             timestamp: createdTs,
             isUnread: createdTs > lastViewed,
+            target: { screen: 'BusinessEscrowDetail', id: escrow.id },
           });
         }
 
@@ -100,6 +103,7 @@ export function NotificationsScreen() {
               description: `${consumerName}님이 ${charge.menuName} ${formatKrwFromRlusd(charge.amount)} 차감을 승인했습니다.`,
               timestamp: ts,
               isUnread: ts > lastViewed,
+              target: { screen: 'BusinessEscrowDetail', id: escrow.id },
             });
           }
           if (charge.status === 'rejected') {
@@ -110,6 +114,7 @@ export function NotificationsScreen() {
               description: `${consumerName}님이 ${charge.menuName} ${formatKrwFromRlusd(charge.amount)} 차감 요청을 거절했습니다.`,
               timestamp: ts,
               isUnread: ts > lastViewed,
+              target: { screen: 'BusinessEscrowDetail', id: escrow.id },
             });
           }
         }
@@ -125,6 +130,7 @@ export function NotificationsScreen() {
             description: `${consumerName}님이 ${formatKrwFromRlusd(refund.refundableAmount)} 환불 검토를 요청했습니다. ${refund.merchantNotice ?? ''}`.trim(),
             timestamp: requestedTs,
             isUnread: requestedTs > lastViewed,
+            target: { screen: 'BusinessEscrowDetail', id: escrow.id },
           });
         }
       }
@@ -146,6 +152,7 @@ export function NotificationsScreen() {
         description: `${bizName} 보호 결제가 시작되었습니다. 보호 금액 ${formatKrwWithRlusd(escrow.totalAmount)}`,
         timestamp: createdTs,
         isUnread: createdTs > lastViewed,
+        target: { screen: 'EscrowDetail', id: escrow.id },
       });
 
       for (const entry of escrow.entries) {
@@ -160,6 +167,7 @@ export function NotificationsScreen() {
             description: `${bizName} ${entry.month}월차 정산이 완료되었습니다. 정산액 ${formatKrwWithRlusd(entry.amount)}`,
             timestamp: ts,
             isUnread: ts > lastViewed,
+            target: { screen: 'EscrowDetail', id: escrow.id },
           });
         }
         if (entry.status === 'refunded') {
@@ -173,6 +181,7 @@ export function NotificationsScreen() {
             description: `${bizName} ${entry.month}월차 대기 금액이 환불되었습니다. 환불액 ${formatKrwWithRlusd(entry.amount)}`,
             timestamp: ts,
             isUnread: ts > lastViewed,
+            target: { screen: 'EscrowDetail', id: escrow.id },
           });
         }
       }
@@ -186,6 +195,7 @@ export function NotificationsScreen() {
           description: `${bizName} 보호 결제가 취소되었습니다.`,
           timestamp: cancelTs,
           isUnread: cancelTs > lastViewed,
+          target: { screen: 'EscrowDetail', id: escrow.id },
         });
       }
     }
@@ -194,13 +204,27 @@ export function NotificationsScreen() {
     return items;
   }, [businessDashboard, escrows, lastViewed, role]);
 
+  const openNotification = (item: NotificationItem) => {
+    if (item.target.screen === 'EscrowDetail') {
+      navigation?.navigate?.('EscrowDetail', { id: item.target.id });
+      return;
+    }
+    navigation?.navigate?.('BusinessEscrowDetail', { id: item.target.id });
+  };
+
   return (
     <View style={s.container}>
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <View style={s.card}>
+          <TouchableOpacity
+            accessibilityLabel={`${item.title} 상세 보기`}
+            accessibilityRole="button"
+            activeOpacity={0.82}
+            onPress={() => openNotification(item)}
+            style={s.card}
+          >
             {item.isUnread && <View style={s.unreadDot} />}
             <View style={s.iconWrap}>
               <Text style={s.icon}>{item.icon}</Text>
@@ -210,7 +234,7 @@ export function NotificationsScreen() {
               <Text style={s.desc}>{item.description}</Text>
               <Text style={s.time}>{formatRelativeTime(item.timestamp)}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
         )}
         ListEmptyComponent={
           <View style={s.emptyContainer}>
