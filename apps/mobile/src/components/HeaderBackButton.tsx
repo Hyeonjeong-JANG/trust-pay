@@ -3,7 +3,7 @@ import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../store/auth';
-import { colors, spacing } from '../theme';
+import { colors } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
 
 export function HeaderBackButton() {
@@ -29,6 +29,7 @@ export function HeaderBackButton() {
       accessibilityLabel="뒤로 가기"
       accessibilityRole="button"
       activeOpacity={0.75}
+      hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}
       onPress={goBack}
       style={styles.button}
     >
@@ -41,9 +42,9 @@ const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
     flexDirection: 'row',
-    marginLeft: -spacing.xs,
-    minHeight: 40,
-    paddingRight: spacing.sm,
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   icon: {
     color: colors.primary,

@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { HeaderBackButton } from './HeaderBackButton';
 
@@ -33,6 +34,14 @@ describe('HeaderBackButton', () => {
 
     expect(mockNavigation.goBack).toHaveBeenCalled();
     expect(mockNavigation.navigate).not.toHaveBeenCalled();
+  });
+
+  it('should provide a minimum 44px touch target for the icon-only back control', () => {
+    const { getByLabelText } = render(<HeaderBackButton />);
+    const buttonStyle = StyleSheet.flatten(getByLabelText('뒤로 가기').props.style);
+
+    expect(buttonStyle.minWidth).toBeGreaterThanOrEqual(44);
+    expect(buttonStyle.minHeight).toBeGreaterThanOrEqual(44);
   });
 
   it('should fall back to the consumer home tab when there is no stack history', () => {
