@@ -1458,6 +1458,10 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'POST' && parts[0] === 'escrow' && parts[2] === 'finish') {
     const escrow = escrows.find((item) => item.id === parts[1]);
+    const hasOpenRefundReview = refundReviewRequests.some((review) => (
+      review.escrowId === escrow?.id && ACTIVE_REFUND_REVIEW_STATUSES.has(review.status)
+    ));
+    if (hasOpenRefundReview) return send(res, 400, { message: '환불 검토가 진행 중인 에스크로는 정산할 수 없습니다' });
     const entry = escrow?.entries.find((item) => item.month === body.entryMonth && item.status === 'pending');
     if (!entry) return send(res, 400, { message: '정산 가능한 월차가 없습니다' });
     entry.status = 'released';

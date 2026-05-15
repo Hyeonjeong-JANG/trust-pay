@@ -39,10 +39,9 @@ test('queue filters collapse detailed statuses into operator decisions', () => {
   assert.deepEqual(getQueueFetchStatuses('needs_action'), [
     'platform_review',
     'merchant_responded',
-    'merchant_review',
     'platform_investigation',
   ]);
-  assert.deepEqual(getQueueFetchStatuses('waiting_merchant'), ['merchant_response_requested']);
+  assert.deepEqual(getQueueFetchStatuses('waiting_merchant'), ['merchant_response_requested', 'merchant_review']);
   assert.deepEqual(getQueueFetchStatuses('resolved'), ['platform_approved', 'rejected', 'refunded']);
 });
 
@@ -82,12 +81,39 @@ test('admin refund detail renders a timeline and status-specific action modes', 
   assert.match(js, /case 'awaiting_merchant'/);
 });
 
+test('admin awaiting merchant panel does not expose final decision buttons before a response', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  const awaitingBlock = js.slice(js.indexOf("case 'awaiting_merchant'"), js.indexOf("case 'needs_decision'"));
+
+  assert.doesNotMatch(awaitingBlock, /renderDecisionButtons/);
+  assert.doesNotMatch(awaitingBlock, /approve-review|reject-review|investigate-review/);
+});
+
 test('admin refund decisions use an in-app modal instead of native browser dialogs', () => {
   const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
 
   assert.doesNotMatch(js, /window\.prompt|window\.alert|window\.confirm|\bprompt\(|\balert\(|\bconfirm\(/);
   assert.match(js, /renderDecisionModal/);
   assert.match(js, /decision-modal/);
+});
+
+test('admin index cache-busts static assets for local preview reloads', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+  assert.match(html, /href="\.\/src\/styles\.css\?v=/);
+  assert.match(html, /src="\.\/src\/main\.js\?v=/);
+});
+
+test('admin main cache-busts internal state module imports', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+
+  assert.match(js, /from '\.\/admin-state\.js\?v=/);
+});
+
+test('admin login form blocks native GET fallback navigation', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+  assert.match(html, /<form id="secret-form"[^>]*onsubmit="return false"/);
 });
 
 test('refund decision reason policy only requires reasons for adverse or investigative outcomes', () => {
@@ -184,8 +210,24 @@ test('buildReviewTimeline explains merchant response progress and next admin dec
   assert.match(timeline[3].description, /정상 영업 중/);
 });
 
+test('buildReviewTimeline keeps legacy merchant_review cases waiting for merchant response', () => {
+  const timeline = buildReviewTimeline({
+    status: 'merchant_review',
+    requestedAt: '2026-05-14T00:00:00.000Z',
+    merchantNotice: '소비자가 남은 5개월분 환불 검토를 요청했습니다.',
+    merchantRespondBy: '2026-05-20T00:00:00.000Z',
+  });
+
+  assert.deepEqual(timeline.map((item) => [item.label, item.state]), [
+    ['소비자 요청 접수', 'done'],
+    ['TrustPay 1차 검토', 'done'],
+    ['사업자 소명 요청', 'current'],
+  ]);
+});
+
 test('getReviewActionMode separates waiting, responded, terminal, and requestable states', () => {
   assert.equal(getReviewActionMode({ status: 'merchant_response_requested' }), 'awaiting_merchant');
+  assert.equal(getReviewActionMode({ status: 'merchant_review' }), 'awaiting_merchant');
   assert.equal(getReviewActionMode({ status: 'merchant_responded' }), 'needs_decision');
   assert.equal(getReviewActionMode({ status: 'platform_approved' }), 'terminal');
   assert.equal(getReviewActionMode({ status: 'platform_review' }), 'request_or_decide');

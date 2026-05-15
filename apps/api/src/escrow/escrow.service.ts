@@ -294,7 +294,7 @@ export class EscrowService {
   async finishEntry(escrowId: string, entryMonth: number, user: SessionUser) {
     const escrow = await this.prisma.escrow.findUnique({
       where: { id: escrowId },
-      include: { entries: true },
+      include: { entries: true, refundReviewRequests: true },
     });
     if (!escrow) throw new NotFoundException('Escrow not found');
     if (user.role !== 'business' || user.userId !== escrow.businessId) {
@@ -305,6 +305,11 @@ export class EscrowService {
     if (!entry) throw new NotFoundException('Entry not found');
     if (entry.status !== 'pending') {
       throw new BadRequestException(`Entry already ${entry.status}`);
+    }
+    const hasOpenRefundReview = (escrow.refundReviewRequests ?? [])
+      .some((review) => ACTIVE_REFUND_REVIEW_STATUSES.includes(review.status));
+    if (hasOpenRefundReview) {
+      throw new BadRequestException('환불 검토가 진행 중인 에스크로는 정산할 수 없습니다');
     }
 
     // Use business wallet for finish (business claims payment)

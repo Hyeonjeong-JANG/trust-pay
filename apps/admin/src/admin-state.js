@@ -32,8 +32,8 @@ const STATUS_LABELS = {
 
 const KRW_PER_RLUSD = 1350;
 const TERMINAL_REFUND_REVIEW_STATUSES = new Set(['platform_approved', 'rejected', 'refunded']);
-const NEEDS_ACTION_STATUSES = ['platform_review', 'merchant_responded', 'merchant_review', 'platform_investigation'];
-const WAITING_MERCHANT_STATUSES = ['merchant_response_requested'];
+const NEEDS_ACTION_STATUSES = ['platform_review', 'merchant_responded', 'platform_investigation'];
+const WAITING_MERCHANT_STATUSES = ['merchant_response_requested', 'merchant_review'];
 const RESOLVED_STATUSES = ['platform_approved', 'rejected', 'refunded'];
 const REFUND_DECISION_META = {
   approve: { label: '환불 승인', reasonRequired: false, minLength: 0 },
@@ -107,7 +107,7 @@ function formatDate(value) {
 
 export function getReviewActionMode(review = {}) {
   if (TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) return 'terminal';
-  if (review.status === 'merchant_response_requested') return 'awaiting_merchant';
+  if (['merchant_response_requested', 'merchant_review'].includes(review.status)) return 'awaiting_merchant';
   if (review.status === 'merchant_responded') return 'needs_decision';
   return 'request_or_decide';
 }
@@ -151,12 +151,12 @@ export function buildReviewTimeline(review = {}) {
     },
   ];
 
-  if (review.merchantNotice || ['merchant_response_requested', 'merchant_responded'].includes(review.status) || TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) {
+  if (review.merchantNotice || ['merchant_response_requested', 'merchant_review', 'merchant_responded'].includes(review.status) || TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) {
     events.push({
       label: '사업자 소명 요청',
       description: review.merchantNotice || '사업자에게 소명 요청을 보냈습니다.',
       timestamp: review.merchantRespondBy ? `기한 ${formatDate(review.merchantRespondBy)}` : '',
-      state: review.status === 'merchant_response_requested' ? 'current' : 'done',
+      state: ['merchant_response_requested', 'merchant_review'].includes(review.status) ? 'current' : 'done',
     });
   }
 

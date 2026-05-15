@@ -1,4 +1,4 @@
-import { adminTabs, buildAdminAuthHeaders, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js';
+import { adminTabs, buildAdminAuthHeaders, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js?v=trustpay-admin-20260515';
 
 const state = {
   apiBase: getApiBase(window.TRUSTPAY_ADMIN_API_BASE || '/api', window.location.hostname),
@@ -286,7 +286,6 @@ function renderActionPanel(review, summary) {
           <h3>사업자 응답 대기 중</h3>
           <p>소명 요청을 보냈습니다. 응답 기한은 <strong>${escapeHtml(summary.respondBy)}</strong>입니다.</p>
           <blockquote>${escapeHtml(review.merchantNotice || '사업자에게 소명을 요청했습니다.')}</blockquote>
-          ${renderDecisionButtons()}
         </section>
       `;
     case 'needs_decision':

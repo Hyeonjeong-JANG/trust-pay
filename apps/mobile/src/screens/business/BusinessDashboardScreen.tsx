@@ -43,6 +43,13 @@ const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
   'refunded',
   'rejected',
 ]);
+const OPEN_REFUND_REVIEW_STATUSES = new Set([
+  'platform_review',
+  'merchant_response_requested',
+  'merchant_responded',
+  'merchant_review',
+  'platform_investigation',
+]);
 
 const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
   platform_review: 'TrustPay 검토 중',
@@ -58,6 +65,11 @@ const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
 };
 
 type EscrowWithConsumer = EscrowRecord & { consumer?: { id: string; name: string } };
+
+function hasOpenRefundReview(escrow: EscrowWithConsumer): boolean {
+  return (escrow.refundReviewRequests ?? [])
+    .some((request) => OPEN_REFUND_REVIEW_STATUSES.has(request.status));
+}
 
 function sumEntryAmounts(entries: EscrowEntry[], status: EscrowEntry['status']): number {
   return entries
@@ -112,6 +124,7 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
     const nowRipple = Math.floor(Date.now() / 1000) - 946684800;
     const eligibleEntries = escrows.flatMap((escrow) => {
       if (escrow.status !== 'active' || escrow.escrowType === 'prepaid') return [];
+      if (hasOpenRefundReview(escrow)) return [];
       return (escrow.entries ?? [])
         .filter((entry) => entry.status === 'pending' && entry.finishAfter <= nowRipple)
         .map((entry) => ({ escrowId: escrow.id, month: entry.month, key: `${escrow.id}:${entry.month}` }));

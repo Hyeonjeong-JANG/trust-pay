@@ -98,6 +98,34 @@ describe('BusinessDashboardScreen', () => {
     });
   });
 
+  it('should not auto-finish monthly settlements while a refund review is open', async () => {
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 300,
+      totalPending: 300,
+      escrows: [
+        {
+          id: 'e-disputed',
+          status: 'active',
+          escrowType: 'monthly',
+          totalAmount: 600,
+          monthlyAmount: 100,
+          months: 6,
+          consumer: { id: 'consumer-1', name: '김민수' },
+          refundReviewRequests: [{ id: 'review-1', status: 'merchant_review' }],
+          entries: [
+            { id: 'en-1', month: 1, amount: '100', status: 'pending', finishAfter: 830607775 },
+          ],
+        },
+      ],
+    });
+
+    const { findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+    expect(await findByText('김민수')).toBeTruthy();
+    expect(api.finishEscrow).not.toHaveBeenCalled();
+  });
+
   it('should open business escrow detail from an escrow card', async () => {
     const { api } = require('../../api/client');
     const navigation = { navigate: jest.fn() };

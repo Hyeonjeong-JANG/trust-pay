@@ -666,6 +666,18 @@ describe('EscrowService', () => {
       await expect(service.finishEntry('escrow-1', 1, businessUser)).rejects.toThrow(BadRequestException);
     });
 
+    it('should block monthly settlement while refund review is open', async () => {
+      prisma.escrow.findUnique.mockResolvedValue({
+        ...makeEscrow(),
+        refundReviewRequests: [{ id: 'review-1', status: 'merchant_review' }],
+      });
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+
+      await expect(service.finishEntry('escrow-1', 1, businessUser)).rejects.toThrow('환불 검토가 진행 중인 에스크로는 정산할 수 없습니다');
+      expect(xrplService.finishEscrow).not.toHaveBeenCalled();
+      expect(prisma.escrowEntry.update).not.toHaveBeenCalled();
+    });
+
     it('should throw if entry month not found', async () => {
       prisma.escrow.findUnique.mockResolvedValue(makeEscrow());
 

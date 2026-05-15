@@ -329,6 +329,15 @@ describe('static Demo API fixture', () => {
     });
   });
 
+  it('blocks demo monthly settlement while refund review is open', async () => {
+    const response = await callApi('POST', '/api/escrow/00000000-0000-4000-a000-000000000700/finish', {
+      entryMonth: 2,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toMatchObject({ message: '환불 검토가 진행 중인 에스크로는 정산할 수 없습니다' });
+  });
+
   it('creates and resolves merchant-originated QR payment requests', async () => {
     const createResponse = await callApi('POST', '/api/payment-requests', {
       businessId: '00000000-0000-4000-a000-000000000020',
