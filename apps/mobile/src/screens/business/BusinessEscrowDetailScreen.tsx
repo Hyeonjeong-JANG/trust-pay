@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
 import { ErrorView } from '../../components/ErrorView';
+import { XrplTransactionProof } from '../../components/XrplTransactionProof';
 import { useBusinessMenuStore } from '../../store/businessMenus';
 import { formatKrwFromRlusd, formatKrwWithRlusd, formatRlusd, krwToRlusd } from '../../utils/money';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
@@ -49,6 +50,7 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   active: { bg: colors.escrow.activeBg, text: colors.escrow.active },
   completed: { bg: colors.escrow.completedBg, text: colors.escrow.completed },
   cancelled: { bg: colors.escrow.cancelledBg, text: colors.escrow.cancelled },
+  cancel_failed: { bg: colors.escrow.cancelledBg, text: colors.escrow.cancelled },
 };
 
 const STATUS_KO: Record<string, string> = {
@@ -62,6 +64,7 @@ const STATUS_KO: Record<string, string> = {
   active: '진행중',
   completed: '완료',
   cancelled: '취소됨',
+  cancel_failed: '취소 재시도 필요',
 };
 
 const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
@@ -475,9 +478,7 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                   <Text style={styles.entryAmount}>{formatKrwFromRlusd(item.amount)}</Text>
                   <Text style={styles.entryRlusd}>{formatRlusd(item.amount)}</Text>
                   {item.txHash && (
-                    <Text style={styles.txHash} numberOfLines={1}>
-                      정산 증빙: {item.txHash}
-                    </Text>
+                    <XrplTransactionProof txHash={item.txHash} label="차감 정산 증빙" />
                   )}
                 </View>
               </View>
@@ -507,9 +508,7 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                 <Text style={styles.entryAmount}>{formatKrwFromRlusd(item.amount)}</Text>
                 <Text style={styles.entryRlusd}>{formatRlusd(item.amount)}</Text>
                 {item.txHash && (
-                  <Text style={styles.txHash} numberOfLines={1}>
-                    원장 증빙: {item.txHash}
-                  </Text>
+                  <XrplTransactionProof txHash={item.txHash} />
                 )}
               </View>
             </View>

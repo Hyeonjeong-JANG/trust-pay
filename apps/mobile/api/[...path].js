@@ -1263,7 +1263,20 @@ module.exports = async function handler(req, res) {
       const review = refundReviewRequests.find((item) => item.id === parts[2]);
       if (!review) return send(res, 404, { message: 'Refund review not found' });
       if (TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) return send(res, 400, { message: '이미 종료된 환불 검토입니다' });
-      review.status = body.decision === 'approve' ? 'platform_approved' : body.decision === 'reject' ? 'rejected' : 'platform_investigation';
+      if (body.decision === 'approve') {
+        const escrow = escrows.find((item) => item.id === review.escrowId);
+        if (!escrow) return send(res, 400, { message: '환불 대상 보호 결제를 확인할 수 없습니다' });
+        escrow.entries.forEach((entry) => {
+          if (entry.status === 'pending') {
+            entry.status = 'refunded';
+            entry.txHash = `DEMO_ADMIN_REFUND_${Date.now()}_${entry.month}`;
+          }
+        });
+        escrow.status = 'cancelled';
+        review.status = 'refunded';
+      } else {
+        review.status = body.decision === 'reject' ? 'rejected' : 'platform_investigation';
+      }
       review.adminResolutionReason = body.reason;
       review.resolvedAt = body.decision === 'investigate' ? null : new Date().toISOString();
       return send(res, 200, serializeAdminReview(review));
@@ -1601,7 +1614,7 @@ module.exports = async function handler(req, res) {
       }
     });
     escrow.status = 'cancelled';
-    return send(res, 200, { cancelled });
+    return send(res, 200, { cancelled, failed: 0 });
   }
 
   return send(res, 404, { message: 'Not found' });

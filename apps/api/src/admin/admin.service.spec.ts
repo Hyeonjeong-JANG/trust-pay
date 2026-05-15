@@ -1,14 +1,35 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { adminResolveRefundReviewSchema } from '@prepaid-shield/validators';
 
 const adminUser = { userId: 'admin-1', role: 'admin' as const, name: 'TrustPay 운영자' };
 const businessUser = { userId: 'business-1', role: 'business' as const, name: '사업자' };
+const refundReviewWithEscrow = {
+  id: 'refund-review-1',
+  status: 'platform_review',
+  refundableAmount: 100,
+  escrow: {
+    id: 'escrow-1',
+    consumerId: 'consumer-1',
+    consumerAddress: 'rConsumerAddr',
+    consumer: { id: 'consumer-1', xrplSecret: 'encrypted:sConsumerSecret' },
+    business: { id: 'business-1' },
+    entries: [
+      { id: 'entry-1', month: 1, sequence: 100, status: 'released', amount: '50' },
+      { id: 'entry-2', month: 2, sequence: 101, status: 'pending', amount: '50' },
+      { id: 'entry-3', month: 3, sequence: 102, status: 'pending', amount: '50' },
+    ],
+    chargeRequests: [],
+  },
+  photoDataUrlsJson: null,
+};
 
 describe('AdminService', () => {
   let service: AdminService;
   let prisma: any;
+  let xrplService: any;
+  let crypto: any;
 
   beforeEach(() => {
     prisma = {
@@ -23,6 +44,10 @@ describe('AdminService', () => {
       escrow: {
         count: jest.fn(),
         findMany: jest.fn(),
+        update: jest.fn(),
+      },
+      escrowEntry: {
+        update: jest.fn(),
       },
       refundReviewRequest: {
         count: jest.fn(),
@@ -31,7 +56,13 @@ describe('AdminService', () => {
         update: jest.fn(),
       },
     };
-    service = new AdminService(prisma as PrismaService);
+    xrplService = {
+      cancelEscrow: jest.fn().mockResolvedValue('REFUND_TX_HASH'),
+    };
+    crypto = {
+      decrypt: jest.fn((value: string) => value.replace('encrypted:', '')),
+    };
+    service = new (AdminService as any)(prisma as PrismaService, xrplService, crypto);
   });
 
   it('lists refund review cases for admin users only', async () => {
@@ -347,38 +378,48 @@ describe('AdminService', () => {
     expect(result.status).toBe('merchant_response_requested');
   });
 
-  it('resolves a refund review by approving or rejecting it', async () => {
-    prisma.refundReviewRequest.findUnique.mockResolvedValue({ id: 'refund-review-1', status: 'platform_review' });
+  it('executes approved refunds before marking a refund review refunded', async () => {
+    prisma.refundReviewRequest.findUnique.mockResolvedValue(refundReviewWithEscrow);
     prisma.refundReviewRequest.update.mockResolvedValue({
       id: 'refund-review-1',
-      status: 'platform_approved',
+      status: 'refunded',
       adminResolutionReason: '사업자 답변이 없어 미사용분 환불을 승인합니다.',
       photoDataUrlsJson: null,
     });
+    prisma.escrowEntry.update.mockResolvedValue({});
+    prisma.escrow.update.mockResolvedValue({});
 
     const result = await service.resolveRefundReview(adminUser, 'refund-review-1', {
       decision: 'approve',
       reason: '사업자 답변이 없어 미사용분 환불을 승인합니다.',
     });
 
+    expect(xrplService.cancelEscrow).toHaveBeenCalledTimes(2);
+    expect(prisma.escrowEntry.update).toHaveBeenCalledTimes(2);
+    expect(prisma.escrow.update).toHaveBeenCalledWith({
+      where: { id: 'escrow-1' },
+      data: { status: 'cancelled' },
+    });
     expect(prisma.refundReviewRequest.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        status: 'platform_approved',
+        status: 'refunded',
         adminResolutionReason: '사업자 답변이 없어 미사용분 환불을 승인합니다.',
         resolvedAt: expect.any(Date),
       }),
     }));
-    expect(result.status).toBe('platform_approved');
+    expect(result.status).toBe('refunded');
   });
 
   it('allows refund approval without forcing an operator-entered reason', async () => {
-    prisma.refundReviewRequest.findUnique.mockResolvedValue({ id: 'refund-review-1', status: 'platform_review' });
+    prisma.refundReviewRequest.findUnique.mockResolvedValue(refundReviewWithEscrow);
     prisma.refundReviewRequest.update.mockResolvedValue({
       id: 'refund-review-1',
-      status: 'platform_approved',
+      status: 'refunded',
       adminResolutionReason: null,
       photoDataUrlsJson: null,
     });
+    prisma.escrowEntry.update.mockResolvedValue({});
+    prisma.escrow.update.mockResolvedValue({});
 
     const result = await service.resolveRefundReview(adminUser, 'refund-review-1', {
       decision: 'approve',
@@ -386,12 +427,32 @@ describe('AdminService', () => {
 
     expect(prisma.refundReviewRequest.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        status: 'platform_approved',
+        status: 'refunded',
         adminResolutionReason: null,
         resolvedAt: expect.any(Date),
       }),
     }));
-    expect(result.status).toBe('platform_approved');
+    expect(result.status).toBe('refunded');
+  });
+
+  it('keeps refund reviews open when an approved refund partially fails', async () => {
+    prisma.refundReviewRequest.findUnique.mockResolvedValue(refundReviewWithEscrow);
+    xrplService.cancelEscrow
+      .mockRejectedValueOnce(new Error('XRPL unavailable'))
+      .mockResolvedValueOnce('REFUND_TX_HASH_2');
+    prisma.escrowEntry.update.mockResolvedValue({});
+    prisma.escrow.update.mockResolvedValue({});
+
+    await expect(service.resolveRefundReview(adminUser, 'refund-review-1', {
+      decision: 'approve',
+    } as any)).rejects.toThrow(BadRequestException);
+
+    expect(prisma.escrowEntry.update).toHaveBeenCalledTimes(1);
+    expect(prisma.escrow.update).toHaveBeenCalledWith({
+      where: { id: 'escrow-1' },
+      data: { status: 'cancel_failed' },
+    });
+    expect(prisma.refundReviewRequest.update).not.toHaveBeenCalled();
   });
 
   it('validates refund resolution reasons by decision type', () => {

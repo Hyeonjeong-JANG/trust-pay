@@ -1,4 +1,4 @@
-export type EscrowStatus = 'active' | 'completed' | 'cancelled';
+export type EscrowStatus = 'active' | 'completed' | 'cancelled' | 'cancel_failed';
 export type EscrowEntryStatus = 'pending' | 'released' | 'refunded';
 export type EscrowType = 'monthly' | 'prepaid';
 export type ChargeRequestStatus = 'pending_approval' | 'settled' | 'rejected' | 'expired';

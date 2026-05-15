@@ -46,7 +46,7 @@ describe('ScanPaymentScreen', () => {
       <ScanPaymentScreen navigation={{ navigate } as any} route={{} as any} />,
     );
 
-    expect(await findByText('사업자 QR 스캔')).toBeTruthy();
+    expect(await findByText('QR 코드 입력')).toBeTruthy();
     expect(await findByText('사업자 화면에 표시된 TP-xxxxxx 코드를 입력하세요.')).toBeTruthy();
     fireEvent.changeText(await findByPlaceholderText('예: TP-123456'), 'tp-123456');
     fireEvent.press(await findByText('결제 QR 불러오기'));

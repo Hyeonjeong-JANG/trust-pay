@@ -10,7 +10,7 @@ import type { EscrowResult } from '@prepaid-shield/xrpl-client';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import type { SessionUser } from '../common/session-token';
 import { requestRefundReviewSchema, type CreateChargeRequestInput, type MerchantRefundReviewResponseInput, type RequestRefundReviewInput } from '@prepaid-shield/validators';
-import type { BusinessClosureStatus, RefundReviewStatus } from '@prepaid-shield/shared-types';
+import type { BusinessClosureStatus, PaymentRequest, RefundReviewStatus } from '@prepaid-shield/shared-types';
 
 const MAX_PREPAID_ESCROW_ENTRIES = 50;
 const RESERVED_CHARGE_STATUSES = new Set(['pending_approval']);
@@ -163,6 +163,21 @@ export class EscrowService {
     const requestedValidityMonths = product?.validityMonths ?? dto.validityMonths;
     const issuer = this.configService.get<string>('rlusd.issuer')!;
 
+    const paymentRequest = dto.paymentRequestCode
+      ? await this.paymentRequestService.findByCode(dto.paymentRequestCode)
+      : null;
+    if (paymentRequest) {
+      this.assertPaymentRequestMatchesEscrow(paymentRequest, {
+        businessId: business.id,
+        productId: product?.id ?? null,
+        totalAmount,
+        months: requestedMonths ?? null,
+        escrowType,
+        unitPrice: requestedUnitPrice ?? null,
+        validityMonths: requestedValidityMonths ?? null,
+      });
+    }
+
     // Reconstruct sender wallet from encrypted secret
     const senderWallet = safeWalletFromSeed(this.crypto.decrypt(consumer.xrplSecret));
 
@@ -272,11 +287,51 @@ export class EscrowService {
 
     const escrow = await createEscrowRecord(escrowResults);
     if (dto.paymentRequestCode) {
-      this.paymentRequestService.markUsedByCode(dto.paymentRequestCode, business.id);
+      await this.paymentRequestService.markUsedByCode(dto.paymentRequestCode, business.id);
     }
 
     this.logger.log(`Created escrow ${escrow.id} with ${escrow.entries.length} entries`);
     return escrow;
+  }
+
+  private assertPaymentRequestMatchesEscrow(
+    request: PaymentRequest,
+    expected: {
+      businessId: string;
+      productId: string | null;
+      totalAmount: number;
+      months: number | null;
+      escrowType: string;
+      unitPrice: number | null;
+      validityMonths: number | null;
+    },
+  ) {
+    if (request.status !== 'pending') {
+      throw new BadRequestException('이미 처리된 결제 QR입니다');
+    }
+    if (request.businessId !== expected.businessId) {
+      throw new BadRequestException('결제 QR 사업자 정보가 일치하지 않습니다');
+    }
+    if ((request.productId ?? null) !== expected.productId) {
+      throw new BadRequestException('결제 QR 상품 정보가 일치하지 않습니다');
+    }
+    if (roundRlusdAmount(request.totalAmount) !== roundRlusdAmount(expected.totalAmount)) {
+      throw new BadRequestException('결제 QR 금액이 요청 내용과 일치하지 않습니다');
+    }
+    if (request.escrowType !== expected.escrowType) {
+      throw new BadRequestException('결제 QR 결제 방식이 요청 내용과 일치하지 않습니다');
+    }
+    if (request.escrowType === 'monthly' && (request.months ?? null) !== expected.months) {
+      throw new BadRequestException('결제 QR 기간이 요청 내용과 일치하지 않습니다');
+    }
+    if (request.escrowType === 'prepaid') {
+      if (roundRlusdAmount(request.unitPrice ?? 0) !== roundRlusdAmount(expected.unitPrice ?? 0)) {
+        throw new BadRequestException('결제 QR 차감 단위가 요청 내용과 일치하지 않습니다');
+      }
+      if ((request.validityMonths ?? null) !== expected.validityMonths) {
+        throw new BadRequestException('결제 QR 유효기간이 요청 내용과 일치하지 않습니다');
+      }
+    }
   }
 
   async findById(id: string, user: SessionUser) {
@@ -521,6 +576,8 @@ export class EscrowService {
     const wallet = safeWalletFromSeed(this.crypto.decrypt(consumer!.xrplSecret));
 
     const pendingEntries = escrow.entries.filter((e) => e.status === 'pending');
+    let cancelled = 0;
+    let failed = 0;
 
     for (const entry of pendingEntries) {
       try {
@@ -533,18 +590,20 @@ export class EscrowService {
           where: { id: entry.id },
           data: { status: 'refunded', txHash },
         });
+        cancelled += 1;
       } catch (err) {
+        failed += 1;
         this.logger.warn(`Failed to cancel entry ${entry.month}: ${err}`);
       }
     }
 
     await this.prisma.escrow.update({
       where: { id: escrowId },
-      data: { status: 'cancelled' },
+      data: { status: failed > 0 ? 'cancel_failed' : 'cancelled' },
     });
 
     this.logger.log(`Cancelled escrow ${escrowId}`);
-    return { cancelled: pendingEntries.length };
+    return { cancelled, failed };
   }
 
   async requestRefundReview(escrowId: string, user: SessionUser, dto: RequestRefundReviewInput) {

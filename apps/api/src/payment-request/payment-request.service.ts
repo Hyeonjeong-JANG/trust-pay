@@ -12,9 +12,6 @@ function roundRlusd(amount: number): number {
 
 @Injectable()
 export class PaymentRequestService {
-  private paymentRequests: PaymentRequest[] = [];
-  private nextCode = 1;
-
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreatePaymentRequest, user: SessionUser): Promise<PaymentRequest> {
@@ -53,46 +50,46 @@ export class PaymentRequestService {
       throw new BadRequestException('기간 금액권 결제 QR에는 차감 단위와 사용 기간이 필요합니다');
     }
 
-    const request: PaymentRequest = {
-      id: randomUUID(),
-      code: `TP-${String(this.nextCode++).padStart(6, '0')}`,
-      businessId: business.id,
-      businessName: business.name,
-      businessCategory: business.category,
-      productId: product?.id ?? null,
-      productName: product?.name ?? null,
-      paymentModel: dto.paymentModel ?? (escrowType === 'prepaid' ? 'voucher' : 'monthly'),
-      paymentAmount: product?.totalAmount ?? dto.paymentAmount ?? totalAmount,
-      totalAmount,
-      monthlyAmount,
-      months,
-      escrowType,
-      unitPrice,
-      validityMonths,
-      validFrom: dto.validFrom ?? null,
-      validUntil: dto.validUntil ?? null,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    };
-
-    this.paymentRequests = [request, ...this.paymentRequests];
-    return request;
+    return this.prisma.paymentRequest.create({
+      data: {
+        code: this.generateCode(),
+        businessId: business.id,
+        businessName: business.name,
+        businessCategory: business.category,
+        productId: product?.id ?? null,
+        productName: product?.name ?? null,
+        paymentModel: dto.paymentModel ?? (escrowType === 'prepaid' ? 'voucher' : 'monthly'),
+        paymentAmount: product?.totalAmount ?? dto.paymentAmount ?? totalAmount,
+        totalAmount,
+        monthlyAmount,
+        months,
+        escrowType,
+        unitPrice,
+        validityMonths,
+        validFrom: dto.validFrom ?? null,
+        validUntil: dto.validUntil ?? null,
+        status: 'pending',
+      },
+    }) as Promise<PaymentRequest>;
   }
 
-  findByCode(code: string): PaymentRequest {
+  async findByCode(code: string): Promise<PaymentRequest> {
     const normalizedCode = code.trim().toUpperCase();
     if (!normalizedCode) throw new BadRequestException('결제 QR 코드가 필요합니다');
-    const request = this.paymentRequests.find((item) => item.code === normalizedCode);
+    const request = await this.prisma.paymentRequest.findUnique({ where: { code: normalizedCode } });
     if (!request) throw new NotFoundException('Payment request not found');
-    return request;
+    return request as PaymentRequest;
   }
 
-  listForBusiness(businessId: string): PaymentRequest[] {
-    return this.paymentRequests.filter((item) => item.businessId === businessId && item.status === 'pending');
+  async listForBusiness(businessId: string): Promise<PaymentRequest[]> {
+    return this.prisma.paymentRequest.findMany({
+      where: { businessId, status: 'pending' },
+      orderBy: { createdAt: 'desc' },
+    }) as Promise<PaymentRequest[]>;
   }
 
-  cancel(id: string, user: SessionUser): PaymentRequest {
-    const request = this.paymentRequests.find((item) => item.id === id);
+  async cancel(id: string, user: SessionUser): Promise<PaymentRequest> {
+    const request = await this.prisma.paymentRequest.findUnique({ where: { id } });
     if (!request) throw new NotFoundException('Payment request not found');
     if (user.role !== 'business' || user.userId !== request.businessId) {
       throw new ForbiddenException('해당 사업자만 결제 QR을 취소할 수 있습니다');
@@ -100,19 +97,27 @@ export class PaymentRequestService {
     if (request.status !== 'pending') {
       throw new BadRequestException('이미 처리된 결제 QR입니다');
     }
-    request.status = 'cancelled';
-    return request;
+    return this.prisma.paymentRequest.update({
+      where: { id: request.id },
+      data: { status: 'cancelled' },
+    }) as Promise<PaymentRequest>;
   }
 
-  markUsedByCode(code: string, businessId: string): PaymentRequest {
-    const request = this.findByCode(code);
+  async markUsedByCode(code: string, businessId: string): Promise<PaymentRequest> {
+    const request = await this.findByCode(code);
     if (request.businessId !== businessId) {
       throw new BadRequestException('결제 QR 사업자 정보가 일치하지 않습니다');
     }
     if (request.status !== 'pending') {
       throw new BadRequestException('이미 처리된 결제 QR입니다');
     }
-    request.status = 'used';
-    return request;
+    return this.prisma.paymentRequest.update({
+      where: { id: request.id },
+      data: { status: 'used' },
+    }) as Promise<PaymentRequest>;
+  }
+
+  private generateCode() {
+    return `TP-${randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase()}`;
   }
 }

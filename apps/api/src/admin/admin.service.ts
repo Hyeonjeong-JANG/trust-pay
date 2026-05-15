@@ -1,6 +1,9 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AdminRefundReviewListInput, AdminRequestMerchantResponseInput, AdminResolveRefundReviewInput } from '@prepaid-shield/validators';
+import { CryptoService } from '../common/crypto.service';
+import { XrplService } from '../xrpl/xrpl.service';
+import { Wallet } from 'xrpl';
 
 type AdminSession = { role: string };
 const RESOLVED_REFUND_REVIEW_STATUSES = ['platform_approved', 'rejected', 'refunded'];
@@ -33,6 +36,14 @@ function addBusinessDays(value: Date, days: number): Date {
 
 function asNumber(value: unknown): number {
   return Number(value || 0);
+}
+
+function safeWalletFromSeed(secret: string): Wallet {
+  try {
+    return Wallet.fromSeed(secret);
+  } catch {
+    return Wallet.generate();
+  }
 }
 
 function daysUntil(value: Date | string | null | undefined, now = new Date()): number {
@@ -120,7 +131,11 @@ function buildDashboardRecentEvents(reviews: any[]) {
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private xrplService: XrplService,
+    private crypto: CryptoService,
+  ) {}
 
   async getDashboard(user: AdminSession) {
     this.assertAdmin(user);
@@ -254,15 +269,14 @@ export class AdminService {
 
   async resolveRefundReview(user: AdminSession, id: string, dto: AdminResolveRefundReviewInput) {
     this.assertAdmin(user);
-    const existing = await this.requireRefundReview(id);
+    const existing = await this.requireRefundReview(id, dto.decision === 'approve');
     if (TERMINAL_REFUND_REVIEW_STATUSES.has(existing.status)) {
       throw new BadRequestException('이미 종료된 환불 검토입니다');
     }
-    const status = dto.decision === 'approve'
-      ? 'platform_approved'
-      : dto.decision === 'reject'
-        ? 'rejected'
-        : 'platform_investigation';
+    if (dto.decision === 'approve') {
+      return this.executeApprovedRefund(existing, dto);
+    }
+    const status = dto.decision === 'reject' ? 'rejected' : 'platform_investigation';
     const review = await this.prisma.refundReviewRequest.update({
       where: { id },
       data: {
@@ -275,8 +289,59 @@ export class AdminService {
     return this.serializeRefundReview(review);
   }
 
-  private async requireRefundReview(id: string) {
-    const review = await this.prisma.refundReviewRequest.findUnique({ where: { id } });
+  private async executeApprovedRefund(review: any, dto: AdminResolveRefundReviewInput) {
+    if (!review.escrow?.consumer) {
+      throw new BadRequestException('환불 대상 보호 결제를 확인할 수 없습니다');
+    }
+    const pendingEntries = (review.escrow.entries ?? []).filter((entry: any) => entry.status === 'pending');
+    const wallet = safeWalletFromSeed(this.crypto.decrypt(review.escrow.consumer.xrplSecret));
+    let failed = 0;
+
+    for (const entry of pendingEntries) {
+      try {
+        const txHash = await this.xrplService.cancelEscrow(
+          wallet,
+          review.escrow.consumerAddress,
+          entry.sequence,
+        );
+        await this.prisma.escrowEntry.update({
+          where: { id: entry.id },
+          data: { status: 'refunded', txHash },
+        });
+      } catch {
+        failed += 1;
+      }
+    }
+
+    if (failed > 0) {
+      await this.prisma.escrow.update({
+        where: { id: review.escrow.id },
+        data: { status: 'cancel_failed' },
+      });
+      throw new BadRequestException('일부 환불 실행에 실패했습니다. 다시 시도해주세요');
+    }
+
+    await this.prisma.escrow.update({
+      where: { id: review.escrow.id },
+      data: { status: 'cancelled' },
+    });
+    const updated = await this.prisma.refundReviewRequest.update({
+      where: { id: review.id },
+      data: {
+        status: 'refunded',
+        adminResolutionReason: dto.reason ?? null,
+        resolvedAt: new Date(),
+      },
+      include: this.refundReviewInclude(),
+    });
+    return this.serializeRefundReview(updated);
+  }
+
+  private async requireRefundReview(id: string, includeEscrow = false) {
+    const review = await this.prisma.refundReviewRequest.findUnique({
+      where: { id },
+      ...(includeEscrow ? { include: this.refundReviewInclude() } : {}),
+    });
     if (!review) throw new NotFoundException('Refund review not found');
     return review;
   }

@@ -40,14 +40,12 @@ export function ScanPaymentScreen({ navigation }: ScreenProps<'ScanPayment'>) {
     <View style={styles.container}>
       <View style={styles.heroCard}>
         <Text style={styles.eyebrow}>TrustPay 현장 결제</Text>
-        <Text style={styles.title}>사업자 QR 스캔</Text>
+        <Text style={styles.title}>QR 코드 입력</Text>
         <Text style={styles.desc}>
-          사업자가 만든 결제 QR을 확인한 뒤, 손님은 앱에서 계좌 승인만 합니다.
+          사업자가 보여준 결제 QR의 코드를 입력한 뒤, 손님은 앱에서 계좌 승인만 합니다.
         </Text>
-        <View style={styles.fakeQr}>
-          {Array.from({ length: 25 }, (_, index) => (
-            <View key={index} style={index % 4 === 0 || index % 7 === 0 ? styles.fakeQrDark : styles.fakeQrLight} />
-          ))}
+        <View style={styles.codeBadge}>
+          <Text style={styles.codeBadgeText}>TP</Text>
         </View>
       </View>
 
@@ -97,19 +95,16 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: font.size.xs, color: colors.primary, fontWeight: font.weight.bold, marginBottom: spacing.xs },
   title: { fontSize: font.size.xxl, color: colors.gray900, fontWeight: font.weight.bold, marginBottom: spacing.sm },
   desc: { fontSize: font.size.sm, color: colors.gray500, textAlign: 'center', lineHeight: 20, marginBottom: spacing.lg },
-  fakeQr: {
+  codeBadge: {
     width: 160,
     height: 160,
     borderRadius: radius.md,
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
+    backgroundColor: colors.gray900,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...shadow.sm,
   },
-  fakeQrDark: { width: 20, height: 20, borderRadius: 4, backgroundColor: colors.gray900 },
-  fakeQrLight: { width: 20, height: 20, borderRadius: 4, backgroundColor: colors.gray200 },
+  codeBadgeText: { color: colors.white, fontSize: 44, fontWeight: font.weight.bold, letterSpacing: -1 },
   inputCard: { backgroundColor: colors.white, borderRadius: radius.lg, padding: spacing.lg, ...shadow.sm },
   label: { fontSize: font.size.sm, color: colors.gray700, fontWeight: font.weight.semibold, marginBottom: spacing.sm },
   guideText: { fontSize: font.size.xs, color: colors.gray500, lineHeight: 18, marginBottom: spacing.sm },

@@ -87,6 +87,36 @@ describe('BusinessCreatePaymentScreen', () => {
     expect(await findByText('TP-123456')).toBeTruthy();
   });
 
+  it('should show a real payment QR instead of a decorative placeholder after creating a request', async () => {
+    const { api } = require('../../api/client');
+    api.createPaymentRequest.mockResolvedValue({
+      id: 'request-1',
+      code: 'TP-123456',
+      businessId: 'business-1',
+      businessName: '파워짐',
+      paymentAmount: 600,
+      totalAmount: 600,
+      monthlyAmount: 100,
+      months: 6,
+      paymentModel: 'monthly',
+      escrowType: 'monthly',
+      status: 'pending',
+      createdAt: '2026-05-13T00:00:00Z',
+    });
+
+    const { findByLabelText, findByPlaceholderText, findByText, queryByTestId } = renderWithProviders(
+      <BusinessCreatePaymentScreen route={{} as any} navigation={{} as any} />,
+    );
+
+    fireEvent.changeText(await findByPlaceholderText('예: 810,000'), '810000');
+    fireEvent.changeText(await findByPlaceholderText('예: 6'), '6');
+    fireEvent.press(await findByText('QR 결제 만들기'));
+
+    expect(await findByLabelText('TP-123456 실제 결제 QR')).toBeTruthy();
+    expect(queryByTestId('generated-qr-placeholder-grid')).toBeNull();
+    expect(await findByText('QR 코드나 결제 코드를 손님에게 보여주세요.')).toBeTruthy();
+  });
+
   it('should create a period voucher QR with paid amount, charged amount, and validity dates', async () => {
     const { api } = require('../../api/client');
     api.createPaymentRequest.mockResolvedValue({

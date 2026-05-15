@@ -24,12 +24,13 @@ import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { EscrowRecord, EscrowEntry, PaymentRequest, RefundReviewRequest } from '@prepaid-shield/shared-types';
 import type { BusinessTabProps } from '../../navigation/types';
 
-type StatusFilter = 'all' | 'active' | 'completed' | 'cancelled';
+type StatusFilter = 'all' | 'active' | 'completed' | 'cancelled' | 'cancel_failed';
 const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: '전체' },
   { key: 'active', label: '진행중' },
   { key: 'completed', label: '완료' },
   { key: 'cancelled', label: '취소됨' },
+  { key: 'cancel_failed', label: '취소 재시도 필요' },
 ];
 
 const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([

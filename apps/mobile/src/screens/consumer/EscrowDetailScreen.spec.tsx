@@ -72,7 +72,8 @@ describe('EscrowDetailScreen', () => {
     expect(await findByText('3개월 정산 완료 · 3개월 예정')).toBeTruthy();
     expect((await findAllByText('정산 완료')).length).toBeGreaterThanOrEqual(3);
     expect((await findAllByText(/정산 가능일:/)).length).toBeGreaterThan(0);
-    expect(await findByText(/원장 증빙: ABC123/)).toBeTruthy();
+    expect(await findByText('XRPL Testnet 증빙')).toBeTruthy();
+    expect(await findByText('ABC123')).toBeTruthy();
     expect(queryByText('릴리즈됨')).toBeNull();
     expect(queryByText(/finishAfter:/)).toBeNull();
   });
@@ -195,7 +196,7 @@ describe('EscrowDetailScreen', () => {
     expect((await findAllByText('5.00 RLUSD')).length).toBeGreaterThan(0);
     expect((await findAllByText('15.00 RLUSD')).length).toBeGreaterThan(0);
     expect(await findByText(/사용기한 2026\. 4\. 27\. ~ 2026\. 7\. 10\./)).toBeTruthy();
-    expect(await findByText(/원장 증빙: TX_AMERICANO/)).toBeTruthy();
+    expect(await findByText('TX_AMERICANO')).toBeTruthy();
     expect(queryByText('보호 원장 항목 1')).toBeNull();
     expect(queryByText(/원장 증빙: TX_UNIT_1/)).toBeNull();
     expect(queryByText('1회차')).toBeNull();

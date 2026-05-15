@@ -165,7 +165,7 @@ export class BusinessService {
     if (!business) throw new NotFoundException('Business not found');
 
     const autoSettled = await this.autoFinishEligibleMonthlyEntries(business);
-    const pendingPaymentRequests = this.paymentRequestService.listForBusiness(id);
+    const pendingPaymentRequests = await this.paymentRequestService.listForBusiness(id);
 
     const totalReceived = business.escrows.reduce((sum, e) => {
       if (e.escrowType === 'prepaid') {

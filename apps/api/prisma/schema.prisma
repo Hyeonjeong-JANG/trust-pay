@@ -25,6 +25,7 @@ model Business {
   updatedAt            DateTime              @updatedAt
   escrows              Escrow[]              @relation("BusinessEscrows")
   products             BusinessProduct[]
+  paymentRequests      PaymentRequest[]
   chargeRequests       ChargeRequest[]       @relation("BusinessChargeRequests")
   refundReviewRequests RefundReviewRequest[] @relation("BusinessRefundReviewRequests")
 }
@@ -60,7 +61,36 @@ model BusinessProduct {
   business       Business          @relation(fields: [businessId], references: [id])
   menuItems      ProductMenuItem[]
   escrows        Escrow[]
+  paymentRequests PaymentRequest[]
   chargeRequests ChargeRequest[]
+}
+
+model PaymentRequest {
+  id               String           @id @default(uuid())
+  code             String           @unique
+  businessId       String
+  businessName     String
+  businessCategory String?
+  productId        String?
+  productName      String?
+  paymentModel     String?
+  paymentAmount    Float?
+  totalAmount      Float
+  monthlyAmount    Float?
+  months           Int?
+  escrowType       String
+  unitPrice        Float?
+  validityMonths   Int?
+  validFrom        String?
+  validUntil       String?
+  status           String           @default("pending")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  business         Business         @relation(fields: [businessId], references: [id])
+  product          BusinessProduct? @relation(fields: [productId], references: [id])
+
+  @@index([businessId, status, createdAt])
+  @@index([code, status])
 }
 
 model ProductMenuItem {

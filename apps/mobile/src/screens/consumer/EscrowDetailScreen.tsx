@@ -19,6 +19,7 @@ import type { ApiError } from '../../api/client';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { ApprovalAuthModal } from '../../components/ApprovalAuthModal';
 import { ErrorView } from '../../components/ErrorView';
+import { XrplTransactionProof } from '../../components/XrplTransactionProof';
 import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
 import type { ChargeRequest, EscrowEntry, RefundReviewRequest, CreateRefundReviewRequest } from '@prepaid-shield/shared-types';
@@ -37,6 +38,7 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   active: { bg: colors.escrow.activeBg, text: colors.escrow.active },
   completed: { bg: colors.escrow.completedBg, text: colors.escrow.completed },
   cancelled: { bg: colors.escrow.cancelledBg, text: colors.escrow.cancelled },
+  cancel_failed: { bg: colors.escrow.cancelledBg, text: colors.escrow.cancelled },
 };
 
 const STATUS_KO: Record<string, string> = {
@@ -50,6 +52,7 @@ const STATUS_KO: Record<string, string> = {
   active: '진행중',
   completed: '완료',
   cancelled: '취소됨',
+  cancel_failed: '취소 재시도 필요',
 };
 
 const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
@@ -422,9 +425,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 </View>
                 <View style={styles.entryBottom}>
                   {item.txHash && (
-                    <Text style={styles.txHash} numberOfLines={1}>
-                      원장 증빙: {item.txHash}
-                    </Text>
+                    <XrplTransactionProof txHash={item.txHash} label="차감 정산 증빙" />
                   )}
                 </View>
               </View>
@@ -454,9 +455,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 <Text style={styles.entryAmount}>{formatKrwFromRlusd(item.amount)}</Text>
                 <Text style={styles.entryRlusd}>{formatRlusd(item.amount)}</Text>
                 {item.txHash && (
-                  <Text style={styles.txHash} numberOfLines={1}>
-                    원장 증빙: {item.txHash}
-                  </Text>
+                  <XrplTransactionProof txHash={item.txHash} />
                 )}
               </View>
             </View>

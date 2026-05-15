@@ -11,6 +11,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
+import { PaymentRequestQrCode } from '../../components/PaymentRequestQrCode';
 import { useAuthStore } from '../../store/auth';
 import { formatKrwFromRlusd, formatRlusd, krwToRlusd, roundRlusd } from '../../utils/money';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
@@ -318,14 +319,11 @@ export function BusinessCreatePaymentScreen({ navigation }: BusinessTabProps<'Bu
 
       {paymentRequest && (
         <View style={styles.generatedQrBox}>
-          <View style={styles.generatedQrGrid}>
-            {Array.from({ length: 16 }, (_, index) => (
-              <View key={index} style={index % 3 === 0 ? styles.generatedQrCellDark : styles.generatedQrCell} />
-            ))}
-          </View>
+          <PaymentRequestQrCode code={paymentRequest.code} />
           <View style={styles.generatedQrInfo}>
-            <Text style={styles.generatedQrLabel}>손님에게 보여줄 결제 코드</Text>
+            <Text style={styles.generatedQrLabel}>손님에게 보여줄 실제 결제 QR</Text>
             <Text style={styles.generatedQrCode}>{paymentRequest.code}</Text>
+            <Text style={styles.generatedQrHint}>QR 코드나 결제 코드를 손님에게 보여주세요.</Text>
             <Text style={styles.generatedQrHint}>손님 승인 후 대시보드와 내역에 자동 반영됩니다.</Text>
           </View>
         </View>
@@ -481,18 +479,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     ...shadow.sm,
   },
-  generatedQrGrid: {
-    width: 72,
-    height: 72,
-    backgroundColor: colors.gray50,
-    borderRadius: radius.sm,
-    padding: 7,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 3,
-  },
-  generatedQrCell: { width: 11, height: 11, borderRadius: 2, backgroundColor: colors.gray200 },
-  generatedQrCellDark: { width: 11, height: 11, borderRadius: 2, backgroundColor: colors.gray900 },
   generatedQrInfo: { flex: 1 },
   generatedQrLabel: { fontSize: font.size.xs, color: colors.gray500, marginBottom: 2 },
   generatedQrCode: {

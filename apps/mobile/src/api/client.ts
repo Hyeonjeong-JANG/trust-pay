@@ -168,7 +168,7 @@ export const api = {
     }),
 
   cancelEscrow: (id: string) =>
-    request<{ cancelled: number }>(`/escrow/${id}/cancel`, { method: 'POST' }),
+    request<{ cancelled: number; failed: number }>(`/escrow/${id}/cancel`, { method: 'POST' }),
 
   getConsumerEscrows: (consumerId: string) =>
     request<EscrowRecord[]>(`/escrow/consumer/${consumerId}`),

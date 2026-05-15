@@ -53,12 +53,14 @@ const STATUS_KO: Record<string, string> = {
   active: '진행중',
   completed: '완료',
   cancelled: '취소됨',
+  cancel_failed: '취소 재시도 필요',
 };
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   active: { bg: colors.escrow.activeBg, text: colors.escrow.active },
   completed: { bg: colors.escrow.completedBg, text: colors.escrow.completed },
   cancelled: { bg: colors.escrow.cancelledBg, text: colors.escrow.cancelled },
+  cancel_failed: { bg: colors.escrow.cancelledBg, text: colors.escrow.cancelled },
 };
 
 const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
@@ -78,6 +80,7 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
   { key: 'active', label: '진행중' },
   { key: 'completed', label: '완료' },
   { key: 'cancelled', label: '취소됨' },
+  { key: 'cancel_failed', label: '취소 재시도 필요' },
 ];
 
 export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>) {

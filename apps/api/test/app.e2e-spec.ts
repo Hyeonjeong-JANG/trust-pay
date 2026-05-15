@@ -84,6 +84,18 @@ describe('TrustPay E2E', () => {
     return `Bearer ${token}`;
   }
 
+  async function cleanTestData() {
+    await prisma.chargeRequest.deleteMany();
+    await prisma.paymentRequest.deleteMany();
+    await prisma.refundReviewRequest.deleteMany();
+    await prisma.escrowEntry.deleteMany();
+    await prisma.escrow.deleteMany();
+    await prisma.productMenuItem.deleteMany();
+    await prisma.businessProduct.deleteMany();
+    await prisma.consumer.deleteMany();
+    await prisma.business.deleteMany();
+  }
+
   beforeAll(async () => {
     // Each createWallet call returns a unique address
     let addrCounter = 0;
@@ -108,16 +120,11 @@ describe('TrustPay E2E', () => {
     prisma = moduleRef.get(PrismaService);
 
     await app.init();
+    await cleanTestData();
   });
 
   afterAll(async () => {
-    // Clean up test data
-    await prisma.chargeRequest.deleteMany();
-    await prisma.refundReviewRequest.deleteMany();
-    await prisma.escrowEntry.deleteMany();
-    await prisma.escrow.deleteMany();
-    await prisma.consumer.deleteMany();
-    await prisma.business.deleteMany();
+    await cleanTestData();
     await app.close();
   });
 

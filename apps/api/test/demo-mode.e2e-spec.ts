@@ -58,6 +58,18 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
     return `Bearer ${token}`;
   }
 
+  async function cleanTestData() {
+    await prisma.chargeRequest.deleteMany();
+    await prisma.paymentRequest.deleteMany();
+    await prisma.refundReviewRequest.deleteMany();
+    await prisma.escrowEntry.deleteMany();
+    await prisma.escrow.deleteMany();
+    await prisma.productMenuItem.deleteMany();
+    await prisma.businessProduct.deleteMany();
+    await prisma.consumer.deleteMany();
+    await prisma.business.deleteMany();
+  }
+
   beforeAll(async () => {
     process.env.DEMO_MODE = 'true';
 
@@ -74,15 +86,11 @@ describe('Demo Mode 통합 테스트 (XRPL 연결 없음)', () => {
     expect(config.get('demoMode')).toBe(true);
 
     await app.init();
+    await cleanTestData();
   });
 
   afterAll(async () => {
-    await prisma.chargeRequest.deleteMany();
-    await prisma.refundReviewRequest.deleteMany();
-    await prisma.escrowEntry.deleteMany();
-    await prisma.escrow.deleteMany();
-    await prisma.consumer.deleteMany();
-    await prisma.business.deleteMany();
+    await cleanTestData();
     await app.close();
     delete process.env.DEMO_MODE;
   });

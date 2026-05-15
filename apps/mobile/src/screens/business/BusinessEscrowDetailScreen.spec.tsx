@@ -60,7 +60,8 @@ describe('BusinessEscrowDetailScreen', () => {
     expect(await findByText('₩810,000')).toBeTruthy();
     expect(await findByText(/이용기간 2026\. 5\. 13\. ~ 2026\. 7\. 13\./)).toBeTruthy();
     expect(await findByText('1월차 정산 완료')).toBeTruthy();
-    expect(await findByText(/원장 증빙: MONTH_1_TX/)).toBeTruthy();
+    expect(await findByText('XRPL Testnet 증빙')).toBeTruthy();
+    expect(await findByText('MONTH_1_TX')).toBeTruthy();
   });
 
   it('should show prepaid validity and hide internal ledger units for the merchant', async () => {

@@ -38,6 +38,19 @@ const mockBusiness = {
   xrplSecret: 'sBusinessSecret',
 };
 
+const mockPaymentRequest = {
+  id: 'payment-request-1',
+  code: 'TP-123456',
+  businessId: 'business-1',
+  businessName: '사업자',
+  totalAmount: 150000,
+  monthlyAmount: 50000,
+  months: 3,
+  escrowType: 'monthly',
+  status: 'pending',
+  createdAt: new Date('2026-05-14T00:00:00.000Z'),
+};
+
 const consumerUser = { userId: 'consumer-1', role: 'consumer' as const, name: '소비자' };
 const businessUser = { userId: 'business-1', role: 'business' as const, name: '사업자' };
 
@@ -115,6 +128,7 @@ describe('EscrowService', () => {
       }),
     };
     paymentRequestService = {
+      findByCode: jest.fn(),
       markUsedByCode: jest.fn(),
     };
 
@@ -183,6 +197,128 @@ describe('EscrowService', () => {
       });
       expect(createArgs.data.entries.create[1]).not.toHaveProperty('status');
       expect(result.entries).toHaveLength(3);
+    });
+
+    it('should reject a non-pending payment request before XRPL escrow creation', async () => {
+      prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+      paymentRequestService.findByCode.mockResolvedValue({
+        ...mockPaymentRequest,
+        status: 'cancelled',
+      });
+
+      await expect(service.create({
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        paymentRequestCode: 'TP-123456',
+        totalAmount: 150000,
+        months: 3,
+      }, consumerUser)).rejects.toThrow(BadRequestException);
+
+      expect(paymentRequestService.findByCode).toHaveBeenCalledWith('TP-123456');
+      expect(xrplService.createMonthlyEscrows).not.toHaveBeenCalled();
+      expect(prisma.escrow.create).not.toHaveBeenCalled();
+      expect(paymentRequestService.markUsedByCode).not.toHaveBeenCalled();
+    });
+
+    it('should reject a payment request for another business before XRPL escrow creation', async () => {
+      prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+      paymentRequestService.findByCode.mockResolvedValue({
+        ...mockPaymentRequest,
+        businessId: 'other-business',
+      });
+
+      await expect(service.create({
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        paymentRequestCode: 'TP-123456',
+        totalAmount: 150000,
+        months: 3,
+      }, consumerUser)).rejects.toThrow(BadRequestException);
+
+      expect(xrplService.createMonthlyEscrows).not.toHaveBeenCalled();
+      expect(prisma.escrow.create).not.toHaveBeenCalled();
+      expect(paymentRequestService.markUsedByCode).not.toHaveBeenCalled();
+    });
+
+    it('should reject a payment request amount mismatch before XRPL escrow creation', async () => {
+      prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+      paymentRequestService.findByCode.mockResolvedValue({
+        ...mockPaymentRequest,
+        totalAmount: 140000,
+      });
+
+      await expect(service.create({
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        paymentRequestCode: 'TP-123456',
+        totalAmount: 150000,
+        months: 3,
+      }, consumerUser)).rejects.toThrow(BadRequestException);
+
+      expect(xrplService.createMonthlyEscrows).not.toHaveBeenCalled();
+      expect(prisma.escrow.create).not.toHaveBeenCalled();
+      expect(paymentRequestService.markUsedByCode).not.toHaveBeenCalled();
+    });
+
+    it('should reject a prepaid payment request term mismatch before XRPL escrow creation', async () => {
+      prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+      paymentRequestService.findByCode.mockResolvedValue({
+        ...mockPaymentRequest,
+        totalAmount: 150,
+        monthlyAmount: null,
+        months: null,
+        escrowType: 'prepaid',
+        unitPrice: 10,
+        validityMonths: 3,
+      });
+
+      await expect(service.create({
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        paymentRequestCode: 'TP-123456',
+        totalAmount: 150,
+        escrowType: 'prepaid',
+        unitPrice: 5,
+        validityMonths: 3,
+      }, consumerUser)).rejects.toThrow(BadRequestException);
+
+      expect(xrplService.createPrepaidEscrows).not.toHaveBeenCalled();
+      expect(prisma.escrow.create).not.toHaveBeenCalled();
+      expect(paymentRequestService.markUsedByCode).not.toHaveBeenCalled();
+    });
+
+    it('should preflight and consume a matching payment request around escrow creation', async () => {
+      prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
+      prisma.business.findUnique.mockResolvedValue(mockBusiness);
+      paymentRequestService.findByCode.mockResolvedValue(mockPaymentRequest);
+      prisma.escrow.create.mockResolvedValue({
+        id: 'escrow-1',
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        totalAmount: 150000,
+        monthlyAmount: 50000,
+        months: 3,
+        entries: mockEscrowResults.map((r, i) => ({ id: `entry-${i}`, ...r, status: 'pending' })),
+      });
+
+      await service.create({
+        consumerId: 'consumer-1',
+        businessId: 'business-1',
+        paymentRequestCode: 'TP-123456',
+        totalAmount: 150000,
+        months: 3,
+      }, consumerUser);
+
+      expect(paymentRequestService.findByCode).toHaveBeenCalledWith('TP-123456');
+      expect(paymentRequestService.findByCode.mock.invocationCallOrder[0])
+        .toBeLessThan(xrplService.createMonthlyEscrows.mock.invocationCallOrder[0]);
+      expect(paymentRequestService.markUsedByCode).toHaveBeenCalledWith('TP-123456', 'business-1');
+      expect(paymentRequestService.markUsedByCode.mock.invocationCallOrder[0])
+        .toBeGreaterThan(prisma.escrow.create.mock.invocationCallOrder[0]);
     });
 
     it('should create prepaid escrow entries by unit price', async () => {
@@ -1142,10 +1278,10 @@ describe('EscrowService', () => {
         where: { id: 'escrow-1' },
         data: { status: 'cancelled' },
       });
-      expect(result).toEqual({ cancelled: 2 });
+      expect(result).toEqual({ cancelled: 2, failed: 0 });
     });
 
-    it('should continue cancelling even if one entry fails', async () => {
+    it('should keep escrow retryable when one pending entry cancellation fails', async () => {
       const escrow = {
         id: 'escrow-1',
         consumerId: 'consumer-1',
@@ -1164,14 +1300,13 @@ describe('EscrowService', () => {
 
       const result = await service.cancelEscrow('escrow-1', consumerUser);
 
-      // Still marks escrow as cancelled
       expect(prisma.escrow.update).toHaveBeenCalledWith({
         where: { id: 'escrow-1' },
-        data: { status: 'cancelled' },
+        data: { status: 'cancel_failed' },
       });
       // Only the successful entry gets DB update
       expect(prisma.escrowEntry.update).toHaveBeenCalledTimes(1);
-      expect(result).toEqual({ cancelled: 2 });
+      expect(result).toEqual({ cancelled: 1, failed: 1 });
     });
 
     it('should throw if escrow not found', async () => {

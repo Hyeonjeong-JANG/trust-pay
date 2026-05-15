@@ -538,4 +538,19 @@ describe('static Demo API fixture', () => {
       validUntil: '2026-09-15',
     });
   });
+
+  it('executes demo admin refund approval by refunding pending escrow entries', async () => {
+    const response = await callAdminApi(
+      'POST',
+      '/api/admin/refund-reviews/00000000-0000-4000-a000-000000004003/resolve',
+      { decision: 'approve' },
+    );
+    const review = response.body as any;
+
+    expect(response.statusCode).toBe(200);
+    expect(review.status).toBe('refunded');
+    expect(review.escrow.status).toBe('cancelled');
+    expect(review.escrow.entries.filter((entry: any) => entry.status === 'pending')).toHaveLength(0);
+    expect(review.escrow.entries.filter((entry: any) => entry.status === 'refunded')).toHaveLength(22);
+  });
 });
