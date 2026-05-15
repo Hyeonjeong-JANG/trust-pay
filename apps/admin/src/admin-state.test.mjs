@@ -155,13 +155,23 @@ test('summarizeDashboard creates card-ready admin metrics', () => {
     consumers: { total: 11 },
     escrows: { active: 5 },
   }), [
-    { label: '열린 환불/분쟁', value: '4건', tone: 'warning' },
-    { label: '사업자 소명 대기', value: '2건', tone: 'primary' },
-    { label: '사업자 응답 완료', value: '1건', tone: 'success' },
-    { label: '활성 에스크로', value: '5건', tone: 'neutral' },
-    { label: '가맹점', value: '7곳', tone: 'neutral' },
-    { label: '소비자', value: '11명', tone: 'neutral' },
+    { label: '열린 환불/분쟁', value: '4건', tone: 'warning', tab: 'refunds', status: 'all', helper: '전체 큐 보기' },
+    { label: '사업자 소명 대기', value: '2건', tone: 'primary', tab: 'refunds', status: 'waiting_merchant', helper: '사업자 대기 보기' },
+    { label: '사업자 응답 완료', value: '1건', tone: 'success', tab: 'refunds', status: 'needs_action', helper: '응답 검토하기' },
+    { label: '활성 에스크로', value: '5건', tone: 'neutral', tab: 'escrows', helper: '거래/에스크로 보기' },
+    { label: '가맹점', value: '7곳', tone: 'neutral', tab: 'businesses', helper: '가맹점 보기' },
+    { label: '소비자', value: '11명', tone: 'neutral', tab: 'consumers', helper: '소비자 보기' },
   ]);
+});
+
+test('admin dashboard metrics are clickable navigation targets', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+
+  assert.match(js, /class="metric-card metric-card-button"/);
+  assert.match(js, /data-tab="\$\{escapeHtml\(card\.tab\)/);
+  assert.match(js, /data-status="\$\{escapeHtml\(card\.status/);
+  assert.match(js, /button\.dataset\.status/);
+  assert.match(js, /setActiveTab\(button\.dataset\.tab\)/);
 });
 
 test('summarizeReview creates an operator-readable queue item', () => {
@@ -288,8 +298,11 @@ test('admin app shell keeps navigation separate from login form', () => {
 test('admin refund layout keeps the header compact and filters sticky', () => {
   const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
-  assert.match(css, /\.topbar\s*\{[\s\S]*min-height:\s*88px/);
+  assert.match(css, /\.brand-block\s*\{[\s\S]*min-height:\s*44px/);
+  assert.match(css, /\.topbar\s*\{[\s\S]*min-height:\s*44px/);
+  assert.match(css, /\.topbar\s*\{[\s\S]*box-shadow:\s*none/);
   assert.match(css, /\.topbar h1\s*\{[\s\S]*font-size:\s*24px/);
+  assert.match(css, /\.topbar p\s*\{[\s\S]*display:\s*none/);
   assert.match(css, /\.filters\s*\{[\s\S]*position:\s*sticky/);
   assert.match(css, /\.filters\s*\{[\s\S]*top:\s*16px/);
 });

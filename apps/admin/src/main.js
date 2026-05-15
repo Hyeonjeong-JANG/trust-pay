@@ -1,4 +1,4 @@
-import { adminTabs, buildAdminAuthHeaders, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js?v=trustpay-admin-20260515';
+import { adminTabs, buildAdminAuthHeaders, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js?v=trustpay-admin-20260515-dashboard3';
 
 const state = {
   apiBase: getApiBase(window.TRUSTPAY_ADMIN_API_BASE || '/api', window.location.hostname),
@@ -118,25 +118,30 @@ async function loadActiveTab() {
 function renderDashboard() {
   const cards = summarizeDashboard(state.dashboard)
     .map((card) => `
-      <article class="metric-card" data-tone="${escapeHtml(card.tone)}">
+      <button type="button" class="metric-card metric-card-button" data-tone="${escapeHtml(card.tone)}" data-tab="${escapeHtml(card.tab)}" data-status="${escapeHtml(card.status || '')}">
         <span>${escapeHtml(card.label)}</span>
         <strong>${escapeHtml(card.value)}</strong>
-      </article>
+        <small>${escapeHtml(card.helper)}</small>
+      </button>
     `)
     .join('');
   $('#content-body').innerHTML = `
-    <section class="metric-grid admin-metrics">${cards}</section>
-    <section class="panel-card quick-panel">
-      <h2>빠른 이동</h2>
-      <div class="button-row">
-        <button type="button" data-tab="refunds">환불/분쟁 처리</button>
-        <button type="button" data-tab="businesses">가맹점 보기</button>
-        <button type="button" data-tab="escrows">거래/에스크로 보기</button>
+    <section class="dashboard-board">
+      <div class="dashboard-section-head">
+        <div>
+          <span>운영 큐</span>
+          <h2>오늘 바로 처리할 항목</h2>
+        </div>
+        <p>카드를 누르면 해당 목록으로 이동합니다.</p>
       </div>
+      <div class="metric-grid admin-metrics">${cards}</div>
     </section>
   `;
   for (const button of document.querySelectorAll('[data-tab]')) {
-    button.addEventListener('click', () => setActiveTab(button.dataset.tab));
+    button.addEventListener('click', () => {
+      if (button.dataset.status) state.status = button.dataset.status;
+      setActiveTab(button.dataset.tab);
+    });
   }
 }
 

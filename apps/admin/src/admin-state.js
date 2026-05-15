@@ -232,12 +232,12 @@ function formatCount(value, suffix) {
 
 export function summarizeDashboard(dashboard = {}) {
   return [
-    { label: '열린 환불/분쟁', value: formatCount(dashboard.refundReviews?.open, '건'), tone: 'warning' },
-    { label: '사업자 소명 대기', value: formatCount(dashboard.refundReviews?.merchantResponseRequested, '건'), tone: 'primary' },
-    { label: '사업자 응답 완료', value: formatCount(dashboard.refundReviews?.merchantResponded, '건'), tone: 'success' },
-    { label: '활성 에스크로', value: formatCount(dashboard.escrows?.active, '건'), tone: 'neutral' },
-    { label: '가맹점', value: formatCount(dashboard.businesses?.total, '곳'), tone: 'neutral' },
-    { label: '소비자', value: formatCount(dashboard.consumers?.total, '명'), tone: 'neutral' },
+    { label: '열린 환불/분쟁', value: formatCount(dashboard.refundReviews?.open, '건'), tone: 'warning', tab: 'refunds', status: 'all', helper: '전체 큐 보기' },
+    { label: '사업자 소명 대기', value: formatCount(dashboard.refundReviews?.merchantResponseRequested, '건'), tone: 'primary', tab: 'refunds', status: 'waiting_merchant', helper: '사업자 대기 보기' },
+    { label: '사업자 응답 완료', value: formatCount(dashboard.refundReviews?.merchantResponded, '건'), tone: 'success', tab: 'refunds', status: 'needs_action', helper: '응답 검토하기' },
+    { label: '활성 에스크로', value: formatCount(dashboard.escrows?.active, '건'), tone: 'neutral', tab: 'escrows', helper: '거래/에스크로 보기' },
+    { label: '가맹점', value: formatCount(dashboard.businesses?.total, '곳'), tone: 'neutral', tab: 'businesses', helper: '가맹점 보기' },
+    { label: '소비자', value: formatCount(dashboard.consumers?.total, '명'), tone: 'neutral', tab: 'consumers', helper: '소비자 보기' },
   ];
 }
 
