@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
@@ -113,6 +113,7 @@ function DateInput(props: DateInputProps) {
 
 export function BusinessCreatePaymentScreen(_props: BusinessTabProps<'BusinessCreatePayment'>) {
   const userId = useAuthStore((s) => s.userId);
+  const queryClient = useQueryClient();
   const [qrPaymentModel, setQrPaymentModel] = useState<QrPaymentModel>('monthly');
   const [qrPaymentAmount, setQrPaymentAmount] = useState('');
   const [qrProtectedAmount, setQrProtectedAmount] = useState('');
@@ -154,6 +155,7 @@ export function BusinessCreatePaymentScreen(_props: BusinessTabProps<'BusinessCr
     },
     onSuccess: (request) => {
       setPaymentRequest(request);
+      queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
       showSuccessToast('결제 QR 생성', '손님이 QR 코드를 스캔하면 계좌 승인 결제를 시작합니다.');
     },
     onError: (err: Error) => {

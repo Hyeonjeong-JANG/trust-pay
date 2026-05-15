@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { colors, font, radius, shadow, spacing } from '../theme';
@@ -23,6 +23,16 @@ export function ApprovalAuthModal({
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [canUseBiometric, setCanUseBiometric] = useState(false);
+  const titleRef = useRef(title);
+  const onAuthenticatedRef = useRef(onAuthenticated);
+
+  useEffect(() => {
+    titleRef.current = title;
+  }, [title]);
+
+  useEffect(() => {
+    onAuthenticatedRef.current = onAuthenticated;
+  }, [onAuthenticated]);
 
   useEffect(() => {
     if (!visible) return;
@@ -41,13 +51,13 @@ export function ApprovalAuthModal({
 
       setCanUseBiometric(true);
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: title,
+        promptMessage: titleRef.current,
         cancelLabel: '취소',
         fallbackLabel: '간편비밀번호 사용',
       });
 
       if (!cancelled && result.success) {
-        onAuthenticated();
+        onAuthenticatedRef.current();
       }
     }
 
@@ -58,7 +68,7 @@ export function ApprovalAuthModal({
     return () => {
       cancelled = true;
     };
-  }, [onAuthenticated, title, visible]);
+  }, [visible]);
 
   const authenticateWithPin = () => {
     if (pin === DEMO_APPROVAL_PIN) {

@@ -1354,6 +1354,7 @@ module.exports = async function handler(req, res) {
       }, 0),
       activeEscrows: scoped.filter((item) => item.status === 'active').length,
       escrows: scoped,
+      pendingPaymentRequests: paymentRequests.filter((item) => item.businessId === businessId && item.status === 'pending'),
     });
   }
 
@@ -1472,6 +1473,10 @@ module.exports = async function handler(req, res) {
       entryStatuses: Array.from({ length: entryCount }, (_, index) => !isPrepaid && index === 0 ? 'released' : 'pending'),
     });
     escrows = [escrow, ...escrows];
+    if (body.paymentRequestCode) {
+      const request = paymentRequests.find((item) => item.code === String(body.paymentRequestCode).toUpperCase() && item.businessId === body.businessId);
+      if (request) request.status = 'used';
+    }
     return send(res, 201, withRelations(escrow, 'consumer'));
   }
 

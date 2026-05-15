@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException,
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { BusinessClosureService } from '../business/business-closure.service';
+import { PaymentRequestService } from '../payment-request/payment-request.service';
 import { PartialPrepaidEscrowCreationError, XrplService } from '../xrpl/xrpl.service';
 import { CryptoService } from '../common/crypto.service';
 import { Wallet } from 'xrpl';
@@ -126,6 +127,7 @@ export class EscrowService {
     private configService: ConfigService,
     private crypto: CryptoService,
     private businessClosureService: BusinessClosureService,
+    private paymentRequestService: PaymentRequestService,
   ) {}
 
   async create(dto: CreateEscrowDto, user: SessionUser) {
@@ -269,6 +271,9 @@ export class EscrowService {
     }
 
     const escrow = await createEscrowRecord(escrowResults);
+    if (dto.paymentRequestCode) {
+      this.paymentRequestService.markUsedByCode(dto.paymentRequestCode, business.id);
+    }
 
     this.logger.log(`Created escrow ${escrow.id} with ${escrow.entries.length} entries`);
     return escrow;

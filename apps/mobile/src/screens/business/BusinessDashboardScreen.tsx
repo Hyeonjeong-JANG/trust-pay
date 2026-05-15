@@ -20,7 +20,7 @@ import { ErrorView } from '../../components/ErrorView';
 import { BalanceCardSkeleton, BusinessSummaryRowSkeleton, EscrowCardSkeleton } from '../../components/Skeleton';
 import { formatKrwFromRlusd, formatRlusd } from '../../utils/money';
 import { colors, spacing, radius, font, shadow } from '../../theme';
-import type { EscrowRecord, EscrowEntry, RefundReviewRequest } from '@prepaid-shield/shared-types';
+import type { EscrowRecord, EscrowEntry, PaymentRequest, RefundReviewRequest } from '@prepaid-shield/shared-types';
 import type { BusinessTabProps } from '../../navigation/types';
 
 type StatusFilter = 'all' | 'active' | 'completed' | 'cancelled';
@@ -171,6 +171,7 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
       .map((request: RefundReviewRequest) => ({ escrow, request })))
     .sort((a, b) => new Date(b.request.requestedAt).getTime() - new Date(a.request.requestedAt).getTime());
   const latestRefundReviewItem = refundReviewItems[0];
+  const pendingPaymentRequests = (dashboard?.pendingPaymentRequests ?? []) as PaymentRequest[];
 
   if (isLoading) {
     return (
@@ -263,6 +264,27 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
                 {!!latestRefundReviewItem.request.merchantNotice && (
                   <Text style={styles.refundReviewReason} numberOfLines={2}>{latestRefundReviewItem.request.merchantNotice}</Text>
                 )}
+              </View>
+            )}
+
+            {pendingPaymentRequests.length > 0 && (
+              <View style={styles.pendingPaymentBox}>
+                <Text style={styles.pendingPaymentTitle}>승인 대기 결제 ({pendingPaymentRequests.length}건)</Text>
+                <Text style={styles.pendingPaymentDesc}>손님이 QR을 스캔하고 계좌 승인하면 보호 결제로 이동합니다.</Text>
+                {pendingPaymentRequests.map((request) => (
+                  <View key={request.id} style={styles.pendingPaymentCard}>
+                    <View>
+                      <Text style={styles.pendingPaymentCode}>{request.code}</Text>
+                      <Text style={styles.pendingPaymentMeta}>손님 승인 전</Text>
+                    </View>
+                    <View style={styles.pendingPaymentAmountBlock}>
+                      <Text style={styles.pendingPaymentAmount}>
+                        결제 {formatKrwFromRlusd(request.paymentAmount ?? request.totalAmount)} · 보호 {formatKrwFromRlusd(request.totalAmount)}
+                      </Text>
+                      <Text style={styles.pendingPaymentAmountSub}>{formatRlusd(request.totalAmount)}</Text>
+                    </View>
+                  </View>
+                ))}
               </View>
             )}
 
@@ -473,6 +495,55 @@ const styles = StyleSheet.create({
     fontSize: font.size.sm,
     lineHeight: 20,
     marginTop: spacing.xs,
+  },
+  pendingPaymentBox: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.lg,
+    marginBottom: spacing.xl,
+    padding: spacing.lg,
+  },
+  pendingPaymentTitle: {
+    color: colors.gray900,
+    fontSize: font.size.lg,
+    fontWeight: font.weight.bold,
+  },
+  pendingPaymentDesc: {
+    color: colors.gray600,
+    fontSize: font.size.sm,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  pendingPaymentCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  pendingPaymentCode: {
+    color: colors.primary,
+    fontSize: font.size.md,
+    fontWeight: font.weight.bold,
+  },
+  pendingPaymentMeta: {
+    color: colors.gray500,
+    fontSize: font.size.xs,
+    marginTop: 2,
+  },
+  pendingPaymentAmountBlock: { alignItems: 'flex-end', flex: 1 },
+  pendingPaymentAmount: {
+    color: colors.gray900,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+    textAlign: 'right',
+  },
+  pendingPaymentAmountSub: {
+    color: colors.gray400,
+    fontSize: font.size.xs,
+    marginTop: 2,
   },
   createPaymentCard: {
     flexDirection: 'row',

@@ -87,6 +87,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
       api.createEscrow({
         consumerId: userId!,
         businessId,
+        ...(paymentRequest?.code ? { paymentRequestCode: paymentRequest.code } : {}),
         ...(paymentRequest?.productId ? { productId: paymentRequest.productId } : selectedProduct ? { productId: selectedProduct.id } : {}),
         totalAmount: payloadTotalAmount,
         ...(effectiveEscrowType === 'monthly'

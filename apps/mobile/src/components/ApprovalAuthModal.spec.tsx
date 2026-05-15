@@ -39,4 +39,22 @@ describe('ApprovalAuthModal', () => {
     expect(await findByText('간편비밀번호가 올바르지 않습니다.')).toBeTruthy();
     expect(onAuthenticated).not.toHaveBeenCalled();
   });
+
+  it('should keep an in-progress simple password when the parent rerenders', () => {
+    const renderModal = (onAuthenticated = jest.fn()) => (
+      <ApprovalAuthModal
+        visible
+        title="결제 승인 인증"
+        description="승인하려면 본인 인증이 필요합니다."
+        onCancel={jest.fn()}
+        onAuthenticated={onAuthenticated}
+      />
+    );
+    const { getByPlaceholderText, rerender } = render(renderModal());
+
+    fireEvent.changeText(getByPlaceholderText('간편비밀번호 6자리'), '123');
+    rerender(renderModal(jest.fn()));
+
+    expect(getByPlaceholderText('간편비밀번호 6자리').props.value).toBe('123');
+  });
 });

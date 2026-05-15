@@ -5,6 +5,7 @@ import { EscrowService } from './escrow.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto.service';
 import { BusinessClosureService } from '../business/business-closure.service';
+import { PaymentRequestService } from '../payment-request/payment-request.service';
 import { PartialPrepaidEscrowCreationError, XrplService } from '../xrpl/xrpl.service';
 import { createEscrowSchema } from '@prepaid-shield/validators';
 
@@ -61,6 +62,7 @@ describe('EscrowService', () => {
   let xrplService: any;
   let configService: any;
   let businessClosureService: any;
+  let paymentRequestService: any;
 
   beforeEach(async () => {
     prisma = {
@@ -112,6 +114,9 @@ describe('EscrowService', () => {
         checkedAt: new Date('2026-05-14T00:00:00.000Z'),
       }),
     };
+    paymentRequestService = {
+      markUsedByCode: jest.fn(),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -121,6 +126,7 @@ describe('EscrowService', () => {
         { provide: ConfigService, useValue: configService },
         { provide: CryptoService, useValue: { encrypt: jest.fn((v: string) => 'encrypted:' + v), decrypt: jest.fn((v: string) => v.replace('encrypted:', '')) } },
         { provide: BusinessClosureService, useValue: businessClosureService },
+        { provide: PaymentRequestService, useValue: paymentRequestService },
       ],
     }).compile();
 

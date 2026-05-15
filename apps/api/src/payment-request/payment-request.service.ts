@@ -86,4 +86,17 @@ export class PaymentRequestService {
     if (!request) throw new NotFoundException('Payment request not found');
     return request;
   }
+
+  listForBusiness(businessId: string): PaymentRequest[] {
+    return this.paymentRequests.filter((item) => item.businessId === businessId && item.status === 'pending');
+  }
+
+  markUsedByCode(code: string, businessId: string): PaymentRequest {
+    const request = this.findByCode(code);
+    if (request.businessId !== businessId) {
+      throw new BadRequestException('결제 QR 사업자 정보가 일치하지 않습니다');
+    }
+    request.status = 'used';
+    return request;
+  }
 }

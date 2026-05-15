@@ -68,6 +68,39 @@ describe('BusinessDashboardScreen', () => {
     }
   });
 
+  it('should show merchant-created payment requests as pending customer approvals', async () => {
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 0,
+      totalPending: 0,
+      escrows: [],
+      pendingPaymentRequests: [
+        {
+          id: 'request-1',
+          code: 'TP-000001',
+          businessId: 'business-1',
+          businessName: '파워짐',
+          paymentAmount: 222.222222,
+          totalAmount: 244.444444,
+          paymentModel: 'voucher',
+          escrowType: 'prepaid',
+          validFrom: '2026-05-15',
+          validUntil: '2026-07-22',
+          status: 'pending',
+          createdAt: '2026-05-15T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const { findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+    expect(await findByText('승인 대기 결제 (1건)')).toBeTruthy();
+    expect(await findByText('TP-000001')).toBeTruthy();
+    expect(await findByText('손님 승인 전')).toBeTruthy();
+    expect(await findByText('결제 ₩300,000 · 보호 ₩330,000')).toBeTruthy();
+    expect(await findByText('진행중 보호 결제 (0건)')).toBeTruthy();
+  });
+
   it('should automatically receive eligible monthly settlements without a manual receive button', async () => {
     const { api } = require('../../api/client');
     api.getBusinessDashboard.mockResolvedValue({

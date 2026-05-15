@@ -266,6 +266,7 @@ describe('PaymentScreen', () => {
       expect(api.createEscrow).toHaveBeenCalledWith({
         consumerId: 'consumer-1',
         businessId: 'b-1',
+        paymentRequestCode: 'TP-123456',
         totalAmount: 600,
         months: 6,
       });
@@ -320,6 +321,7 @@ describe('PaymentScreen', () => {
       expect(api.createEscrow).toHaveBeenCalledWith({
         consumerId: 'consumer-1',
         businessId: 'b-cafe',
+        paymentRequestCode: 'TP-654321',
         totalAmount: 74.07407,
         escrowType: 'prepaid',
         unitPrice: 7.407407,

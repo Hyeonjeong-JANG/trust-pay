@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
 import { CryptoService } from '../common/crypto.service';
 import { BusinessClosureService } from './business-closure.service';
+import { PaymentRequestService } from '../payment-request/payment-request.service';
 
 const mockBusiness = {
   id: 'biz-1',
@@ -31,6 +32,7 @@ describe('BusinessService', () => {
   let prisma: any;
   let xrplService: any;
   let businessClosureService: any;
+  let paymentRequestService: any;
 
   beforeEach(async () => {
     prisma = {
@@ -58,6 +60,9 @@ describe('BusinessService', () => {
         checkedAt: new Date('2026-05-14T00:00:00.000Z'),
       }),
     };
+    paymentRequestService = {
+      listForBusiness: jest.fn().mockReturnValue([]),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -66,6 +71,7 @@ describe('BusinessService', () => {
         { provide: XrplService, useValue: xrplService },
         { provide: CryptoService, useValue: { encrypt: jest.fn((v: string) => 'encrypted:' + v), decrypt: jest.fn((v: string) => v.replace('encrypted:', '')) } },
         { provide: BusinessClosureService, useValue: businessClosureService },
+        { provide: PaymentRequestService, useValue: paymentRequestService },
       ],
     }).compile();
 
@@ -277,6 +283,31 @@ describe('BusinessService', () => {
       expect(legacyMerchantReview).not.toHaveProperty('photoDataUrlsJson');
       expect(legacyMerchantReview).not.toHaveProperty('photoDataUrls');
       expect(legacyMerchantReview).not.toHaveProperty('consumerReason');
+    });
+
+    it('should include pending merchant-created payment requests', async () => {
+      const pendingRequest = {
+        id: 'request-1',
+        code: 'TP-000001',
+        businessId: 'biz-1',
+        businessName: '테스트카페',
+        paymentAmount: 222.222222,
+        totalAmount: 244.444444,
+        paymentModel: 'voucher',
+        escrowType: 'prepaid',
+        status: 'pending',
+        createdAt: '2026-05-15T00:00:00.000Z',
+      };
+      prisma.business.findUnique.mockResolvedValue({
+        ...mockBusiness,
+        escrows: [],
+      });
+      paymentRequestService.listForBusiness.mockReturnValue([pendingRequest]);
+
+      const result = await service.dashboard('biz-1', businessUser);
+
+      expect(paymentRequestService.listForBusiness).toHaveBeenCalledWith('biz-1');
+      expect(result.pendingPaymentRequests).toEqual([pendingRequest]);
     });
 
     it('should return zero amounts when no escrows', async () => {

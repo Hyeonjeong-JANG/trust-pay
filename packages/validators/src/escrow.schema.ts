@@ -29,6 +29,7 @@ export const createEscrowSchema = z
   .object({
     consumerId: z.string().uuid(),
     businessId: z.string().uuid(),
+    paymentRequestCode: z.string().optional(),
     productId: z.string().uuid().optional(),
     totalAmount: z
       .number()

@@ -4,6 +4,7 @@ import { XrplService } from '../xrpl/xrpl.service';
 import { CryptoService } from '../common/crypto.service';
 import type { SessionUser } from '../common/session-token';
 import { BusinessClosureService } from './business-closure.service';
+import { PaymentRequestService } from '../payment-request/payment-request.service';
 
 type BusinessRegistrationVerificationStatus = 'verified' | 'demo_verified' | 'unavailable';
 
@@ -43,6 +44,7 @@ export class BusinessService {
     private xrplService: XrplService,
     private crypto: CryptoService,
     private businessClosureService: BusinessClosureService,
+    private paymentRequestService: PaymentRequestService,
   ) {}
 
   async verifyRegistrationNumber(registrationNumber: string) {
@@ -161,6 +163,7 @@ export class BusinessService {
       totalPending,
       activeEscrows: business.escrows.filter((e) => e.status === 'active').length,
       escrows: business.escrows.map((e) => this.stripEscrowDashboardFields(e)),
+      pendingPaymentRequests: this.paymentRequestService.listForBusiness(id),
     };
   }
 

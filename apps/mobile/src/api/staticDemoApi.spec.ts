@@ -390,6 +390,15 @@ describe('static Demo API fixture', () => {
     });
     const created = createResponse.body as any;
     const lookupResponse = await callApi('GET', `/api/payment-requests?code=${created.code}`);
+    const dashboardResponse = await callApi('GET', '/api/business/00000000-0000-4000-a000-000000000020/dashboard');
+    const approvalResponse = await callApi('POST', '/api/escrow', {
+      consumerId: '00000000-0000-4000-a000-000000000001',
+      businessId: '00000000-0000-4000-a000-000000000020',
+      paymentRequestCode: created.code,
+      totalAmount: 600,
+      months: 6,
+    });
+    const dashboardAfterApprovalResponse = await callApi('GET', '/api/business/00000000-0000-4000-a000-000000000020/dashboard');
 
     expect(createResponse.statusCode).toBe(201);
     expect(created).toMatchObject({
@@ -405,6 +414,14 @@ describe('static Demo API fixture', () => {
     expect(created.code).toMatch(/^TP-/);
     expect(lookupResponse.statusCode).toBe(200);
     expect(lookupResponse.body).toMatchObject({ code: created.code, businessName: '파워짐 피트니스' });
+    expect(dashboardResponse.statusCode).toBe(200);
+    expect(dashboardResponse.body.pendingPaymentRequests).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: created.code, status: 'pending' })]),
+    );
+    expect(approvalResponse.statusCode).toBe(201);
+    expect(dashboardAfterApprovalResponse.body.pendingPaymentRequests).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: created.code })]),
+    );
   });
 
   it('creates monthly escrows from the approval date on calendar month boundaries', async () => {

@@ -168,6 +168,7 @@ export interface CreateRefundReviewRequest {
 export interface CreateEscrowRequest {
   consumerId: string;
   businessId: string;
+  paymentRequestCode?: string;
   productId?: string;
   totalAmount: number;
   months?: number;
@@ -265,6 +266,7 @@ export interface BusinessDashboard {
   totalPending: number;
   activeEscrows: number;
   escrows: EscrowRecord[];
+  pendingPaymentRequests?: PaymentRequest[];
 }
 
 export interface BalanceResponse {
