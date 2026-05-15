@@ -63,6 +63,8 @@ model BusinessProduct {
   escrows        Escrow[]
   paymentRequests PaymentRequest[]
   chargeRequests ChargeRequest[]
+
+  @@index([businessId, isActive])
 }
 
 model PaymentRequest {
@@ -103,6 +105,8 @@ model ProductMenuItem {
   updatedAt      DateTime        @updatedAt
   product        BusinessProduct @relation(fields: [productId], references: [id])
   chargeRequests ChargeRequest[]
+
+  @@index([productId, isActive])
 }
 
 model Escrow {
@@ -129,6 +133,10 @@ model Escrow {
   entries              EscrowEntry[]
   chargeRequests       ChargeRequest[]
   refundReviewRequests RefundReviewRequest[]
+
+  @@index([businessId, status, createdAt])
+  @@index([consumerId, status, createdAt])
+  @@index([status, createdAt])
 }
 
 model RefundReviewRequest {
@@ -156,6 +164,11 @@ model RefundReviewRequest {
   escrow                   Escrow    @relation(fields: [escrowId], references: [id])
   consumer                 Consumer  @relation("ConsumerRefundReviewRequests", fields: [consumerId], references: [id])
   business                 Business  @relation("BusinessRefundReviewRequests", fields: [businessId], references: [id])
+
+  @@index([status, requestedAt])
+  @@index([businessId, status, requestedAt])
+  @@index([consumerId, status, requestedAt])
+  @@index([escrowId, status])
 }
 
 model EscrowEntry {
@@ -171,6 +184,8 @@ model EscrowEntry {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   escrow      Escrow   @relation(fields: [escrowId], references: [id])
+
+  @@index([escrowId, status])
 }
 
 model ChargeRequest {
@@ -196,4 +211,8 @@ model ChargeRequest {
   business    Business         @relation("BusinessChargeRequests", fields: [businessId], references: [id])
   product     BusinessProduct? @relation(fields: [productId], references: [id])
   menuItem    ProductMenuItem? @relation(fields: [menuItemId], references: [id])
+
+  @@index([escrowId, status])
+  @@index([businessId, status, requestedAt])
+  @@index([consumerId, status, requestedAt])
 }

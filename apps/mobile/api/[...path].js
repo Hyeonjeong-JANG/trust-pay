@@ -1028,6 +1028,12 @@ function reviewWithoutEscrow(review) {
   return rest;
 }
 
+function paginateRows(rows, url) {
+  const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get('pageSize')) || 50));
+  return rows.slice((page - 1) * pageSize, page * pageSize);
+}
+
 function serializeAdminReview(review) {
   const escrow = escrows.find((item) => item.id === review.escrowId);
   return {
@@ -1224,15 +1230,15 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'GET' && path === '/admin/businesses') {
-      return send(res, 200, adminBusinessRows());
+      return send(res, 200, paginateRows(adminBusinessRows(), url));
     }
 
     if (req.method === 'GET' && path === '/admin/consumers') {
-      return send(res, 200, adminConsumerRows());
+      return send(res, 200, paginateRows(adminConsumerRows(), url));
     }
 
     if (req.method === 'GET' && path === '/admin/escrows') {
-      return send(res, 200, adminEscrowRows());
+      return send(res, 200, paginateRows(adminEscrowRows(), url));
     }
 
     if (req.method === 'GET' && parts[1] === 'refund-reviews' && !parts[2]) {
@@ -1241,7 +1247,7 @@ module.exports = async function handler(req, res) {
         .filter((review) => status ? review.status === status : OPEN_REFUND_REVIEW_STATUSES.includes(review.status))
         .sort((a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime())
         .map(serializeAdminReview);
-      return send(res, 200, reviews);
+      return send(res, 200, paginateRows(reviews, url));
     }
 
     if (req.method === 'GET' && parts[1] === 'refund-reviews' && parts[2]) {

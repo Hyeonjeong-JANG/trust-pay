@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import type { AdminRefundReviewListInput, AdminRequestMerchantResponseInput, AdminResolveRefundReviewInput } from '@prepaid-shield/validators';
+import type { AdminListQueryInput, AdminRefundReviewListInput, AdminRequestMerchantResponseInput, AdminResolveRefundReviewInput } from '@prepaid-shield/validators';
 import { CryptoService } from '../common/crypto.service';
 import { XrplService } from '../xrpl/xrpl.service';
 import { Wallet } from 'xrpl';
@@ -12,6 +12,7 @@ const OPEN_REFUND_REVIEW_STATUSES = ['platform_review', 'merchant_response_reque
 const WAITING_MERCHANT_STATUSES = new Set(['merchant_response_requested', 'merchant_review']);
 const DASHBOARD_REFUND_REVIEW_STATUSES = [...OPEN_REFUND_REVIEW_STATUSES, ...RESOLVED_REFUND_REVIEW_STATUSES];
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_ADMIN_PAGE_SIZE = 50;
 
 function parsePhotoDataUrls(value?: string | null): string[] {
   if (!value) return [];
@@ -53,6 +54,12 @@ function daysUntil(value: Date | string | null | undefined, now = new Date()): n
 
 function getParticipantName(review: any, role: 'business' | 'consumer'): string {
   return review.escrow?.[role]?.name ?? `${role === 'business' ? '사업자' : '소비자'} 미확인`;
+}
+
+function getPagination(query: AdminListQueryInput = {}) {
+  const page = query.page ?? 1;
+  const take = query.pageSize ?? DEFAULT_ADMIN_PAGE_SIZE;
+  return { skip: (page - 1) * take, take };
 }
 
 function buildDashboardByStatus(reviews: any[]) {
@@ -191,35 +198,81 @@ export class AdminService {
     };
   }
 
-  async listBusinesses(user: AdminSession) {
+  async listBusinesses(user: AdminSession, query: AdminListQueryInput = {}) {
     this.assertAdmin(user);
     const businesses = await this.prisma.business.findMany({
-      include: { _count: { select: { products: true, escrows: true, refundReviewRequests: true } } },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        address: true,
+        phone: true,
+        email: true,
+        registrationNumber: true,
+        registrationVerificationStatus: true,
+        registrationVerificationSource: true,
+        registrationVerifiedAt: true,
+        xrplAddress: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { products: true, escrows: true, refundReviewRequests: true } },
+      },
       orderBy: [{ createdAt: 'desc' }],
+      ...getPagination(query),
     });
     return businesses.map((business) => this.stripSecret(business));
   }
 
-  async listConsumers(user: AdminSession) {
+  async listConsumers(user: AdminSession, query: AdminListQueryInput = {}) {
     this.assertAdmin(user);
     const consumers = await this.prisma.consumer.findMany({
-      include: { _count: { select: { escrows: true, chargeRequests: true, refundReviewRequests: true } } },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        xrplAddress: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { escrows: true, chargeRequests: true, refundReviewRequests: true } },
+      },
       orderBy: [{ createdAt: 'desc' }],
+      ...getPagination(query),
     });
     return consumers.map((consumer) => this.stripSecret(consumer));
   }
 
-  async listEscrows(user: AdminSession) {
+  async listEscrows(user: AdminSession, query: AdminListQueryInput = {}) {
     this.assertAdmin(user);
     const escrows = await this.prisma.escrow.findMany({
-      include: {
-        business: true,
-        consumer: true,
-        entries: true,
-        chargeRequests: true,
-        refundReviewRequests: { orderBy: { requestedAt: 'desc' } },
+      select: {
+        id: true,
+        consumerId: true,
+        businessId: true,
+        productId: true,
+        totalAmount: true,
+        monthlyAmount: true,
+        months: true,
+        escrowType: true,
+        unitPrice: true,
+        validityMonths: true,
+        currency: true,
+        issuer: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        business: { select: { id: true, name: true } },
+        consumer: { select: { id: true, name: true, phone: true, email: true } },
+        entries: { select: { id: true, month: true, amount: true, status: true, finishAfter: true, cancelAfter: true, txHash: true } },
+        chargeRequests: { select: { id: true, menuName: true, amount: true, status: true, requestedAt: true } },
+        refundReviewRequests: {
+          orderBy: { requestedAt: 'desc' },
+          select: this.refundReviewListSelect(),
+        },
       },
       orderBy: [{ createdAt: 'desc' }],
+      ...getPagination(query),
     });
     return escrows.map((escrow) => ({
       ...escrow,
@@ -233,8 +286,9 @@ export class AdminService {
     this.assertAdmin(user);
     const reviews = await this.prisma.refundReviewRequest.findMany({
       where: { status: query.status ?? { in: OPEN_REFUND_REVIEW_STATUSES } },
-      include: this.refundReviewInclude(),
+      select: this.refundReviewSelect(),
       orderBy: [{ requestedAt: 'asc' }],
+      ...getPagination(query),
     });
     return reviews.map((review) => this.serializeRefundReview(review));
   }
@@ -243,7 +297,7 @@ export class AdminService {
     this.assertAdmin(user);
     const review = await this.prisma.refundReviewRequest.findUnique({
       where: { id },
-      include: this.refundReviewInclude(),
+      select: this.refundReviewSelect(),
     });
     if (!review) throw new NotFoundException('Refund review not found');
     return this.serializeRefundReview(review);
@@ -262,7 +316,7 @@ export class AdminService {
         merchantNotice: dto.merchantNotice,
         merchantRespondBy: addBusinessDays(new Date(), 3),
       },
-      include: this.refundReviewInclude(),
+      select: this.refundReviewSelect(),
     });
     return this.serializeRefundReview(review);
   }
@@ -284,7 +338,7 @@ export class AdminService {
         adminResolutionReason: dto.reason ?? null,
         resolvedAt: dto.decision === 'investigate' ? null : new Date(),
       },
-      include: this.refundReviewInclude(),
+      select: this.refundReviewSelect(),
     });
     return this.serializeRefundReview(review);
   }
@@ -332,7 +386,7 @@ export class AdminService {
         adminResolutionReason: dto.reason ?? null,
         resolvedAt: new Date(),
       },
-      include: this.refundReviewInclude(),
+      select: this.refundReviewSelect(),
     });
     return this.serializeRefundReview(updated);
   }
@@ -340,7 +394,7 @@ export class AdminService {
   private async requireRefundReview(id: string, includeEscrow = false) {
     const review = await this.prisma.refundReviewRequest.findUnique({
       where: { id },
-      ...(includeEscrow ? { include: this.refundReviewInclude() } : {}),
+      ...(includeEscrow ? { select: this.refundReviewSelect({ includeConsumerSecret: true }) } : {}),
     });
     if (!review) throw new NotFoundException('Refund review not found');
     return review;
@@ -350,14 +404,58 @@ export class AdminService {
     if (user.role !== 'admin') throw new ForbiddenException('운영자 권한이 필요합니다');
   }
 
-  private refundReviewInclude() {
+  private refundReviewListSelect() {
     return {
+      id: true,
+      escrowId: true,
+      consumerId: true,
+      businessId: true,
+      status: true,
+      refundableAmount: true,
+      merchantRespondBy: true,
+      businessClosureStatus: true,
+      businessClosureSource: true,
+      businessClosureCheckedAt: true,
+      investigationReason: true,
+      consumerReason: true,
+      merchantNotice: true,
+      merchantResponse: true,
+      merchantRespondedAt: true,
+      adminResolutionReason: true,
+      photoDataUrlsJson: true,
+      requestedAt: true,
+      resolvedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    } as const;
+  }
+
+  private refundReviewSelect(options: { includeConsumerSecret?: boolean } = {}) {
+    return {
+      ...this.refundReviewListSelect(),
       escrow: {
-        include: {
-          entries: true,
-          chargeRequests: true,
-          business: true,
-          consumer: true,
+        select: {
+          id: true,
+          consumerId: true,
+          businessId: true,
+          consumerAddress: true,
+          totalAmount: true,
+          monthlyAmount: true,
+          months: true,
+          escrowType: true,
+          status: true,
+          entries: { select: { id: true, month: true, sequence: true, amount: true, status: true, finishAfter: true, cancelAfter: true, txHash: true } },
+          chargeRequests: { select: { id: true, menuName: true, amount: true, status: true, requestedAt: true } },
+          business: { select: { id: true, name: true, category: true } },
+          consumer: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true,
+              ...(options.includeConsumerSecret ? { xrplSecret: true } : {}),
+            },
+          },
         },
       },
     } as const;

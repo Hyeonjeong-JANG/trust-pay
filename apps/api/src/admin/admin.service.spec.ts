@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { adminResolveRefundReviewSchema } from '@prepaid-shield/validators';
+import { adminListQuerySchema, adminRefundReviewListSchema, adminResolveRefundReviewSchema } from '@prepaid-shield/validators';
 
 const adminUser = { userId: 'admin-1', role: 'admin' as const, name: 'TrustPay 운영자' };
 const businessUser = { userId: 'business-1', role: 'business' as const, name: '사업자' };
@@ -83,11 +83,13 @@ describe('AdminService', () => {
       },
     ]);
 
-    const result = await service.listRefundReviews(adminUser, { status: 'platform_review' });
+    const result = await service.listRefundReviews(adminUser, { status: 'platform_review', page: 2, pageSize: 10 });
 
     expect(prisma.refundReviewRequest.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { status: 'platform_review' },
       orderBy: [{ requestedAt: 'asc' }],
+      skip: 10,
+      take: 10,
     }));
     expect(result[0].photoDataUrls).toEqual(['data:image/png;base64,ZmFrZQ==']);
     expect(result[0].escrow.business).not.toHaveProperty('xrplSecret');
@@ -103,6 +105,15 @@ describe('AdminService', () => {
       where: { status: { in: ['platform_review', 'merchant_response_requested', 'merchant_responded', 'merchant_review', 'platform_investigation'] } },
       orderBy: [{ requestedAt: 'asc' }],
     }));
+  });
+
+  it('parses admin list pagination query parameters', () => {
+    expect(adminListQuerySchema.parse({ page: '3', pageSize: '25' })).toEqual({ page: 3, pageSize: 25 });
+    expect(adminRefundReviewListSchema.parse({ status: 'platform_review', page: '2', pageSize: '10' })).toEqual({
+      status: 'platform_review',
+      page: 2,
+      pageSize: 10,
+    });
   });
 
   it('returns dashboard counts for admin operations tabs', async () => {
@@ -303,11 +314,20 @@ describe('AdminService', () => {
       },
     ]);
 
-    const result = await service.listBusinesses(adminUser);
+    const result = await service.listBusinesses(adminUser, { page: 2, pageSize: 10 });
 
-    expect(prisma.business.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      include: { _count: { select: { products: true, escrows: true, refundReviewRequests: true } } },
-    }));
+    expect(prisma.business.findMany).toHaveBeenCalledWith({
+      select: expect.objectContaining({
+        id: true,
+        name: true,
+        category: true,
+        registrationVerificationStatus: true,
+        _count: { select: { products: true, escrows: true, refundReviewRequests: true } },
+      }),
+      orderBy: [{ createdAt: 'desc' }],
+      skip: 10,
+      take: 10,
+    });
     expect(result[0]).not.toHaveProperty('xrplSecret');
     expect(result[0]._count).toEqual({ products: 1, escrows: 2, refundReviewRequests: 1 });
   });
@@ -323,11 +343,20 @@ describe('AdminService', () => {
       },
     ]);
 
-    const result = await service.listConsumers(adminUser);
+    const result = await service.listConsumers(adminUser, { page: 3, pageSize: 5 });
 
-    expect(prisma.consumer.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      include: { _count: { select: { escrows: true, chargeRequests: true, refundReviewRequests: true } } },
-    }));
+    expect(prisma.consumer.findMany).toHaveBeenCalledWith({
+      select: expect.objectContaining({
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        _count: { select: { escrows: true, chargeRequests: true, refundReviewRequests: true } },
+      }),
+      orderBy: [{ createdAt: 'desc' }],
+      skip: 10,
+      take: 5,
+    });
     expect(result[0]).not.toHaveProperty('xrplSecret');
   });
 
@@ -345,11 +374,21 @@ describe('AdminService', () => {
       },
     ]);
 
-    const result = await service.listEscrows(adminUser);
+    const result = await service.listEscrows(adminUser, { page: 2, pageSize: 20 });
 
-    expect(prisma.escrow.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      include: expect.objectContaining({ business: true, consumer: true }),
-    }));
+    expect(prisma.escrow.findMany).toHaveBeenCalledWith({
+      select: expect.objectContaining({
+        id: true,
+        status: true,
+        escrowType: true,
+        totalAmount: true,
+        business: { select: expect.objectContaining({ id: true, name: true }) },
+        consumer: { select: expect.objectContaining({ id: true, name: true }) },
+      }),
+      orderBy: [{ createdAt: 'desc' }],
+      skip: 20,
+      take: 20,
+    });
     expect(result[0].business).not.toHaveProperty('xrplSecret');
     expect(result[0].consumer).not.toHaveProperty('xrplSecret');
   });

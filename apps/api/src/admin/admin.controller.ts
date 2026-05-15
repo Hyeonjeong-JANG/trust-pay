@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nest
 import { AdminService } from './admin.service';
 import { AdminAuthGuard, type AdminUser } from './admin-auth.guard';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
-import { adminRefundReviewListSchema, adminRequestMerchantResponseSchema, adminResolveRefundReviewSchema, type AdminRefundReviewListInput, type AdminRequestMerchantResponseInput, type AdminResolveRefundReviewInput } from '@prepaid-shield/validators';
+import { adminListQuerySchema, adminRefundReviewListSchema, adminRequestMerchantResponseSchema, adminResolveRefundReviewSchema, type AdminListQueryInput, type AdminRefundReviewListInput, type AdminRequestMerchantResponseInput, type AdminResolveRefundReviewInput } from '@prepaid-shield/validators';
 
 @Controller('admin')
 @UseGuards(AdminAuthGuard)
@@ -15,18 +15,27 @@ export class AdminController {
   }
 
   @Get('businesses')
-  listBusinesses(@Req() req: { user: AdminUser }) {
-    return this.adminService.listBusinesses(req.user);
+  listBusinesses(
+    @Query(new ZodValidationPipe(adminListQuerySchema)) query: AdminListQueryInput,
+    @Req() req: { user: AdminUser },
+  ) {
+    return this.adminService.listBusinesses(req.user, query);
   }
 
   @Get('consumers')
-  listConsumers(@Req() req: { user: AdminUser }) {
-    return this.adminService.listConsumers(req.user);
+  listConsumers(
+    @Query(new ZodValidationPipe(adminListQuerySchema)) query: AdminListQueryInput,
+    @Req() req: { user: AdminUser },
+  ) {
+    return this.adminService.listConsumers(req.user, query);
   }
 
   @Get('escrows')
-  listEscrows(@Req() req: { user: AdminUser }) {
-    return this.adminService.listEscrows(req.user);
+  listEscrows(
+    @Query(new ZodValidationPipe(adminListQuerySchema)) query: AdminListQueryInput,
+    @Req() req: { user: AdminUser },
+  ) {
+    return this.adminService.listEscrows(req.user, query);
   }
 
   @Get('refund-reviews')

@@ -101,7 +101,12 @@ export const requestRefundReviewSchema = z.object({
     .default([]),
 });
 
-export const adminRefundReviewListSchema = z.object({
+export const adminListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export const adminRefundReviewListSchema = adminListQuerySchema.extend({
   status: z.string().trim().min(1).optional(),
 });
 
@@ -173,6 +178,7 @@ export type CreateEscrowInput = z.infer<typeof createEscrowSchema>;
 export type FinishEscrowInput = z.infer<typeof finishEscrowSchema>;
 export type CreateChargeRequestInput = z.infer<typeof createChargeRequestSchema>;
 export type RequestRefundReviewInput = z.infer<typeof requestRefundReviewSchema>;
+export type AdminListQueryInput = z.infer<typeof adminListQuerySchema>;
 export type AdminRefundReviewListInput = z.infer<typeof adminRefundReviewListSchema>;
 export type AdminRequestMerchantResponseInput = z.infer<typeof adminRequestMerchantResponseSchema>;
 export type AdminResolveRefundReviewInput = z.infer<typeof adminResolveRefundReviewSchema>;

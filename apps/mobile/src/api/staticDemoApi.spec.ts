@@ -113,6 +113,16 @@ describe('static Demo API fixture', () => {
     }
   });
 
+  it('paginates demo admin list endpoints while keeping array responses', async () => {
+    const businessesResponse = await callAdminApi('GET', '/api/admin/businesses?page=2&pageSize=2');
+    const reviewsResponse = await callAdminApi('GET', '/api/admin/refund-reviews?page=1&pageSize=2');
+
+    expect(businessesResponse.statusCode).toBe(200);
+    expect(businessesResponse.body).toHaveLength(2);
+    expect(reviewsResponse.statusCode).toBe(200);
+    expect(reviewsResponse.body).toHaveLength(2);
+  });
+
   it('serves chart-ready demo admin dashboard metrics', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-05-15T00:00:00.000Z'));
 

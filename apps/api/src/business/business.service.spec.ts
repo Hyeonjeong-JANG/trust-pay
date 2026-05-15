@@ -190,6 +190,22 @@ describe('BusinessService', () => {
 
       const result = await service.dashboard('biz-1', businessUser);
 
+      expect(prisma.business.findUnique).toHaveBeenCalledWith({
+        where: { id: 'biz-1' },
+        select: expect.objectContaining({
+          id: true,
+          name: true,
+          xrplSecret: true,
+          escrows: {
+            select: expect.objectContaining({
+              id: true,
+              status: true,
+              entries: expect.objectContaining({ select: expect.any(Object) }),
+              consumer: { select: { id: true, name: true } },
+            }),
+          },
+        }),
+      });
       // e-1: 2 released * 10000 = 20000 received, 1 pending * 10000 = 10000 pending
       // e-2: 0 released = 0 received, 2 pending * 20000 = 40000 pending
       expect(result.totalReceived).toBe(20000);
