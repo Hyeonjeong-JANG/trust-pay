@@ -51,9 +51,9 @@ describe('ProfileScreen', () => {
   });
 
   it('should render app info section', async () => {
-    const { findByText } = renderWithProviders(<ProfileScreen navigation={{} as any} route={{} as any} />);
+    const { findAllByText, findByText } = renderWithProviders(<ProfileScreen navigation={{} as any} route={{} as any} />);
     expect(await findByText('XRPL Testnet')).toBeTruthy();
-    expect(await findByText('Token Escrow (XLS-85)')).toBeTruthy();
+    expect((await findAllByText('XRPL 보호 원장')).length).toBeGreaterThan(0);
     expect(await findByText(/보호 원장 증빙용 RLUSD와 Testnet 주소를 확인/)).toBeTruthy();
   });
 

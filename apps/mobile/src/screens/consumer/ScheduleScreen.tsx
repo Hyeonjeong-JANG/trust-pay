@@ -87,7 +87,7 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
 
     items.sort((a, b) => a.entry.finishAfter - b.entry.finishAfter);
 
-    // 다음 릴리즈 가능 항목 표시
+    // 다음 정산 가능 항목 표시
     const nextIdx = items.findIndex((i) => !i.isPast);
     if (nextIdx >= 0) items[nextIdx].isNext = true;
     else if (items.length > 0) items[0].isNext = true;
@@ -150,7 +150,7 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
         ListHeaderComponent={
           <>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>예정된 릴리즈</Text>
+              <Text style={styles.summaryTitle}>예정된 정산</Text>
               <View style={styles.summaryRow}>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryValue}>{totalPending}</Text>
@@ -163,7 +163,7 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
                 </View>
               </View>
               <Text style={styles.summaryDesc}>
-                대기 월차는 finishAfter 기준으로 표시됩니다
+                대기 월차는 정산 가능 시점 기준으로 표시됩니다
               </Text>
             </View>
             {prepaidSummaries.length > 0 && (
@@ -177,7 +177,7 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
               </View>
             )}
             {scheduleItems.length > 0 && (
-              <Text style={styles.sectionTitle}>릴리즈 일정</Text>
+              <Text style={styles.sectionTitle}>정산 일정</Text>
             )}
           </>
         }
@@ -205,7 +205,7 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
                     item.isPast && styles.cardRelativePast,
                     item.isNext && styles.cardRelativeNext,
                   ]}>
-                    {item.isPast ? '릴리즈 가능' : relativeStr}
+                    {item.isPast ? '정산 가능' : relativeStr}
                   </Text>
                 </View>
                 <Text style={styles.cardBusiness}>{item.escrow.business?.name ?? '사업자'}</Text>
@@ -215,8 +215,8 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
                 </View>
                 <Text style={styles.cardLedgerNote}>
                   {item.isPast
-                    ? 'finishAfter 이후입니다. 사업자가 EscrowFinish로 수령할 수 있습니다.'
-                    : 'finishAfter까지 에스크로에 잠겨 있습니다.'}
+                    ? '정산 가능 시점 이후입니다. 사업자가 수령할 수 있습니다.'
+                    : '정산 가능 시점까지 보호 원장에 보관됩니다.'}
                 </Text>
               </View>
             </View>
@@ -225,8 +225,8 @@ export function ScheduleScreen(_props: ConsumerTabProps<'Schedule'>) {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📅</Text>
-            <Text style={styles.emptyTitle}>예정된 릴리즈가 없습니다</Text>
-            <Text style={styles.emptyDesc}>활성 에스크로의 대기 월차가 생기면 finishAfter 기준으로 표시됩니다</Text>
+            <Text style={styles.emptyTitle}>예정된 정산이 없습니다</Text>
+            <Text style={styles.emptyDesc}>활성 보호 결제의 대기 월차가 생기면 정산 가능 시점 기준으로 표시됩니다</Text>
           </View>
         }
         contentContainerStyle={styles.listContent}

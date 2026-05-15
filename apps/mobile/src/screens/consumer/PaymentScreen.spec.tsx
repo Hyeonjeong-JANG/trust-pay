@@ -48,7 +48,7 @@ describe('PaymentScreen', () => {
     jest.clearAllMocks();
   });
 
-  it('should explain the monthly Token Escrow structure', () => {
+  it('should explain the monthly protected ledger structure', () => {
     const { getByPlaceholderText, getByText } = renderWithProviders(
       <PaymentScreen
         navigation={{ navigate: jest.fn() } as any}
@@ -61,7 +61,7 @@ describe('PaymentScreen', () => {
 
     expect(getByText('월 ₩135,000')).toBeTruthy();
     expect(getByText('100.00 RLUSD')).toBeTruthy();
-    expect(getByText(/총액은 6개의 Token Escrow로 나뉘어 잠기고/)).toBeTruthy();
+    expect(getByText(/총액은 6개월로 나뉘어 보호 원장에 보관되고/)).toBeTruthy();
   });
 
   it('should explain account-approved TrustPay checkout as the main protected payment path', () => {
@@ -167,7 +167,7 @@ describe('PaymentScreen', () => {
       );
 
       expect(getByText('기간 (개월)')).toBeTruthy();
-      expect(getByText(/월별 릴리즈 금액/)).toBeTruthy();
+      expect(getByText(/월별 정산 금액/)).toBeTruthy();
     },
   );
 

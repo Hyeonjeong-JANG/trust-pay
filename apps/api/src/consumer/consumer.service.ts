@@ -52,7 +52,7 @@ export class ConsumerService {
   }
 
   async findAll(_user: SessionUser) {
-    throw new ForbiddenException('소비자 목록 조회는 관리자 권한이 필요합니다');
+    throw new ForbiddenException('소비자 목록 조회는 운영자 권한이 필요합니다');
   }
 
   private assertConsumerOwner(id: string, user: SessionUser) {

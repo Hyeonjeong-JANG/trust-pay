@@ -157,7 +157,7 @@ function AppNavigator() {
       <Stack.Screen name="BusinessSelect" component={BusinessSelectScreen} options={{ title: '사업자 선택' }} />
       <Stack.Screen name="ScanPayment" component={ScanPaymentScreen} options={{ title: 'QR 스캔 결제' }} />
       <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: '보호 결제' }} />
-      <Stack.Screen name="EscrowDetail" component={EscrowDetailScreen} options={{ title: '에스크로 상세' }} />
+      <Stack.Screen name="EscrowDetail" component={EscrowDetailScreen} options={{ title: '보호 결제 상세' }} />
       <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: '프로필' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: '알림' }} />
     </Stack.Navigator>

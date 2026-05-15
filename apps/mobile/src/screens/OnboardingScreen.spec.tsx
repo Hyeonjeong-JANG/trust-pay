@@ -49,7 +49,7 @@ describe('OnboardingScreen', () => {
     );
 
     expect(getByText('선불금을 월별로 보호')).toBeTruthy();
-    expect(getByText('XLS-85 Token Escrow')).toBeTruthy();
+    expect(getByText('XRPL 보호 원장')).toBeTruthy();
     expect(getByText('RLUSD 스테이블코인')).toBeTruthy();
     expect(getByText('QR로 간편하게 시작')).toBeTruthy();
   });
@@ -97,10 +97,10 @@ describe('OnboardingScreen', () => {
     );
 
     expect(
-      getByText(/이미 이용한 월차만 사업자에게 릴리즈되고/),
+      getByText(/이미 이용한 월차만 사업자에게 정산되고/),
     ).toBeTruthy();
     expect(
-      getByText(/finishAfter 이후 월별로 릴리즈/),
+      getByText(/정산 가능 시점 이후 월별 흐름/),
     ).toBeTruthy();
   });
 

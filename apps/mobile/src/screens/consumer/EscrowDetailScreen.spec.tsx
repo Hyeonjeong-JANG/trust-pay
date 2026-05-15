@@ -70,8 +70,10 @@ describe('EscrowDetailScreen', () => {
     expect(await findByText('₩810,000')).toBeTruthy();
     expect(await findByText('600.00 RLUSD')).toBeTruthy();
     expect(await findByText('3개월 정산 완료 · 3개월 예정')).toBeTruthy();
+    expect((await findAllByText('정산 완료')).length).toBeGreaterThanOrEqual(3);
     expect((await findAllByText(/정산 가능일:/)).length).toBeGreaterThan(0);
     expect(await findByText(/원장 증빙: ABC123/)).toBeTruthy();
+    expect(queryByText('릴리즈됨')).toBeNull();
     expect(queryByText(/finishAfter:/)).toBeNull();
   });
 
@@ -325,7 +327,7 @@ describe('EscrowDetailScreen', () => {
 
     await waitFor(() => expect(api.requestRefundReview).toHaveBeenCalledWith('e-prepaid-refund', { reason, photoDataUrls: [] }));
     expect(api.cancelEscrow).not.toHaveBeenCalled();
-    expect(showSuccessToast).toHaveBeenCalledWith('환불 검토 요청 접수', '사업자 응답 기한과 폐업 여부를 확인한 뒤 환불 가능 금액을 안내합니다.');
+    expect(showSuccessToast).toHaveBeenCalledWith('환불 검토 요청 접수', '사업자 답변 기한과 폐업 여부를 확인한 뒤 환불 가능 금액을 안내합니다.');
   });
 
   it('should require a detailed refund reason before submitting the modal', async () => {
@@ -380,11 +382,11 @@ describe('EscrowDetailScreen', () => {
       refundReviewRequests: [
         {
           id: 'refund-review-1',
-          status: 'closure_confirmed',
+          status: 'closure_suspected',
           refundableAmount: 10,
           merchantRespondBy: '2026-05-14T00:00:00.000Z',
           requestedAt: '2026-05-14T00:00:00.000Z',
-          investigationReason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 검토로 전환합니다.',
+          investigationReason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 확인 절차로 전환합니다.',
           consumerReason: '사업장 문이 닫혀 있고 예약 전화가 연결되지 않아 환불 검토를 요청합니다.',
           photoDataUrls: ['data:image/png;base64,ZmFrZQ==', 'data:image/jpeg;base64,ZmFrZTI='],
         },
@@ -396,7 +398,7 @@ describe('EscrowDetailScreen', () => {
     );
 
     expect(await findByText('환불 검토 요청 접수됨')).toBeTruthy();
-    expect(await findByText('폐업 확인 · TrustPay 검토')).toBeTruthy();
+    expect(await findByText('영업중단 의심 · TrustPay 추가 확인')).toBeTruthy();
     expect(await findByText(/국세청 사업자 상태가 폐업으로 확인/)).toBeTruthy();
     expect(await findByText(/사업장 문이 닫혀 있고 예약 전화가 연결되지 않아/)).toBeTruthy();
     expect(await findByText('첨부 사진 2장')).toBeTruthy();

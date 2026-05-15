@@ -62,10 +62,10 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
 };
 
 const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
-  platform_review: 'TrustPay 검토 중',
-  merchant_response_requested: '사업자 응답 대기',
-  merchant_responded: '사업자 응답 완료',
-  platform_investigation: 'TrustPay 조사 중',
+  platform_review: 'TrustPay 확인 중',
+  merchant_response_requested: '사업자 답변 대기',
+  merchant_responded: '사업자 답변 완료',
+  platform_investigation: 'TrustPay 추가 확인 중',
   platform_approved: 'TrustPay 환불 승인',
   refunded: '환불 완료',
   rejected: '환불 검토 거절',
@@ -162,7 +162,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
         ? '완료된 보호가 없습니다'
         : statusFilter === 'cancelled'
           ? '취소된 보호가 없습니다'
-          : '에스크로가 없습니다';
+          : '보호 결제가 없습니다';
   const emptyDesc = hasSearchQuery
     ? '다른 검색어나 필터를 시도해보세요'
     : statusFilter === 'active'

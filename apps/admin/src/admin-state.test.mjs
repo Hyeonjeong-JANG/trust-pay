@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { adminTabs, buildAdminAuthHeaders, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js';
+import { adminTabs, buildAdminAuthHeaders, buildDashboardAmountFlow, buildDashboardEvents, buildDashboardPipeline, buildDashboardSlaRisks, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js';
 
 test('getApiBase resolves local and deployed admin API roots', () => {
   assert.equal(getApiBase('/api', 'localhost'), 'http://localhost:3000');
@@ -10,8 +10,8 @@ test('getApiBase resolves local and deployed admin API roots', () => {
 });
 
 test('getStatusLabel describes platform-first refund review states', () => {
-  assert.equal(getStatusLabel('platform_review'), 'TrustPay 검토');
-  assert.equal(getStatusLabel('merchant_response_requested'), '사업자 소명 요청');
+  assert.equal(getStatusLabel('platform_review'), '접수 확인');
+  assert.equal(getStatusLabel('merchant_response_requested'), '사업자 답변 요청');
   assert.equal(getStatusLabel('platform_approved'), '환불 승인');
 });
 
@@ -24,8 +24,8 @@ test('visibleQueueStatuses prioritizes operational refund review work', () => {
   ]);
   assert.equal(getStatusLabel('all'), '전체');
   assert.equal(getStatusLabel('needs_action'), '처리 필요');
-  assert.equal(getStatusLabel('waiting_merchant'), '사업자 대기');
-  assert.equal(getStatusLabel('resolved'), '완료');
+  assert.equal(getStatusLabel('waiting_merchant'), '답변 대기');
+  assert.equal(getStatusLabel('resolved'), '처리 완료');
 });
 
 test('admin refund queue defaults to the actionable work view', () => {
@@ -67,7 +67,7 @@ test('summarizeReview exposes the queue ordering date shown on case cards', () =
     escrow: { business: { name: '파워짐' }, consumer: { name: '김민수' }, entries: [], chargeRequests: [] },
   });
 
-  assert.equal(summary.queueDateLabel, '사업자 응답');
+  assert.equal(summary.queueDateLabel, '사업자 답변');
   assert.match(summary.queueDate, /2026\. 5\. 14\./);
 });
 
@@ -128,7 +128,7 @@ test('refund decision reason policy only requires reasons for adverse or investi
     minLength: 5,
   });
   assert.deepEqual(getRefundDecisionMeta('investigate'), {
-    label: '추가 조사',
+    label: '추가 확인',
     reasonRequired: true,
     minLength: 5,
   });
@@ -155,10 +155,10 @@ test('summarizeDashboard creates card-ready admin metrics', () => {
     consumers: { total: 11 },
     escrows: { active: 5 },
   }), [
-    { label: '열린 환불/분쟁', value: '4건', tone: 'warning', tab: 'refunds', status: 'all', helper: '전체 큐 보기' },
-    { label: '사업자 소명 대기', value: '2건', tone: 'primary', tab: 'refunds', status: 'waiting_merchant', helper: '사업자 대기 보기' },
-    { label: '사업자 응답 완료', value: '1건', tone: 'success', tab: 'refunds', status: 'needs_action', helper: '응답 검토하기' },
-    { label: '활성 에스크로', value: '5건', tone: 'neutral', tab: 'escrows', helper: '거래/에스크로 보기' },
+    { label: '진행 중인 환불 검토', value: '4건', tone: 'warning', tab: 'refunds', status: 'all', helper: '전체 보기' },
+    { label: '사업자 답변 대기', value: '2건', tone: 'primary', tab: 'refunds', status: 'waiting_merchant', helper: '답변 대기 보기' },
+    { label: '답변 도착', value: '1건', tone: 'success', tab: 'refunds', status: 'needs_action', helper: '답변 확인하기' },
+    { label: '활성 보호 결제', value: '5건', tone: 'neutral', tab: 'escrows', helper: '보호 결제 보기' },
     { label: '가맹점', value: '7곳', tone: 'neutral', tab: 'businesses', helper: '가맹점 보기' },
     { label: '소비자', value: '11명', tone: 'neutral', tab: 'consumers', helper: '소비자 보기' },
   ]);
@@ -172,6 +172,118 @@ test('admin dashboard metrics are clickable navigation targets', () => {
   assert.match(js, /data-status="\$\{escapeHtml\(card\.status/);
   assert.match(js, /button\.dataset\.status/);
   assert.match(js, /setActiveTab\(button\.dataset\.tab\)/);
+});
+
+test('buildDashboardPipeline creates refund review chart segments', () => {
+  const pipeline = buildDashboardPipeline({
+    refundReviews: {
+      byStatus: {
+        platformReview: 1,
+        waitingMerchant: 3,
+        merchantResponded: 2,
+        platformInvestigation: 1,
+        resolved: 4,
+      },
+    },
+  });
+
+  assert.deepEqual(pipeline.map((item) => [item.label, item.count, item.percent, item.status]), [
+    ['접수 확인', 1, 9, 'platform_review'],
+    ['답변 대기', 3, 27, 'waiting_merchant'],
+    ['답변 도착', 2, 18, 'needs_action'],
+    ['추가 확인', 1, 9, 'platform_investigation'],
+    ['처리 완료', 4, 36, 'resolved'],
+  ]);
+});
+
+test('buildDashboardAmountFlow creates KRW amount chart segments', () => {
+  const flow = buildDashboardAmountFlow({
+    escrows: {
+      releasedAmount: 300,
+      pendingAmount: 500,
+      frozenByRefundReviewAmount: 200,
+      refundedAmount: 50,
+    },
+  });
+
+  assert.deepEqual(flow.map((item) => [item.label, item.value, item.percent, item.tone]), [
+    ['정산 완료', '₩405,000', 29, 'success'],
+    ['정산 대기', '₩675,000', 48, 'primary'],
+    ['검토 중 보류', '₩270,000', 19, 'warning'],
+    ['환불 완료', '₩67,500', 5, 'neutral'],
+  ]);
+});
+
+test('buildDashboardSlaRisks prioritizes response deadlines', () => {
+  const risks = buildDashboardSlaRisks({
+    refundReviews: {
+      slaRisks: [
+        { id: 'late', businessName: '파워짐', consumerName: '김민수', refundableAmount: 300, daysRemaining: -1, status: 'merchant_review' },
+        { id: 'soon', businessName: '크린토피아', consumerName: '정다은', refundableAmount: 110, daysRemaining: 1, status: 'merchant_response_requested' },
+      ],
+    },
+  });
+
+  assert.deepEqual(risks.map((item) => [item.id, item.badge, item.amount, item.status]), [
+    ['late', '초과', '₩405,000', 'waiting_merchant'],
+    ['soon', 'D-1', '₩148,500', 'waiting_merchant'],
+  ]);
+});
+
+test('buildDashboardEvents creates recent operations timeline rows', () => {
+  const events = buildDashboardEvents({
+    recentEvents: [
+      { id: 'event-1', type: 'merchant_responded', label: '사업자 답변 도착', businessName: '파워짐', consumerName: '김민수', amount: 300, occurredAt: '2026-05-15T01:20:00.000Z' },
+    ],
+  });
+
+  assert.equal(events[0].title, '사업자 답변 도착');
+  assert.equal(events[0].description, '파워짐 · 김민수 · ₩405,000');
+  assert.match(events[0].time, /2026\. 5\. 15\./);
+});
+
+test('admin visible copy uses operations terminology instead of internal jargon', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  const stateSource = readFileSync(new URL('./admin-state.js', import.meta.url), 'utf8');
+  const visibleCopy = `${html}\n${js}\n${stateSource}`;
+
+  assert.doesNotMatch(visibleCopy, /환불\/분쟁|운영 큐|소명|에스크로|케이스|Refund Pipeline|KRW Flow|Merchant SLA|Event Stream|TrustPay 검토|사업자 대기/);
+  assert.match(visibleCopy, /운영 콘솔/);
+  assert.match(visibleCopy, /환불 검토/);
+  assert.match(visibleCopy, /보호 결제/);
+  assert.match(visibleCopy, /사업자 답변/);
+  assert.match(visibleCopy, /응답 기한/);
+  assert.match(visibleCopy, /처리 내역/);
+});
+
+test('admin dashboard renders charts, SLA risks, and recent event panels', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+  assert.match(js, /renderDashboardPipeline/);
+  assert.match(js, /renderDashboardAmountFlow/);
+  assert.match(js, /renderDashboardSlaRisks/);
+  assert.match(js, /renderDashboardEvents/);
+  assert.match(css, /\.pipeline-chart/);
+  assert.match(css, /\.amount-flow/);
+  assert.match(css, /\.sla-list/);
+  assert.match(css, /\.event-stream/);
+});
+
+test('admin dashboard keeps the operations queue compact and uses purpose-fit graph structures', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+  assert.match(js, /class="metric-strip admin-metrics"/);
+  assert.match(js, /class="pipeline-funnel"/);
+  assert.match(js, /class="amount-stack"/);
+  assert.match(js, /class="amount-ledger"/);
+  assert.match(css, /\.compact-queue[^}]*grid-template-columns:\s*180px minmax\(0, 1fr\)/s);
+  assert.match(css, /\.dashboard-hero[^}]*padding:\s*10px 12px/s);
+  assert.match(css, /\.metric-card-button[^}]*min-height:\s*64px/s);
+  assert.match(css, /\.pipeline-funnel/);
+  assert.match(css, /\.amount-stack/);
 });
 
 test('summarizeReview creates an operator-readable queue item', () => {
@@ -212,10 +324,10 @@ test('buildReviewTimeline explains merchant response progress and next admin dec
 
   assert.deepEqual(timeline.map((item) => [item.label, item.state]), [
     ['소비자 요청 접수', 'done'],
-    ['TrustPay 1차 검토', 'done'],
-    ['사업자 소명 요청', 'done'],
-    ['사업자 응답 완료', 'done'],
-    ['운영자 최종 결정', 'current'],
+    ['요청 내용 확인', 'done'],
+    ['사업자 답변 요청', 'done'],
+    ['사업자 답변 도착', 'done'],
+    ['최종 처리', 'current'],
   ]);
   assert.match(timeline[3].description, /정상 영업 중/);
 });
@@ -230,8 +342,8 @@ test('buildReviewTimeline keeps legacy merchant_review cases waiting for merchan
 
   assert.deepEqual(timeline.map((item) => [item.label, item.state]), [
     ['소비자 요청 접수', 'done'],
-    ['TrustPay 1차 검토', 'done'],
-    ['사업자 소명 요청', 'current'],
+    ['요청 내용 확인', 'done'],
+    ['사업자 답변 요청', 'current'],
   ]);
 });
 
@@ -259,7 +371,7 @@ test('summarizeEscrow creates compact transaction rows', () => {
   assert.equal(summary.consumerName, '이서연');
   assert.equal(summary.totalKrw, '₩202,500');
   assert.equal(summary.progressText, '1/2 정산');
-  assert.equal(summary.refundText, '환불/분쟁 1건');
+  assert.equal(summary.refundText, '환불 검토 1건');
 });
 
 test('escapeHtml neutralizes consumer-provided markup before admin rendering', () => {
@@ -279,8 +391,8 @@ test('admin shell starts with a dedicated centered login view', () => {
   assert.match(html, /class="login-view"/);
   assert.match(html, /id="admin-view"/);
   assert.match(html, /hidden/);
-  assert.match(html, /관리자 콘솔 로그인/);
-  assert.match(html, /관리자 아이디/);
+  assert.match(html, /운영 콘솔 로그인/);
+  assert.match(html, /운영자 아이디/);
   assert.match(html, /placeholder="admin"/);
   assert.match(html, /admin1234/);
 });

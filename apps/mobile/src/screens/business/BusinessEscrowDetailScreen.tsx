@@ -65,14 +65,14 @@ const STATUS_KO: Record<string, string> = {
 };
 
 const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
-  platform_review: 'TrustPay 검토 중',
-  merchant_response_requested: '사업자 응답 대기',
-  merchant_responded: '사업자 응답 완료',
-  merchant_review: '사업자 응답 대기',
+  platform_review: 'TrustPay 확인 중',
+  merchant_response_requested: '사업자 답변 대기',
+  merchant_responded: '사업자 답변 완료',
+  merchant_review: '사업자 답변 대기',
   merchant_disputed: '사업자 이의제기',
-  platform_investigation: 'TrustPay 조사 중',
-  closure_suspected: '영업중단 의심 · TrustPay 조사',
-  closure_confirmed: '폐업 확인 · TrustPay 검토',
+  platform_investigation: 'TrustPay 추가 확인 중',
+  closure_suspected: '영업중단 의심 · TrustPay 추가 확인',
+  closure_confirmed: '폐업 확인 · TrustPay 확인',
   auto_approved: '무응답 자동 승인',
   platform_approved: 'TrustPay 환불 승인',
   refunded: '환불 완료',
@@ -171,11 +171,11 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
       setMerchantResponse('');
       queryClient.invalidateQueries({ queryKey: ['escrow', id] });
       queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
-      showSuccessToast('소명 제출 완료', 'TrustPay 운영 검토 큐에 사업자 응답을 전달했습니다.');
+      showSuccessToast('답변 제출 완료', 'TrustPay 운영 확인 절차에 사업자 답변을 전달했습니다.');
     },
     onError: (err: Error) => {
       const apiErr = err as ApiError;
-      showErrorToast('소명 제출 실패', apiErr.userMessage ?? err.message);
+      showErrorToast('답변 제출 실패', apiErr.userMessage ?? err.message);
     },
   });
 
@@ -263,7 +263,7 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
     if (!latestRefundReview) return;
     const response = merchantResponse.trim();
     if (response.length < 10) {
-      showErrorToast('소명 제출 실패', '소명 내용을 10자 이상 입력해주세요.');
+      showErrorToast('답변 제출 실패', '답변 내용을 10자 이상 입력해주세요.');
       return;
     }
     refundReviewResponseMutation.mutate({ requestId: latestRefundReview.id, response });
@@ -327,11 +327,11 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                   <Text style={styles.refundReviewStatus}>{REFUND_REVIEW_STATUS_KO[latestRefundReview.status] ?? latestRefundReview.status}</Text>
                 </View>
                 <Text style={styles.refundReviewDesc}>
-                  환불 검토 금액 {formatKrwFromRlusd(latestRefundReview.refundableAmount)} · 사업자 응답 기한 {isoToDate(latestRefundReview.merchantRespondBy) ?? '-'}
+                  환불 검토 금액 {formatKrwFromRlusd(latestRefundReview.refundableAmount)} · 사업자 답변 기한 {isoToDate(latestRefundReview.merchantRespondBy) ?? '-'}
                 </Text>
                 {!!latestRefundReview.merchantNotice && (
                   <View style={styles.refundReviewReasonBox}>
-                    <Text style={styles.refundReviewReasonLabel}>TrustPay 소명 요청</Text>
+                    <Text style={styles.refundReviewReasonLabel}>TrustPay 답변 요청</Text>
                     <Text style={styles.refundReviewReason}>{latestRefundReview.merchantNotice}</Text>
                   </View>
                 )}
@@ -339,7 +339,7 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                   <View style={styles.refundReviewResponseBox}>
                     <TextInput
                       style={styles.refundReviewResponseInput}
-                      placeholder="TrustPay에 전달할 소명 내용을 입력해주세요"
+                      placeholder="TrustPay에 전달할 답변 내용을 입력해주세요"
                       placeholderTextColor={colors.gray400}
                       value={merchantResponse}
                       onChangeText={setMerchantResponse}
@@ -353,7 +353,7 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                       disabled={refundReviewResponseMutation.isPending}
                       activeOpacity={0.84}
                     >
-                      <Text style={styles.refundReviewResponseButtonText}>{refundReviewResponseMutation.isPending ? '제출 중...' : '소명 제출'}</Text>
+                      <Text style={styles.refundReviewResponseButtonText}>{refundReviewResponseMutation.isPending ? '제출 중...' : '답변 제출'}</Text>
                     </TouchableOpacity>
                   </View>
                 )}

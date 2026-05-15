@@ -26,8 +26,8 @@ describe('ScheduleScreen', () => {
     const { api } = require('../../api/client');
     api.getConsumerEscrows.mockResolvedValue([]);
     const { findByText } = renderWithProviders(<ScheduleScreen navigation={{} as any} route={{} as any} />);
-    expect(await findByText('예정된 릴리즈가 없습니다')).toBeTruthy();
-    expect(await findByText('활성 에스크로의 대기 월차가 생기면 finishAfter 기준으로 표시됩니다')).toBeTruthy();
+    expect(await findByText('예정된 정산이 없습니다')).toBeTruthy();
+    expect(await findByText('활성 보호 결제의 대기 월차가 생기면 정산 가능 시점 기준으로 표시됩니다')).toBeTruthy();
   });
 
   it('should show schedule items for active escrows', async () => {
@@ -43,7 +43,7 @@ describe('ScheduleScreen', () => {
     const { findByText } = renderWithProviders(<ScheduleScreen navigation={{} as any} route={{} as any} />);
     expect(await findByText('테스트카페')).toBeTruthy();
     expect(await findByText('1월차')).toBeTruthy();
-    expect(await findByText(/EscrowFinish로 수령할 수 있습니다/)).toBeTruthy();
+    expect(await findByText(/사업자가 수령할 수 있습니다/)).toBeTruthy();
   });
 
   it('should show summary with total pending count and amount', async () => {

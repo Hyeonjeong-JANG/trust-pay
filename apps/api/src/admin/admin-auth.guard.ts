@@ -31,7 +31,7 @@ export class AdminAuthGuard implements CanActivate {
     const expectedId = getAdminId();
     const expected = getAdminSecret();
     if (typeof providedId !== 'string' || providedId !== expectedId || typeof provided !== 'string' || provided !== expected) {
-      throw new UnauthorizedException('관리자 인증이 필요합니다');
+      throw new UnauthorizedException('운영자 인증이 필요합니다');
     }
     req.user = { userId: 'trustpay-admin', role: 'admin', name: 'TrustPay 운영자' } satisfies AdminUser;
     return true;

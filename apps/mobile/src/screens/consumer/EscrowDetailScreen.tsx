@@ -41,7 +41,7 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
 
 const STATUS_KO: Record<string, string> = {
   pending: '대기',
-  released: '릴리즈됨',
+  released: '정산 완료',
   refunded: '환불됨',
   pending_approval: '승인 대기',
   settled: '정산됨',
@@ -53,20 +53,20 @@ const STATUS_KO: Record<string, string> = {
 };
 
 const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
-  platform_review: 'TrustPay 검토 중',
-  merchant_response_requested: '사업자 응답 대기',
-  merchant_responded: '사업자 응답 완료',
-  merchant_review: '사업자 응답 대기',
+  platform_review: 'TrustPay 확인 중',
+  merchant_response_requested: '사업자 답변 대기',
+  merchant_responded: '사업자 답변 완료',
+  merchant_review: '사업자 답변 대기',
   merchant_disputed: '사업자 이의제기',
-  platform_investigation: 'TrustPay 조사 중',
-  closure_suspected: '영업중단 의심 · TrustPay 조사',
-  closure_confirmed: '폐업 확인 · TrustPay 검토',
+  platform_investigation: 'TrustPay 추가 확인 중',
+  closure_suspected: '영업중단 의심 · TrustPay 추가 확인',
+  closure_confirmed: '폐업 확인 · TrustPay 확인',
   auto_approved: '무응답 자동 승인',
   platform_approved: 'TrustPay 환불 승인',
   refunded: '환불 완료',
   rejected: '환불 검토 거절',
 };
-const REFUND_REVIEW_CONFIRM_MESSAGE = '즉시 에스크로를 취소하지 않습니다. 실제 결제액, 보너스 혜택, 사용분, 약관상 공제액을 확인한 뒤 환불 가능 금액을 산정합니다.';
+const REFUND_REVIEW_CONFIRM_MESSAGE = '즉시 보호 결제를 취소하지 않습니다. 실제 결제액, 보너스 혜택, 사용분, 약관상 공제액을 확인한 뒤 환불 가능 금액을 산정합니다.';
 const MIN_REFUND_REASON_LENGTH = 10;
 const MAX_REFUND_REASON_LENGTH = 500;
 const MAX_REFUND_PHOTOS = 3;
@@ -176,7 +176,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
       setRefundReviewError(null);
       queryClient.invalidateQueries({ queryKey: ['escrow', id] });
       queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
-      showSuccessToast('환불 검토 요청 접수', '사업자 응답 기한과 폐업 여부를 확인한 뒤 환불 가능 금액을 안내합니다.');
+      showSuccessToast('환불 검토 요청 접수', '사업자 답변 기한과 폐업 여부를 확인한 뒤 환불 가능 금액을 안내합니다.');
     },
     onError: (err: Error) => {
       const apiErr = err as ApiError;
@@ -477,7 +477,7 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 <Text style={styles.refundReviewTitle}>환불 검토 요청 접수됨</Text>
                 <Text style={styles.refundReviewStatus}>{REFUND_REVIEW_STATUS_KO[latestRefundReview.status] ?? latestRefundReview.status}</Text>
                 <Text style={styles.refundReviewDesc}>
-                  환불 검토 금액 {formatKrwFromRlusd(latestRefundReview.refundableAmount)} · 사업자 응답 기한 {isoToDate(latestRefundReview.merchantRespondBy) ?? '-'}
+                  환불 검토 금액 {formatKrwFromRlusd(latestRefundReview.refundableAmount)} · 사업자 답변 기한 {isoToDate(latestRefundReview.merchantRespondBy) ?? '-'}
                 </Text>
                 {!!latestRefundReview.investigationReason && (
                   <Text style={styles.refundReviewReason}>{latestRefundReview.investigationReason}</Text>

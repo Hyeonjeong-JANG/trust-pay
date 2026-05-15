@@ -52,12 +52,12 @@ const OPEN_REFUND_REVIEW_STATUSES = new Set([
 ]);
 
 const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
-  platform_review: 'TrustPay 검토 중',
-  merchant_response_requested: '사업자 응답 대기',
-  merchant_responded: '사업자 응답 완료',
-  merchant_review: '사업자 응답 대기',
+  platform_review: 'TrustPay 확인 중',
+  merchant_response_requested: '사업자 답변 대기',
+  merchant_responded: '사업자 답변 완료',
+  merchant_review: '사업자 답변 대기',
   merchant_disputed: '사업자 이의제기',
-  platform_investigation: 'TrustPay 조사 중',
+  platform_investigation: 'TrustPay 추가 확인 중',
   auto_approved: '무응답 자동 승인',
   platform_approved: 'TrustPay 환불 승인',
   refunded: '환불 완료',
@@ -163,8 +163,8 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
   const sectionLabel = searchQuery.trim()
     ? '검색 결과'
     : statusFilter === 'all'
-      ? '에스크로'
-      : `${FILTER_OPTIONS.find((option) => option.key === statusFilter)?.label ?? '진행중'} 에스크로`;
+      ? '보호 결제'
+      : `${FILTER_OPTIONS.find((option) => option.key === statusFilter)?.label ?? '진행중'} 보호 결제`;
   const refundReviewItems = ((dashboard?.escrows ?? []) as EscrowWithConsumer[])
     .flatMap((escrow) => (escrow.refundReviewRequests ?? [])
       .filter((request: RefundReviewRequest) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
@@ -314,7 +314,7 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
             <Text style={styles.settlementHint}>
               {filteredEscrows.some((e) => e.escrowType === 'prepaid')
                 ? '이미 보호 원장에 잠긴 금액권에서 실제 사용금액 차감 요청을 보냅니다. 소비자 승인 후 잔액에서 정산됩니다'
-                : 'EscrowFinish로 수령 가능한 월차만 정산됩니다'}
+                : '정산 가능한 월차만 자동 처리됩니다'}
             </Text>
             <Text style={styles.sectionTitle}>
               {sectionLabel} ({filteredEscrows.length}건)
@@ -378,8 +378,8 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📭</Text>
-            <Text style={styles.emptyTitle}>활성 에스크로가 없습니다</Text>
-            <Text style={styles.emptyDesc}>소비자가 에스크로를 생성하면 여기에 표시됩니다</Text>
+            <Text style={styles.emptyTitle}>활성 보호 결제가 없습니다</Text>
+            <Text style={styles.emptyDesc}>소비자가 보호 결제를 생성하면 여기에 표시됩니다</Text>
           </View>
         }
         contentContainerStyle={styles.listContent}

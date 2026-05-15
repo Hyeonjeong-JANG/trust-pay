@@ -156,8 +156,8 @@ export function NotificationsScreen() {
           items.push({
             id: `${entry.id}-released`,
             icon: '✅',
-            title: '릴리즈 완료',
-            description: `${bizName} ${entry.month}월차가 EscrowFinish로 ${Number(entry.amount).toLocaleString()} RLUSD가 릴리즈되었습니다.`,
+            title: '정산 완료',
+            description: `${bizName} ${entry.month}월차 ${Number(entry.amount).toLocaleString()} RLUSD가 정산 완료되었습니다.`,
             timestamp: ts,
             isUnread: ts > lastViewed,
           });
@@ -182,8 +182,8 @@ export function NotificationsScreen() {
         items.push({
           id: `${escrow.id}-cancelled`,
           icon: '❌',
-          title: '에스크로 취소',
-          description: `${bizName} 에스크로가 취소되었습니다.`,
+          title: '보호 결제 취소',
+          description: `${bizName} 보호 결제가 취소되었습니다.`,
           timestamp: cancelTs,
           isUnread: cancelTs > lastViewed,
         });
@@ -216,7 +216,7 @@ export function NotificationsScreen() {
           <View style={s.emptyContainer}>
             <Text style={s.emptyIcon}>🔔</Text>
             <Text style={s.emptyTitle}>알림이 없습니다</Text>
-            <Text style={s.emptyDesc}>에스크로 활동 알림이 여기에 표시됩니다</Text>
+            <Text style={s.emptyDesc}>보호 결제 활동 알림이 여기에 표시됩니다</Text>
           </View>
         }
         contentContainerStyle={s.listContent}

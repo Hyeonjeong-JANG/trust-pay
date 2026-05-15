@@ -115,8 +115,8 @@ export function ProfileScreen(_props: { route?: unknown; navigation?: unknown })
           </View>
           <View style={styles.divider} />
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>에스크로</Text>
-            <Text style={styles.infoValue}>Token Escrow (XLS-85)</Text>
+            <Text style={styles.infoLabel}>보호 결제</Text>
+            <Text style={styles.infoValue}>XRPL 보호 원장</Text>
           </View>
         </View>
       </View>

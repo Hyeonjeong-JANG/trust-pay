@@ -53,7 +53,7 @@ describe('BusinessDashboardScreen', () => {
     try {
       const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
-      expect(await findByText('진행중 에스크로 (0건)')).toBeTruthy();
+      expect(await findByText('진행중 보호 결제 (0건)')).toBeTruthy();
       expect(queryByText('QR 결제 만들기')).toBeNull();
       expect(queryByText('결제 금액')).toBeNull();
       expect(api.getBusinessDashboard).toHaveBeenCalledTimes(1);
@@ -90,7 +90,7 @@ describe('BusinessDashboardScreen', () => {
 
     const { findAllByText, findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
-    expect(await findByText(/EscrowFinish로 수령 가능한 월차/)).toBeTruthy();
+    expect(await findByText(/정산 가능한 월차만 자동 처리/)).toBeTruthy();
     expect((await findAllByText('100.00 RLUSD')).length).toBeGreaterThan(0);
     expect(queryByText('1월차 수령 가능 (₩135,000)')).toBeNull();
     await waitFor(() => {
@@ -190,7 +190,7 @@ describe('BusinessDashboardScreen', () => {
 
     const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
-    expect(await findByText('진행중 에스크로 (1건)')).toBeTruthy();
+    expect(await findByText('진행중 보호 결제 (1건)')).toBeTruthy();
     expect(await findByText('김민수')).toBeTruthy();
     expect(queryByText('완료 고객')).toBeNull();
   });
@@ -322,8 +322,8 @@ describe('BusinessDashboardScreen', () => {
 
     expect(await findByText('이서연')).toBeTruthy();
     expect(await findByText('환불 검토 요청')).toBeTruthy();
-    expect(await findByText('TrustPay 검토 중')).toBeTruthy();
-    expect(await findByText('환불 검토 중: TrustPay 검토 중')).toBeTruthy();
+    expect(await findByText('TrustPay 확인 중')).toBeTruthy();
+    expect(await findByText('환불 검토 중: TrustPay 확인 중')).toBeTruthy();
     expect(queryByText(/2주 넘게 안 열고 전화도 받지 않아/)).toBeNull();
   });
 
@@ -346,7 +346,7 @@ describe('BusinessDashboardScreen', () => {
           refundReviewRequests: [
             {
               id: 'refund-review-merchant',
-              status: 'merchant_review',
+              status: 'platform_investigation',
               refundableAmount: 10,
               consumerReason: '2주 넘게 문을 열지 않아 환불 검토를 요청합니다.',
               requestedAt: new Date().toISOString(),
@@ -359,7 +359,7 @@ describe('BusinessDashboardScreen', () => {
     const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
     expect(await findByText('김민수')).toBeTruthy();
-    expect(await findByText('환불 검토 중: 사업자 응답 대기')).toBeTruthy();
+    expect(await findByText('환불 검토 중: TrustPay 추가 확인 중')).toBeTruthy();
     expect(queryByText(/2주 넘게 문을 열지 않아/)).toBeNull();
   });
 

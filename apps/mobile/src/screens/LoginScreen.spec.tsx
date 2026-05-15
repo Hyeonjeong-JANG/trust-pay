@@ -256,7 +256,7 @@ describe('LoginScreen', () => {
       registrationNumber: '1234567890',
       status: 'unavailable',
       source: 'nts',
-      message: '국세청 사업자등록번호 인증을 완료할 수 없어 TrustPay 검토로 진행합니다.',
+      message: '국세청 사업자등록번호 인증을 완료할 수 없어 TrustPay 확인 절차로 진행합니다.',
     });
 
     const { getByText, getByPlaceholderText, findByText, queryByText } = renderWithProviders(<LoginScreen />);
@@ -273,7 +273,7 @@ describe('LoginScreen', () => {
       expect(api.verifyBusinessRegistrationNumber).toHaveBeenCalledWith({ registrationNumber: '1234567890' });
     });
     expect(await findByText('사업자등록번호 인증 실패')).toBeTruthy();
-    expect(await findByText('국세청 사업자등록번호 인증을 완료할 수 없어 TrustPay 검토로 진행합니다.')).toBeTruthy();
+    expect(await findByText('국세청 사업자등록번호 인증을 완료할 수 없어 TrustPay 확인 절차로 진행합니다.')).toBeTruthy();
     expect(queryByText('데모 국세청 인증 완료')).toBeNull();
   });
 

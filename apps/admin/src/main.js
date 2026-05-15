@@ -1,4 +1,4 @@
-import { adminTabs, buildAdminAuthHeaders, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js?v=trustpay-admin-20260515-dashboard3';
+import { adminTabs, buildAdminAuthHeaders, buildDashboardAmountFlow, buildDashboardEvents, buildDashboardPipeline, buildDashboardSlaRisks, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js?v=trustpay-admin-20260515-ops-copy1';
 
 const state = {
   apiBase: getApiBase(window.TRUSTPAY_ADMIN_API_BASE || '/api', window.location.hostname),
@@ -28,7 +28,7 @@ async function adminRequest(path, options = {}) {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(body.message || '관리자 API 요청에 실패했습니다.');
+    throw new Error(body.message || '운영 API 요청에 실패했습니다.');
   }
   return res.json();
 }
@@ -77,7 +77,7 @@ function renderLoading(message) {
 function renderLoginRequired() {
   $('#login-view').hidden = false;
   $('#admin-view').hidden = true;
-  setLoginStatus('관리자 아이디와 비밀번호를 입력하세요.', 'warn');
+  setLoginStatus('운영자 아이디와 비밀번호를 입력하세요.', 'warn');
 }
 
 function renderAdminShell() {
@@ -126,15 +126,21 @@ function renderDashboard() {
     `)
     .join('');
   $('#content-body').innerHTML = `
-    <section class="dashboard-board">
-      <div class="dashboard-section-head">
+    <section class="dashboard-board dashboard-hero compact-queue">
+      <div class="dashboard-section-head compact-head">
         <div>
-          <span>운영 큐</span>
-          <h2>오늘 바로 처리할 항목</h2>
+          <span>처리 현황</span>
+          <h2>바로 확인할 항목</h2>
         </div>
         <p>카드를 누르면 해당 목록으로 이동합니다.</p>
       </div>
-      <div class="metric-grid admin-metrics">${cards}</div>
+      <div class="metric-strip admin-metrics">${cards}</div>
+    </section>
+    <section class="dashboard-grid">
+      ${renderDashboardPipeline()}
+      ${renderDashboardAmountFlow()}
+      ${renderDashboardSlaRisks()}
+      ${renderDashboardEvents()}
     </section>
   `;
   for (const button of document.querySelectorAll('[data-tab]')) {
@@ -143,6 +149,104 @@ function renderDashboard() {
       setActiveTab(button.dataset.tab);
     });
   }
+}
+
+function renderDashboardPipeline() {
+  const segments = buildDashboardPipeline(state.dashboard);
+  const rows = segments.map((item) => `
+    <button type="button" class="funnel-stage" data-tone="${escapeHtml(item.tone)}" data-tab="refunds" data-status="${escapeHtml(item.status)}" style="--stage-width: ${Math.max(item.percent, 6)}%">
+      <i class="funnel-bar" aria-hidden="true"></i>
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${escapeHtml(item.count)}건</strong>
+      <small>${escapeHtml(item.percent)}%</small>
+    </button>
+  `).join('');
+  return `
+    <article class="dashboard-board chart-card pipeline-chart">
+      <div class="dashboard-section-head compact-head">
+        <div>
+          <span>처리 단계</span>
+          <h2>환불 검토 단계</h2>
+        </div>
+      </div>
+      <div class="pipeline-funnel">${rows}</div>
+    </article>
+  `;
+}
+
+function renderDashboardAmountFlow() {
+  const items = buildDashboardAmountFlow(state.dashboard);
+  const stack = items.map((item) => `
+    <span data-tone="${escapeHtml(item.tone)}" style="width: ${escapeHtml(item.percent)}%" title="${escapeHtml(`${item.label} ${item.value}`)}"></span>
+  `).join('');
+  const rows = items.map((item) => `
+    <div class="amount-flow-row" data-tone="${escapeHtml(item.tone)}">
+      <div>
+        <span>${escapeHtml(item.label)}</span>
+        <strong>${escapeHtml(item.value)}</strong>
+      </div>
+      <small>${escapeHtml(item.percent)}%</small>
+    </div>
+  `).join('');
+  return `
+    <article class="dashboard-board chart-card amount-flow">
+      <div class="dashboard-section-head compact-head">
+        <div>
+          <span>정산 흐름</span>
+          <h2>보호 금액 현황</h2>
+        </div>
+      </div>
+      <div class="amount-stack" aria-label="보호 금액 비중">${stack}</div>
+      <div class="amount-ledger">${rows}</div>
+    </article>
+  `;
+}
+
+function renderDashboardSlaRisks() {
+  const risks = buildDashboardSlaRisks(state.dashboard);
+  const rows = risks.map((risk) => `
+    <button type="button" class="sla-item" data-tab="refunds" data-status="${escapeHtml(risk.status)}">
+      <span class="sla-badge">${escapeHtml(risk.badge)}</span>
+      <strong>${escapeHtml(risk.businessName)}</strong>
+      <span>${escapeHtml(risk.consumerName)} · ${escapeHtml(risk.amount)}</span>
+    </button>
+  `).join('');
+  return `
+    <article class="dashboard-board chart-card sla-list">
+      <div class="dashboard-section-head compact-head">
+        <div>
+          <span>응답 기한</span>
+          <h2>사업자 답변 기한</h2>
+        </div>
+      </div>
+      <div class="sla-stack">${rows || '<div class="empty">확인할 응답 기한이 없습니다.</div>'}</div>
+    </article>
+  `;
+}
+
+function renderDashboardEvents() {
+  const events = buildDashboardEvents(state.dashboard);
+  const rows = events.map((event) => `
+    <article class="event-item">
+      <span class="event-dot" data-type="${escapeHtml(event.type)}" aria-hidden="true"></span>
+      <div>
+        <strong>${escapeHtml(event.title)}</strong>
+        <p>${escapeHtml(event.description)}</p>
+        <small>${escapeHtml(event.time)}</small>
+      </div>
+    </article>
+  `).join('');
+  return `
+    <article class="dashboard-board chart-card event-stream">
+      <div class="dashboard-section-head compact-head">
+        <div>
+          <span>처리 내역</span>
+          <h2>최근 처리 내역</h2>
+        </div>
+      </div>
+      <div class="event-list">${rows || '<div class="empty">최근 처리 내역이 없습니다.</div>'}</div>
+    </article>
+  `;
 }
 
 async function loadDashboard() {
@@ -175,7 +279,7 @@ function renderRefundLayout() {
     <section class="workbench">
       <aside id="case-list" class="queue" aria-label="환불 검토 목록"></aside>
       <article id="case-detail" class="detail" aria-label="환불 검토 상세">
-        <div class="empty detail-empty">검토할 케이스를 선택하세요.</div>
+        <div class="empty detail-empty">확인할 항목을 선택하세요.</div>
       </article>
     </section>
   `;
@@ -185,7 +289,7 @@ function renderQueue() {
   const list = $('#case-list');
   list.innerHTML = '';
   if (state.reviews.length === 0) {
-    list.innerHTML = '<div class="empty">이 상태의 환불 검토 케이스가 없습니다.</div>';
+    list.innerHTML = '<div class="empty">이 상태의 환불 검토 항목이 없습니다.</div>';
     renderDetail(null);
     return;
   }
@@ -231,7 +335,7 @@ function renderDecisionButtons() {
     <div class="button-row">
       <button id="approve-review" type="button">환불 승인</button>
       <button id="reject-review" type="button">환불 거절</button>
-      <button id="investigate-review" type="button">추가 조사</button>
+      <button id="investigate-review" type="button">추가 확인</button>
     </div>
   `;
 }
@@ -258,15 +362,15 @@ function renderDecisionModal() {
   const meta = getRefundDecisionMeta(decision);
   const helper = meta.reasonRequired
     ? `${meta.label} 사유를 ${meta.minLength}자 이상 남겨주세요.`
-    : '환불 승인은 사유 없이 처리할 수 있습니다. 운영 기록이 필요하면 선택으로 남겨주세요.';
+    : '환불 승인은 사유 없이 처리할 수 있습니다. 처리 메모가 필요하면 선택으로 남겨주세요.';
   root.innerHTML = `
     <div class="modal-backdrop decision-modal" role="presentation">
       <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="decision-modal-title">
-        <div class="modal-kicker">환불/분쟁 최종 처리</div>
+        <div class="modal-kicker">환불 검토 최종 처리</div>
         <h2 id="decision-modal-title">${escapeHtml(meta.label)}</h2>
         <p>${escapeHtml(helper)}</p>
-        <label for="decision-reason">운영 기록${meta.reasonRequired ? ' (필수)' : ' (선택)'}</label>
-        <textarea id="decision-reason" maxlength="500" placeholder="결정 근거, 참고한 사업자 소명, 추가 조사 범위를 입력하세요."></textarea>
+        <label for="decision-reason">처리 메모${meta.reasonRequired ? ' (필수)' : ' (선택)'}</label>
+        <textarea id="decision-reason" maxlength="500" placeholder="결정 근거, 참고한 사업자 답변, 추가 확인 범위를 입력하세요."></textarea>
         ${error ? `<div class="modal-error">${escapeHtml(error)}</div>` : ''}
         <div class="modal-actions">
           <button id="cancel-decision" type="button">취소</button>
@@ -288,24 +392,24 @@ function renderActionPanel(review, summary) {
     case 'awaiting_merchant':
       return `
         <section class="action-panel" data-mode="awaiting_merchant">
-          <h3>사업자 응답 대기 중</h3>
-          <p>소명 요청을 보냈습니다. 응답 기한은 <strong>${escapeHtml(summary.respondBy)}</strong>입니다.</p>
-          <blockquote>${escapeHtml(review.merchantNotice || '사업자에게 소명을 요청했습니다.')}</blockquote>
+          <h3>사업자 답변 대기 중</h3>
+          <p>확인 요청을 보냈습니다. 응답 기한은 <strong>${escapeHtml(summary.respondBy)}</strong>입니다.</p>
+          <blockquote>${escapeHtml(review.merchantNotice || '사업자에게 확인을 요청했습니다.')}</blockquote>
         </section>
       `;
     case 'needs_decision':
       return `
         <section class="action-panel action-panel-focus" data-mode="needs_decision">
-          <h3>사업자 응답 도착</h3>
-          <p>사업자 소명을 확인한 뒤 최종 처리 방향을 선택하세요.</p>
-          <blockquote>${escapeHtml(review.merchantResponse || '사업자 응답이 접수되었습니다.')}</blockquote>
+          <h3>사업자 답변 도착</h3>
+          <p>사업자 답변을 확인한 뒤 최종 처리 방향을 선택하세요.</p>
+          <blockquote>${escapeHtml(review.merchantResponse || '사업자 답변이 접수되었습니다.')}</blockquote>
           ${renderDecisionButtons()}
         </section>
       `;
     case 'terminal':
       return `
         <section class="action-panel" data-mode="terminal">
-          <h3>검토 종료</h3>
+          <h3>처리 완료</h3>
           <p>${escapeHtml(review.adminResolutionReason || `${summary.statusLabel} 상태로 검토가 종료되었습니다.`)}</p>
         </section>
       `;
@@ -313,13 +417,13 @@ function renderActionPanel(review, summary) {
     default:
       return `
         <section class="action-panel" data-mode="request_or_decide">
-          <label>사업자에게 보낼 소명 요청</label>
+          <label>사업자에게 확인할 내용</label>
           <textarea id="merchant-notice" maxlength="500">${escapeHtml(review.merchantNotice || '고객이 장기 휴업 또는 이용 불가를 주장했습니다. 영업 가능 여부와 미사용분 처리 방안을 답변해주세요.')}</textarea>
           <div class="button-row">
-            <button id="request-merchant" class="primary" type="button">사업자 소명 요청</button>
+            <button id="request-merchant" class="primary" type="button">사업자 답변 요청</button>
             <button id="approve-review" type="button">환불 승인</button>
             <button id="reject-review" type="button">환불 거절</button>
-            <button id="investigate-review" type="button">추가 조사</button>
+            <button id="investigate-review" type="button">추가 확인</button>
           </div>
         </section>
       `;
@@ -329,7 +433,7 @@ function renderActionPanel(review, summary) {
 function renderDetail(review) {
   const detail = $('#case-detail');
   if (!review) {
-    detail.innerHTML = '<div class="empty detail-empty">검토할 케이스를 선택하세요.</div>';
+    detail.innerHTML = '<div class="empty detail-empty">확인할 항목을 선택하세요.</div>';
     return;
   }
 
@@ -348,7 +452,7 @@ function renderDetail(review) {
     <div class="metric-grid">
       <div><span>환불 검토 금액</span><strong>${summary.refundableKrw}</strong></div>
       <div><span>사용/정산 금액</span><strong>${summary.usedKrw}</strong></div>
-      <div><span>사업자 응답 기한</span><strong>${summary.respondBy}</strong></div>
+      <div><span>사업자 답변 기한</span><strong>${summary.respondBy}</strong></div>
       <div><span>증빙</span><strong>${summary.photoCountText}</strong></div>
     </div>
     <section class="evidence-panel">
@@ -371,7 +475,7 @@ function renderDetail(review) {
 
 async function loadReviews() {
   renderRefundLayout();
-  setStatus('환불 검토 큐를 불러오는 중...');
+  setStatus('환불 검토 목록을 불러오는 중...');
   state.reviews = await fetchReviewsForFilter(state.status);
   renderFilters();
   renderQueue();
@@ -396,8 +500,8 @@ function renderBusinessList() {
       </div>
       <div class="list-meta">
         <span>상품 ${business._count?.products ?? 0}</span>
-        <span>에스크로 ${business._count?.escrows ?? 0}</span>
-        <span>분쟁 ${business._count?.refundReviewRequests ?? 0}</span>
+        <span>보호 결제 ${business._count?.escrows ?? 0}</span>
+        <span>환불 검토 ${business._count?.refundReviewRequests ?? 0}</span>
       </div>
     </article>
   `).join('');
@@ -419,9 +523,9 @@ function renderConsumerList() {
         <span>${escapeHtml(consumer.phone || consumer.email || '연락처 없음')}</span>
       </div>
       <div class="list-meta">
-        <span>에스크로 ${consumer._count?.escrows ?? 0}</span>
+        <span>보호 결제 ${consumer._count?.escrows ?? 0}</span>
         <span>결제요청 ${consumer._count?.chargeRequests ?? 0}</span>
-        <span>분쟁 ${consumer._count?.refundReviewRequests ?? 0}</span>
+        <span>환불 검토 ${consumer._count?.refundReviewRequests ?? 0}</span>
       </div>
     </article>
   `).join('');
@@ -452,21 +556,21 @@ function renderEscrowList() {
       </article>
     `;
   }).join('');
-  $('#content-body').innerHTML = `<section class="list-panel">${rows || '<div class="empty">표시할 에스크로가 없습니다.</div>'}</section>`;
+  $('#content-body').innerHTML = `<section class="list-panel">${rows || '<div class="empty">표시할 보호 결제가 없습니다.</div>'}</section>`;
 }
 
 async function loadEscrows() {
-  renderLoading('거래/에스크로 목록을 불러오는 중...');
+  renderLoading('보호 결제 목록을 불러오는 중...');
   state.escrows = await adminRequest('/admin/escrows');
   renderEscrowList();
-  setStatus(`에스크로 ${state.escrows.length}건`, 'ok');
+  setStatus(`보호 결제 ${state.escrows.length}건`, 'ok');
 }
 
 function renderSettings() {
   $('#content-body').innerHTML = `
     <section class="panel-card settings-panel">
-      <h2>관리자 로그인</h2>
-      <p>현재 관리자 아이디: <strong>${escapeHtml(state.adminId || '로그인 전')}</strong></p>
+      <h2>운영자 로그인</h2>
+      <p>현재 운영자 아이디: <strong>${escapeHtml(state.adminId || '로그인 전')}</strong></p>
       <p>로컬 기본 계정은 <code>admin / admin1234</code>입니다. 운영 환경에서는 <code>ADMIN_ID</code>와 <code>ADMIN_API_SECRET</code>을 설정하세요.</p>
       <button id="logout-admin" type="button">로그아웃</button>
     </section>
@@ -491,14 +595,14 @@ function renderSettings() {
 async function requestMerchant(id) {
   const merchantNotice = $('#merchant-notice').value.trim();
   if (merchantNotice.length < 10) {
-    setStatus('사업자 소명 요청은 10자 이상 입력해야 합니다.', 'warn');
+    setStatus('사업자 답변 요청은 10자 이상 입력해야 합니다.', 'warn');
     return;
   }
   await adminRequest(`/admin/refund-reviews/${id}/request-merchant-response`, {
     method: 'POST',
     body: JSON.stringify({ merchantNotice }),
   });
-  setStatus('사업자 소명 요청을 보냈습니다.', 'ok');
+  setStatus('사업자 답변 요청을 보냈습니다.', 'ok');
   state.status = 'merchant_response_requested';
   await loadReviews();
 }

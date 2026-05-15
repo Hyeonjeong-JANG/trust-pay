@@ -6,25 +6,25 @@ export const visibleQueueStatuses = [
 ];
 
 export const adminTabs = [
-  { id: 'dashboard', label: '대시보드', description: '오늘 처리해야 할 운영 지표를 확인합니다.' },
-  { id: 'refunds', label: '환불/분쟁', description: '소비자 환불 요청과 사업자 소명을 처리합니다.' },
+  { id: 'dashboard', label: '대시보드', description: '오늘 처리해야 할 항목을 확인합니다.' },
+  { id: 'refunds', label: '환불 검토', description: '소비자 요청과 사업자 답변을 확인합니다.' },
   { id: 'businesses', label: '가맹점', description: '가입 가맹점과 인증 상태를 확인합니다.' },
   { id: 'consumers', label: '소비자', description: '소비자 계정과 이용 현황을 확인합니다.' },
-  { id: 'escrows', label: '거래/에스크로', description: '전체 보호 결제와 정산 상태를 확인합니다.' },
-  { id: 'settings', label: '설정', description: '관리자 로그인과 API 연결 상태를 확인합니다.' },
+  { id: 'escrows', label: '보호 결제', description: '전체 보호 결제와 정산 상태를 확인합니다.' },
+  { id: 'settings', label: '설정', description: '운영자 로그인과 API 연결 상태를 확인합니다.' },
 ];
 
 const STATUS_LABELS = {
   needs_action: '처리 필요',
-  waiting_merchant: '사업자 대기',
-  resolved: '완료',
+  waiting_merchant: '답변 대기',
+  resolved: '처리 완료',
   all: '전체',
-  open: '열린 전체',
-  platform_review: 'TrustPay 검토',
-  merchant_response_requested: '사업자 소명 요청',
-  merchant_responded: '사업자 응답 완료',
-  merchant_review: '사업자 검토',
-  platform_investigation: '추가 조사',
+  open: '진행 중',
+  platform_review: '접수 확인',
+  merchant_response_requested: '사업자 답변 요청',
+  merchant_responded: '사업자 답변 도착',
+  merchant_review: '사업자 확인 중',
+  platform_investigation: '추가 확인',
   platform_approved: '환불 승인',
   rejected: '환불 거절',
   refunded: '환불 완료',
@@ -38,7 +38,7 @@ const RESOLVED_STATUSES = ['platform_approved', 'rejected', 'refunded'];
 const REFUND_DECISION_META = {
   approve: { label: '환불 승인', reasonRequired: false, minLength: 0 },
   reject: { label: '환불 거절', reasonRequired: true, minLength: 5 },
-  investigate: { label: '추가 조사', reasonRequired: true, minLength: 5 },
+  investigate: { label: '추가 확인', reasonRequired: true, minLength: 5 },
 };
 
 function isLocalHost(hostname) {
@@ -119,7 +119,7 @@ function getQueueTimestamp(review = {}) {
 }
 
 function getQueueDateLabel(review = {}) {
-  if (review.status === 'merchant_responded' && review.merchantRespondedAt) return '사업자 응답';
+  if (review.status === 'merchant_responded' && review.merchantRespondedAt) return '사업자 답변';
   if (TERMINAL_REFUND_REVIEW_STATUSES.has(review.status) && review.resolvedAt) return '종료';
   return '접수';
 }
@@ -139,13 +139,13 @@ export function buildReviewTimeline(review = {}) {
   const events = [
     {
       label: '소비자 요청 접수',
-      description: review.consumerReason || '환불 검토 요청이 접수되었습니다.',
+      description: review.consumerReason || '환불 요청이 접수되었습니다.',
       timestamp: formatDateTime(review.requestedAt),
       state: 'done',
     },
     {
-      label: 'TrustPay 1차 검토',
-      description: review.investigationReason || '요청 내용과 에스크로 상태를 확인합니다.',
+      label: '요청 내용 확인',
+      description: review.investigationReason || '요청 내용과 보호 결제 상태를 확인합니다.',
       timestamp: formatDateTime(review.businessClosureCheckedAt),
       state: review.status === 'platform_review' ? 'current' : 'done',
     },
@@ -153,8 +153,8 @@ export function buildReviewTimeline(review = {}) {
 
   if (review.merchantNotice || ['merchant_response_requested', 'merchant_review', 'merchant_responded'].includes(review.status) || TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) {
     events.push({
-      label: '사업자 소명 요청',
-      description: review.merchantNotice || '사업자에게 소명 요청을 보냈습니다.',
+      label: '사업자 답변 요청',
+      description: review.merchantNotice || '사업자에게 확인 요청을 보냈습니다.',
       timestamp: review.merchantRespondBy ? `기한 ${formatDate(review.merchantRespondBy)}` : '',
       state: ['merchant_response_requested', 'merchant_review'].includes(review.status) ? 'current' : 'done',
     });
@@ -162,8 +162,8 @@ export function buildReviewTimeline(review = {}) {
 
   if (review.merchantResponse || review.status === 'merchant_responded' || TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) {
     events.push({
-      label: '사업자 응답 완료',
-      description: review.merchantResponse || '사업자 응답이 접수되었습니다.',
+      label: '사업자 답변 도착',
+      description: review.merchantResponse || '사업자 답변이 접수되었습니다.',
       timestamp: formatDateTime(review.merchantRespondedAt),
       state: 'done',
     });
@@ -172,14 +172,14 @@ export function buildReviewTimeline(review = {}) {
   if (TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)) {
     events.push({
       label: getStatusLabel(review.status),
-      description: review.adminResolutionReason || '운영자 결정이 완료되었습니다.',
+      description: review.adminResolutionReason || '처리가 완료되었습니다.',
       timestamp: formatDateTime(review.resolvedAt),
       state: 'done',
     });
   } else if (review.status === 'merchant_responded') {
     events.push({
-      label: '운영자 최종 결정',
-      description: '사업자 응답을 확인한 뒤 승인, 거절, 추가 조사 중 하나를 선택하세요.',
+      label: '최종 처리',
+      description: '사업자 답변을 확인한 뒤 승인, 거절, 추가 확인 중 하나를 선택하세요.',
       timestamp: '',
       state: 'current',
     });
@@ -217,9 +217,9 @@ export function safeDataImageSrc(value) {
 export function getAdminRequestErrorMessage(error) {
   const message = error?.message || String(error ?? '');
   if (message === 'Failed to fetch' || message.includes('NetworkError')) {
-    return 'API 서버에 연결할 수 없습니다. API 실행 상태와 CORS 설정을 확인하세요.';
+      return 'API 서버에 연결할 수 없습니다. API 실행 상태와 CORS 설정을 확인하세요.';
   }
-  return message || '관리자 API 요청에 실패했습니다.';
+  return message || '운영 API 요청에 실패했습니다.';
 }
 
 export function formatKrwFromRlusd(amount) {
@@ -232,13 +232,68 @@ function formatCount(value, suffix) {
 
 export function summarizeDashboard(dashboard = {}) {
   return [
-    { label: '열린 환불/분쟁', value: formatCount(dashboard.refundReviews?.open, '건'), tone: 'warning', tab: 'refunds', status: 'all', helper: '전체 큐 보기' },
-    { label: '사업자 소명 대기', value: formatCount(dashboard.refundReviews?.merchantResponseRequested, '건'), tone: 'primary', tab: 'refunds', status: 'waiting_merchant', helper: '사업자 대기 보기' },
-    { label: '사업자 응답 완료', value: formatCount(dashboard.refundReviews?.merchantResponded, '건'), tone: 'success', tab: 'refunds', status: 'needs_action', helper: '응답 검토하기' },
-    { label: '활성 에스크로', value: formatCount(dashboard.escrows?.active, '건'), tone: 'neutral', tab: 'escrows', helper: '거래/에스크로 보기' },
+    { label: '진행 중인 환불 검토', value: formatCount(dashboard.refundReviews?.open, '건'), tone: 'warning', tab: 'refunds', status: 'all', helper: '전체 보기' },
+    { label: '사업자 답변 대기', value: formatCount(dashboard.refundReviews?.merchantResponseRequested, '건'), tone: 'primary', tab: 'refunds', status: 'waiting_merchant', helper: '답변 대기 보기' },
+    { label: '답변 도착', value: formatCount(dashboard.refundReviews?.merchantResponded, '건'), tone: 'success', tab: 'refunds', status: 'needs_action', helper: '답변 확인하기' },
+    { label: '활성 보호 결제', value: formatCount(dashboard.escrows?.active, '건'), tone: 'neutral', tab: 'escrows', helper: '보호 결제 보기' },
     { label: '가맹점', value: formatCount(dashboard.businesses?.total, '곳'), tone: 'neutral', tab: 'businesses', helper: '가맹점 보기' },
     { label: '소비자', value: formatCount(dashboard.consumers?.total, '명'), tone: 'neutral', tab: 'consumers', helper: '소비자 보기' },
   ];
+}
+
+function percentOf(value, total) {
+  return total > 0 ? Math.round((Number(value || 0) / total) * 100) : 0;
+}
+
+export function buildDashboardPipeline(dashboard = {}) {
+  const byStatus = dashboard.refundReviews?.byStatus ?? {};
+  const segments = [
+    { label: '접수 확인', count: byStatus.platformReview, status: 'platform_review', tone: 'primary' },
+    { label: '답변 대기', count: byStatus.waitingMerchant, status: 'waiting_merchant', tone: 'warning' },
+    { label: '답변 도착', count: byStatus.merchantResponded, status: 'needs_action', tone: 'success' },
+    { label: '추가 확인', count: byStatus.platformInvestigation, status: 'platform_investigation', tone: 'neutral' },
+    { label: '처리 완료', count: byStatus.resolved, status: 'resolved', tone: 'neutral' },
+  ].map((item) => ({ ...item, count: Number(item.count || 0) }));
+  const total = segments.reduce((sum, item) => sum + item.count, 0);
+  return segments.map((item) => ({ ...item, percent: percentOf(item.count, total) }));
+}
+
+export function buildDashboardAmountFlow(dashboard = {}) {
+  const escrows = dashboard.escrows ?? {};
+  const segments = [
+    { label: '정산 완료', amount: escrows.releasedAmount, tone: 'success' },
+    { label: '정산 대기', amount: escrows.pendingAmount, tone: 'primary' },
+    { label: '검토 중 보류', amount: escrows.frozenByRefundReviewAmount, tone: 'warning' },
+    { label: '환불 완료', amount: escrows.refundedAmount, tone: 'neutral' },
+  ].map((item) => ({ ...item, amount: Number(item.amount || 0) }));
+  const total = segments.reduce((sum, item) => sum + item.amount, 0);
+  return segments.map((item) => ({
+    ...item,
+    value: formatKrwFromRlusd(item.amount),
+    percent: percentOf(item.amount, total),
+  }));
+}
+
+export function buildDashboardSlaRisks(dashboard = {}) {
+  return (dashboard.refundReviews?.slaRisks ?? []).map((risk) => ({
+    id: risk.id,
+    businessName: risk.businessName ?? '사업자 미확인',
+    consumerName: risk.consumerName ?? '소비자 미확인',
+    amount: formatKrwFromRlusd(risk.refundableAmount),
+    badge: Number(risk.daysRemaining) < 0 ? '초과' : `D-${Number(risk.daysRemaining || 0)}`,
+    status: 'waiting_merchant',
+  }));
+}
+
+export function buildDashboardEvents(dashboard = {}) {
+  return (dashboard.recentEvents ?? []).map((event) => ({
+    id: event.id,
+    type: event.type,
+    title: event.label || getStatusLabel(event.status),
+    description: `${event.businessName ?? '사업자 미확인'} · ${event.consumerName ?? '소비자 미확인'} · ${formatKrwFromRlusd(event.amount)}`,
+    time: formatDateTime(event.occurredAt),
+    status: event.status,
+  }));
 }
 
 function sumAmount(items, status) {
@@ -283,6 +338,6 @@ export function summarizeEscrow(escrow) {
     consumerName: escrow.consumer?.name ?? '소비자 미확인',
     totalKrw: formatKrwFromRlusd(escrow.totalAmount),
     progressText: `${releasedCount}/${entries.length} 정산`,
-    refundText: `환불/분쟁 ${refundCount}건`,
+    refundText: `환불 검토 ${refundCount}건`,
   };
 }

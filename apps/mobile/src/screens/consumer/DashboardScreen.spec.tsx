@@ -274,7 +274,7 @@ describe('ConsumerDashboardScreen', () => {
         refundReviewRequests: [
           {
             id: 'refund-review-1',
-            status: 'platform_review',
+            status: 'platform_investigation',
             refundableAmount: 10,
             requestedAt: '2026-05-14T00:00:00.000Z',
           },
@@ -287,7 +287,7 @@ describe('ConsumerDashboardScreen', () => {
     );
 
     expect(await findByText('강남 블루보틀')).toBeTruthy();
-    expect(await findByText('환불 검토 중: TrustPay 검토 중')).toBeTruthy();
+    expect(await findByText('환불 검토 중: TrustPay 추가 확인 중')).toBeTruthy();
   });
 
   it('should surface a push-style on-site charge approval and approve it from home', async () => {

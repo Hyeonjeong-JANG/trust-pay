@@ -45,6 +45,7 @@ const REFUND_REVIEW_ACADEMY_INVESTIGATION_ID = '00000000-0000-4000-a000-00000000
 const REFUND_REVIEW_SALON_APPROVED_ID = '00000000-0000-4000-a000-000000004006';
 const REFUND_REVIEW_ACADEMY_REJECTED_ID = '00000000-0000-4000-a000-000000004007';
 const OPEN_REFUND_REVIEW_STATUSES = ['platform_review', 'merchant_response_requested', 'merchant_responded', 'merchant_review', 'platform_investigation'];
+const WAITING_MERCHANT_STATUSES = new Set(['merchant_response_requested', 'merchant_review']);
 const ACTIVE_REFUND_REVIEW_STATUSES = new Set([
   'platform_review',
   'merchant_response_requested',
@@ -58,6 +59,8 @@ const ACTIVE_REFUND_REVIEW_STATUSES = new Set([
   'platform_approved',
 ]);
 const TERMINAL_REFUND_REVIEW_STATUSES = new Set(['platform_approved', 'rejected', 'refunded']);
+const DASHBOARD_REFUND_REVIEW_STATUSES = new Set([...OPEN_REFUND_REVIEW_STATUSES, ...TERMINAL_REFUND_REVIEW_STATUSES]);
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
   'platform_review',
   'merchant_response_requested',
@@ -70,7 +73,7 @@ const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
   'refunded',
   'rejected',
 ]);
-const DEMO_REFUND_INVESTIGATION_REASON = '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.';
+const DEMO_REFUND_INVESTIGATION_REASON = '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 답변 기한으로 진행합니다.';
 
 const consumers = [
   {
@@ -1065,17 +1068,110 @@ function adminEscrowRows() {
   }));
 }
 
+function asNumber(value) {
+  return Number(value || 0);
+}
+
+function daysUntil(value, now = new Date()) {
+  const deadline = value ? new Date(value).getTime() : now.getTime();
+  return Math.floor((deadline - now.getTime()) / ONE_DAY_MS);
+}
+
+function dashboardParticipantName(review, role) {
+  const collection = role === 'business' ? businesses : consumers;
+  const id = role === 'business' ? review.businessId : review.consumerId;
+  return collection.find((item) => item.id === id)?.name || `${role === 'business' ? '사업자' : '소비자'} 미확인`;
+}
+
+function dashboardByStatus(reviews) {
+  return {
+    platformReview: reviews.filter((review) => review.status === 'platform_review').length,
+    waitingMerchant: reviews.filter((review) => WAITING_MERCHANT_STATUSES.has(review.status)).length,
+    merchantResponded: reviews.filter((review) => review.status === 'merchant_responded').length,
+    platformInvestigation: reviews.filter((review) => review.status === 'platform_investigation').length,
+    resolved: reviews.filter((review) => TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)).length,
+  };
+}
+
+function dashboardSlaMetrics(reviews) {
+  const slaRisks = reviews
+    .filter((review) => WAITING_MERCHANT_STATUSES.has(review.status))
+    .map((review) => ({
+      id: review.id,
+      businessName: dashboardParticipantName(review, 'business'),
+      consumerName: dashboardParticipantName(review, 'consumer'),
+      refundableAmount: asNumber(review.refundableAmount),
+      daysRemaining: daysUntil(review.merchantRespondBy),
+      status: review.status,
+    }))
+    .sort((a, b) => a.daysRemaining - b.daysRemaining);
+
+  return {
+    slaRisks,
+    slaOverdue: slaRisks.filter((risk) => risk.daysRemaining < 0).length,
+    slaDueSoon: slaRisks.filter((risk) => risk.daysRemaining >= 0 && risk.daysRemaining <= 1).length,
+  };
+}
+
+function dashboardEscrowAmounts() {
+  return escrows.reduce((totals, escrow) => {
+    const released = escrow.entries.filter((entry) => entry.status === 'released').reduce((sum, entry) => sum + asNumber(entry.amount), 0);
+    const pending = escrow.entries.filter((entry) => entry.status === 'pending').reduce((sum, entry) => sum + asNumber(entry.amount), 0);
+    const refunded = escrow.entries.filter((entry) => entry.status === 'refunded').reduce((sum, entry) => sum + asNumber(entry.amount), 0);
+    const frozen = Math.max(0, ...refundReviewRequests
+      .filter((review) => review.escrowId === escrow.id && OPEN_REFUND_REVIEW_STATUSES.includes(review.status))
+      .map((review) => asNumber(review.refundableAmount)));
+
+    totals.releasedAmount += released;
+    totals.pendingAmount += Math.max(pending - frozen, 0);
+    totals.frozenByRefundReviewAmount += frozen;
+    totals.refundedAmount += refunded;
+    return totals;
+  }, { releasedAmount: 0, pendingAmount: 0, frozenByRefundReviewAmount: 0, refundedAmount: 0 });
+}
+
+function dashboardRecentEvents(reviews) {
+  return reviews
+    .map((review) => {
+      const isResolved = TERMINAL_REFUND_REVIEW_STATUSES.has(review.status);
+      const isMerchantResponded = review.status === 'merchant_responded' || review.merchantRespondedAt;
+      const type = isResolved ? review.status : isMerchantResponded ? 'merchant_responded' : review.status;
+      const label = isResolved
+        ? review.status === 'platform_approved' ? '환불 승인' : review.status === 'rejected' ? '환불 거절' : '환불 완료'
+        : isMerchantResponded ? '사업자 답변 도착' : review.status === 'platform_investigation' ? '추가 확인' : '환불 검토 접수';
+      const occurredAt = (isResolved ? review.resolvedAt : isMerchantResponded ? review.merchantRespondedAt : review.requestedAt) || review.requestedAt;
+      return {
+        id: review.id,
+        type,
+        label,
+        businessName: dashboardParticipantName(review, 'business'),
+        consumerName: dashboardParticipantName(review, 'consumer'),
+        amount: asNumber(review.refundableAmount),
+        occurredAt: occurredAt ? new Date(occurredAt).toISOString() : null,
+        status: review.status,
+      };
+    })
+    .filter((event) => event.occurredAt)
+    .sort((a, b) => new Date(b.occurredAt || 0).getTime() - new Date(a.occurredAt || 0).getTime())
+    .slice(0, 6);
+}
+
 function adminDashboard() {
+  const dashboardReviews = refundReviewRequests.filter((review) => DASHBOARD_REFUND_REVIEW_STATUSES.has(review.status));
+  const slaMetrics = dashboardSlaMetrics(dashboardReviews);
   return {
     refundReviews: {
       open: refundReviewRequests.filter((review) => OPEN_REFUND_REVIEW_STATUSES.includes(review.status)).length,
       merchantResponseRequested: refundReviewRequests.filter((review) => review.status === 'merchant_response_requested').length,
       merchantResponded: refundReviewRequests.filter((review) => review.status === 'merchant_responded').length,
       platformInvestigation: refundReviewRequests.filter((review) => review.status === 'platform_investigation').length,
+      byStatus: dashboardByStatus(dashboardReviews),
+      ...slaMetrics,
     },
     businesses: { total: businesses.length },
     consumers: { total: consumers.length },
-    escrows: { active: escrows.filter((escrow) => escrow.status === 'active').length },
+    escrows: { active: escrows.filter((escrow) => escrow.status === 'active').length, ...dashboardEscrowAmounts() },
+    recentEvents: dashboardRecentEvents(dashboardReviews),
   };
 }
 
@@ -1121,7 +1217,7 @@ module.exports = async function handler(req, res) {
   const body = req.method === 'POST' ? await parseBody(req) : {};
 
   if (parts[0] === 'admin') {
-    if (!isAdminRequest(req)) return send(res, 401, { message: '관리자 권한이 필요합니다' });
+    if (!isAdminRequest(req)) return send(res, 401, { message: '운영자 권한이 필요합니다' });
 
     if (req.method === 'GET' && path === '/admin/dashboard') {
       return send(res, 200, adminDashboard());
@@ -1278,13 +1374,13 @@ module.exports = async function handler(req, res) {
     const review = refundReviewRequests.find((item) => item.id === parts[2]);
     if (!review) return send(res, 404, { message: 'Refund review not found' });
     if (!session || session.role !== 'business' || session.userId !== review.businessId) {
-      return send(res, 403, { message: '해당 사업자만 환불 검토 소명을 제출할 수 있습니다' });
+      return send(res, 403, { message: '해당 사업자만 환불 검토 답변을 제출할 수 있습니다' });
     }
     if (review.status !== 'merchant_response_requested') {
-      return send(res, 400, { message: '사업자 소명 요청 상태에서만 응답할 수 있습니다' });
+      return send(res, 400, { message: '사업자 답변 요청 상태에서만 응답할 수 있습니다' });
     }
     const response = typeof body.response === 'string' ? body.response.trim() : '';
-    if (response.length < 10) return send(res, 400, { message: '소명 내용을 10자 이상 입력해주세요' });
+    if (response.length < 10) return send(res, 400, { message: '답변 내용을 10자 이상 입력해주세요' });
 
     review.status = 'merchant_responded';
     review.merchantResponse = response;
@@ -1301,7 +1397,7 @@ module.exports = async function handler(req, res) {
       return send(res, 403, { message: '해당 소비자만 환불 검토를 요청할 수 있습니다' });
     }
     if (escrow.status !== 'active') {
-      return send(res, 400, { message: '진행 중인 에스크로만 환불 검토를 요청할 수 있습니다' });
+      return send(res, 400, { message: '진행 중인 보호 결제만 환불 검토를 요청할 수 있습니다' });
     }
 
     const existing = refundReviewRequests
@@ -1461,7 +1557,7 @@ module.exports = async function handler(req, res) {
     const hasOpenRefundReview = refundReviewRequests.some((review) => (
       review.escrowId === escrow?.id && ACTIVE_REFUND_REVIEW_STATUSES.has(review.status)
     ));
-    if (hasOpenRefundReview) return send(res, 400, { message: '환불 검토가 진행 중인 에스크로는 정산할 수 없습니다' });
+    if (hasOpenRefundReview) return send(res, 400, { message: '환불 검토가 진행 중인 보호 결제는 정산할 수 없습니다' });
     const entry = escrow?.entries.find((item) => item.month === body.entryMonth && item.status === 'pending');
     if (!entry) return send(res, 400, { message: '정산 가능한 월차가 없습니다' });
     entry.status = 'released';

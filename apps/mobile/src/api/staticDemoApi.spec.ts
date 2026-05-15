@@ -113,6 +113,47 @@ describe('static Demo API fixture', () => {
     }
   });
 
+  it('serves chart-ready demo admin dashboard metrics', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-15T00:00:00.000Z'));
+
+    try {
+      const response = await callAdminApi('GET', '/api/admin/dashboard');
+      const dashboard = response.body as any;
+
+      expect(response.statusCode).toBe(200);
+      expect(dashboard.refundReviews.byStatus).toEqual({
+        platformReview: 1,
+        waitingMerchant: 2,
+        merchantResponded: 1,
+        platformInvestigation: 1,
+        resolved: 2,
+      });
+      expect(dashboard.refundReviews.slaRisks.slice(0, 2)).toEqual([
+        expect.objectContaining({ businessName: '파워짐 피트니스', consumerName: '오하준', daysRemaining: 5, status: 'merchant_review' }),
+        expect.objectContaining({ businessName: '크린토피아 역삼점', consumerName: '정다은', daysRemaining: 6, status: 'merchant_response_requested' }),
+      ]);
+      expect(dashboard.escrows).toMatchObject({
+        active: 9,
+        releasedAmount: 2100,
+        pendingAmount: 1050,
+        frozenByRefundReviewAmount: 1690,
+        refundedAmount: 300,
+      });
+      expect(dashboard.recentEvents[0]).toMatchObject({
+        type: 'merchant_responded',
+        label: '사업자 답변 도착',
+        businessName: '헤어살롱 루나',
+        consumerName: '정다은',
+        amount: 220,
+        occurredAt: '2026-05-16T05:20:00.000Z',
+      });
+      expect(JSON.stringify(dashboard)).not.toContain('consumerReason');
+      expect(JSON.stringify(dashboard)).not.toContain('photoDataUrls');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('serves varied demo customers across every bundled business dashboard', async () => {
     const businessesResponse = await callApi('GET', '/api/business');
     const businesses = businessesResponse.body as any[];
@@ -335,7 +376,7 @@ describe('static Demo API fixture', () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(response.body).toMatchObject({ message: '환불 검토가 진행 중인 에스크로는 정산할 수 없습니다' });
+    expect(response.body).toMatchObject({ message: '환불 검토가 진행 중인 보호 결제는 정산할 수 없습니다' });
   });
 
   it('creates and resolves merchant-originated QR payment requests', async () => {

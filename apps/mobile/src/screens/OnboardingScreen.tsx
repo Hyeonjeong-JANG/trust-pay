@@ -28,13 +28,13 @@ const SLIDES: Slide[] = [
     key: '1',
     illustration: <ShieldIllustration size={120} />,
     title: '선불금을 월별로 보호',
-    desc: '이미 이용한 월차만 사업자에게 릴리즈되고\n남은 월차는 취소 시 환불할 수 있습니다.',
+    desc: '이미 이용한 월차만 사업자에게 정산되고\n남은 월차는 취소 시 환불할 수 있습니다.',
   },
   {
     key: '2',
     illustration: <EscrowIllustration size={120} />,
-    title: 'XLS-85 Token Escrow',
-    desc: 'XRP Ledger Testnet의 Token Escrow로 각 월차를 잠급니다.\nfinishAfter 이후 월별로 릴리즈되어 흐름이 원장에 남습니다.',
+    title: 'XRPL 보호 원장',
+    desc: 'XRP Ledger Testnet의 보호 원장에 각 월차를 보관합니다.\n정산 가능 시점 이후 월별 흐름이 원장에 남습니다.',
   },
   {
     key: '3',

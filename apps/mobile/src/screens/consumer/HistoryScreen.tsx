@@ -32,7 +32,7 @@ const RIPPLE_EPOCH = 946684800;
 
 const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; bg: string }> = {
   created: { icon: '📝', label: '보호 결제 시작', color: colors.primary, bg: colors.primaryLight },
-  released: { icon: '✅', label: '릴리즈 완료', color: colors.success, bg: colors.successLight },
+  released: { icon: '✅', label: '정산 완료', color: colors.success, bg: colors.successLight },
   refunded: { icon: '↩️', label: '환불됨', color: colors.gray500, bg: colors.gray100 },
   refund_review: { icon: '🛡️', label: '환불 검토 요청 접수', color: colors.warning, bg: colors.warningLight },
 };
@@ -64,7 +64,7 @@ export function HistoryScreen(_props: ConsumerTabProps<'History'>) {
         escrowId: escrow.id,
       });
 
-      // entry별 릴리즈/환불 이벤트
+      // 월차별 정산/환불 이벤트
       for (const entry of escrow.entries) {
         if (entry.status === 'released' || entry.status === 'refunded') {
           items.push({

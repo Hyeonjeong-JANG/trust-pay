@@ -130,7 +130,7 @@ export class EscrowService {
 
   async create(dto: CreateEscrowDto, user: SessionUser) {
     if (user.role !== 'consumer' || user.userId !== dto.consumerId) {
-      throw new ForbiddenException('본인 소비자 계정으로만 에스크로를 생성할 수 있습니다');
+      throw new ForbiddenException('본인 소비자 계정으로만 보호 결제를 생성할 수 있습니다');
     }
 
     const consumer = await this.prisma.consumer.findUnique({
@@ -206,7 +206,7 @@ export class EscrowService {
 
     if (escrowType === 'prepaid') {
       if (!requestedUnitPrice || !requestedValidityMonths) {
-        throw new BadRequestException('이용권 에스크로에는 1회 이용금액과 유효기간이 필요합니다');
+        throw new BadRequestException('이용권 보호 결제에는 1회 이용금액과 유효기간이 필요합니다');
       }
       const entryCount = getWholeRatio(totalAmount, requestedUnitPrice);
       if (entryCount === null) {
@@ -245,7 +245,7 @@ export class EscrowService {
       }
     } else {
       if (!requestedMonths) {
-        throw new BadRequestException('월정액 에스크로에는 기간이 필요합니다');
+        throw new BadRequestException('월정액 보호 결제에는 기간이 필요합니다');
       }
       monthlyAmount = totalAmount / requestedMonths;
       entryMonths = requestedMonths;
@@ -298,7 +298,7 @@ export class EscrowService {
     });
     if (!escrow) throw new NotFoundException('Escrow not found');
     if (user.role !== 'business' || user.userId !== escrow.businessId) {
-      throw new ForbiddenException('해당 사업자만 에스크로를 정산할 수 있습니다');
+      throw new ForbiddenException('해당 사업자만 보호 결제를 정산할 수 있습니다');
     }
 
     const entry = escrow.entries.find((e) => e.month === entryMonth);
@@ -309,7 +309,7 @@ export class EscrowService {
     const hasOpenRefundReview = (escrow.refundReviewRequests ?? [])
       .some((review) => ACTIVE_REFUND_REVIEW_STATUSES.includes(review.status));
     if (hasOpenRefundReview) {
-      throw new BadRequestException('환불 검토가 진행 중인 에스크로는 정산할 수 없습니다');
+      throw new BadRequestException('환불 검토가 진행 중인 보호 결제는 정산할 수 없습니다');
     }
 
     // Use business wallet for finish (business claims payment)
@@ -357,7 +357,7 @@ export class EscrowService {
       throw new ForbiddenException('해당 사업자만 차감 요청을 만들 수 있습니다');
     }
     if (escrow.status !== 'active' || escrow.escrowType !== 'prepaid') {
-      throw new BadRequestException('진행 중인 이용권 에스크로만 차감 요청을 만들 수 있습니다');
+      throw new BadRequestException('진행 중인 이용권 보호 결제만 차감 요청을 만들 수 있습니다');
     }
 
     let menuItem: any = null;
@@ -371,7 +371,7 @@ export class EscrowService {
       });
       if (!menuItem || !menuItem.isActive) throw new NotFoundException('Menu item not found');
       if (menuItem.product.businessId !== escrow.businessId || menuItem.productId !== escrow.productId) {
-        throw new BadRequestException('메뉴가 해당 에스크로 상품에 속하지 않습니다');
+        throw new BadRequestException('메뉴가 해당 보호 결제 상품에 속하지 않습니다');
       }
       requestedAmount = Number(menuItem.amount);
       menuName = menuItem.name;
@@ -506,7 +506,7 @@ export class EscrowService {
     });
     if (!escrow) throw new NotFoundException('Escrow not found');
     if (user.role !== 'consumer' || user.userId !== escrow.consumerId) {
-      throw new ForbiddenException('해당 소비자만 에스크로를 취소할 수 있습니다');
+      throw new ForbiddenException('해당 소비자만 보호 결제를 취소할 수 있습니다');
     }
 
     // Use consumer wallet for cancel (consumer reclaims funds)
@@ -553,7 +553,7 @@ export class EscrowService {
       throw new ForbiddenException('해당 소비자만 환불 검토를 요청할 수 있습니다');
     }
     if (escrow.status !== 'active') {
-      throw new BadRequestException('진행 중인 에스크로만 환불 검토를 요청할 수 있습니다');
+      throw new BadRequestException('진행 중인 보호 결제만 환불 검토를 요청할 수 있습니다');
     }
 
     const existing = await this.prisma.refundReviewRequest.findFirst({
@@ -603,10 +603,10 @@ export class EscrowService {
     const review = await this.prisma.refundReviewRequest.findUnique({ where: { id: requestId } });
     if (!review) throw new NotFoundException('Refund review not found');
     if (user.role !== 'business' || user.userId !== review.businessId) {
-      throw new ForbiddenException('해당 사업자만 환불 검토 소명을 제출할 수 있습니다');
+      throw new ForbiddenException('해당 사업자만 환불 검토 답변을 제출할 수 있습니다');
     }
     if (review.status !== 'merchant_response_requested') {
-      throw new BadRequestException('사업자 소명 요청 상태에서만 응답할 수 있습니다');
+      throw new BadRequestException('사업자 답변 요청 상태에서만 응답할 수 있습니다');
     }
 
     const updated = await this.prisma.refundReviewRequest.update({
@@ -623,7 +623,7 @@ export class EscrowService {
 
   async findByConsumer(consumerId: string, user: SessionUser) {
     if (user.role !== 'consumer' || user.userId !== consumerId) {
-      throw new ForbiddenException('본인 에스크로 목록만 조회할 수 있습니다');
+      throw new ForbiddenException('본인 보호 결제 목록만 조회할 수 있습니다');
     }
 
     const escrows = await this.prisma.escrow.findMany({
@@ -655,7 +655,7 @@ export class EscrowService {
     const isConsumerOwner = user.role === 'consumer' && user.userId === escrow.consumerId;
     const isBusinessOwner = user.role === 'business' && user.userId === escrow.businessId;
     if (!isConsumerOwner && !isBusinessOwner) {
-      throw new ForbiddenException('해당 에스크로에 접근할 수 없습니다');
+      throw new ForbiddenException('해당 보호 결제에 접근할 수 없습니다');
     }
   }
 
@@ -711,34 +711,34 @@ export class EscrowService {
       return {
         status: 'platform_review',
         slaBusinessDays: 0,
-        reason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 검토로 전환합니다.',
+        reason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 확인 절차로 전환합니다.',
       };
     }
     if (closureStatus === 'suspended') {
       return {
         status: 'platform_review',
         slaBusinessDays: 1,
-        reason: '국세청 사업자 상태가 휴업으로 확인되어 TrustPay 조사 대상입니다.',
+        reason: '국세청 사업자 상태가 휴업으로 확인되어 TrustPay 추가 확인 대상입니다.',
       };
     }
     if (closureStatus === 'not_configured') {
       return {
         status: 'platform_review',
         slaBusinessDays: 3,
-        reason: '사업자 인증 정보 재확인이 필요해 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.',
+        reason: '사업자 인증 정보 재확인이 필요해 TrustPay 자체 확인과 사업자 답변 기한으로 진행합니다.',
       };
     }
     if (closureStatus === 'unavailable') {
       return {
         status: 'platform_review',
         slaBusinessDays: 3,
-        reason: '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.',
+        reason: '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 답변 기한으로 진행합니다.',
       };
     }
     return {
       status: 'platform_review',
       slaBusinessDays: 3,
-      reason: 'TrustPay가 요청 내용을 먼저 검토한 뒤 필요한 경우 사업자 소명을 요청합니다.',
+      reason: 'TrustPay가 요청 내용을 먼저 검토한 뒤 필요한 경우 사업자 답변을 요청합니다.',
     };
   }
 

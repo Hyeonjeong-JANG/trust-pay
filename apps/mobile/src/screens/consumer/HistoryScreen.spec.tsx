@@ -29,7 +29,7 @@ describe('HistoryScreen', () => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         business: { name: '파워짐 헬스장' },
-        entries: [],
+        entries: [{ id: 'en-1', month: 1, amount: '100', status: 'released', updatedAt: new Date().toISOString() }],
       },
     ]);
 
@@ -38,8 +38,10 @@ describe('HistoryScreen', () => {
     );
 
     expect(await findByText('보호 결제 시작')).toBeTruthy();
+    expect(await findByText('정산 완료')).toBeTruthy();
     expect(await findByText('파워짐 헬스장')).toBeTruthy();
     expect(queryByText('에스크로 생성')).toBeNull();
+    expect(queryByText('릴리즈 완료')).toBeNull();
   });
 
   it('should include refund review requests in the consumer history timeline', async () => {

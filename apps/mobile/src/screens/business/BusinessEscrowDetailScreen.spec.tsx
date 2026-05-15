@@ -216,9 +216,9 @@ describe('BusinessEscrowDetailScreen', () => {
     );
 
     expect(await findByText('환불 검토 요청 접수됨')).toBeTruthy();
-    expect(await findByText('사업자 응답 대기')).toBeTruthy();
+    expect(await findByText('사업자 답변 대기')).toBeTruthy();
     expect(await findByText(/환불 검토 금액 ₩13,500/)).toBeTruthy();
-    expect(await findByText(/사업자 응답 기한 2026\. 5\. 18\./)).toBeTruthy();
+    expect(await findByText(/사업자 답변 기한 2026\. 5\. 18\./)).toBeTruthy();
     expect(await findByText(/고객이 장기 휴업을 주장했습니다/)).toBeTruthy();
   });
 
@@ -253,8 +253,8 @@ describe('BusinessEscrowDetailScreen', () => {
       <BusinessEscrowDetailScreen route={{ params: { id: 'e-prepaid-refund-response' } } as any} navigation={{} as any} />,
     );
 
-    fireEvent.changeText(await findByPlaceholderText('TrustPay에 전달할 소명 내용을 입력해주세요'), '현재 리모델링 중이며 다음 주부터 이용 가능합니다. 미사용분 환불 협의 가능합니다.');
-    fireEvent.press(await findByText('소명 제출'));
+    fireEvent.changeText(await findByPlaceholderText('TrustPay에 전달할 답변 내용을 입력해주세요'), '현재 리모델링 중이며 다음 주부터 이용 가능합니다. 미사용분 환불 협의 가능합니다.');
+    fireEvent.press(await findByText('답변 제출'));
 
     await waitFor(() => expect(api.respondToRefundReviewRequest).toHaveBeenCalledWith('refund-review-response', {
       response: '현재 리모델링 중이며 다음 주부터 이용 가능합니다. 미사용분 환불 협의 가능합니다.',
@@ -294,7 +294,7 @@ describe('BusinessEscrowDetailScreen', () => {
 
     expect(await findByText(/강남 블루보틀/)).toBeTruthy();
     expect(await findByText('환불 검토 요청 접수됨')).toBeTruthy();
-    expect(await findByText('TrustPay 검토 중')).toBeTruthy();
+    expect(await findByText('TrustPay 확인 중')).toBeTruthy();
     expect(queryByText(/2주 넘게 안 열고 전화도 안/)).toBeNull();
     expect(queryByText('첨부 사진 1장')).toBeNull();
   });
@@ -316,7 +316,7 @@ describe('BusinessEscrowDetailScreen', () => {
       refundReviewRequests: [
         {
           id: 'refund-review-merchant',
-          status: 'merchant_review',
+          status: 'platform_investigation',
           refundableAmount: 10,
           merchantRespondBy: '2026-05-18T00:00:00.000Z',
           consumerReason: '2주 넘게 문을 열지 않아 환불 검토를 요청합니다.',
@@ -331,7 +331,7 @@ describe('BusinessEscrowDetailScreen', () => {
     );
 
     expect(await findByText('환불 검토 요청 접수됨')).toBeTruthy();
-    expect(await findByText('사업자 응답 대기')).toBeTruthy();
+    expect(await findByText('TrustPay 추가 확인 중')).toBeTruthy();
     expect(queryByText(/2주 넘게 문을 열지 않아/)).toBeNull();
     expect(queryByText('첨부 사진 1장')).toBeNull();
   });

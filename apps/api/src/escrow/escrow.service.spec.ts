@@ -673,7 +673,7 @@ describe('EscrowService', () => {
       });
       prisma.business.findUnique.mockResolvedValue(mockBusiness);
 
-      await expect(service.finishEntry('escrow-1', 1, businessUser)).rejects.toThrow('환불 검토가 진행 중인 에스크로는 정산할 수 없습니다');
+      await expect(service.finishEntry('escrow-1', 1, businessUser)).rejects.toThrow('환불 검토가 진행 중인 보호 결제는 정산할 수 없습니다');
       expect(xrplService.finishEscrow).not.toHaveBeenCalled();
       expect(prisma.escrowEntry.update).not.toHaveBeenCalled();
     });
@@ -998,7 +998,7 @@ describe('EscrowService', () => {
           refundableAmount: 30,
           businessClosureStatus: 'active',
           businessClosureSource: 'nts',
-          investigationReason: 'TrustPay가 요청 내용을 먼저 검토한 뒤 필요한 경우 사업자 소명을 요청합니다.',
+          investigationReason: 'TrustPay가 요청 내용을 먼저 검토한 뒤 필요한 경우 사업자 답변을 요청합니다.',
           consumerReason: refundReviewInput.reason,
           photoDataUrlsJson: JSON.stringify(refundReviewInput.photoDataUrls),
           merchantRespondBy: expect.any(Date),
@@ -1040,7 +1040,7 @@ describe('EscrowService', () => {
           status: 'platform_review',
           businessClosureStatus: 'closed',
           businessClosureSource: 'nts',
-          investigationReason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 검토로 전환합니다.',
+          investigationReason: '국세청 사업자 상태가 폐업으로 확인되어 TrustPay 확인 절차로 전환합니다.',
         }),
         include: { escrow: { include: { business: true, consumer: true } } },
       });
@@ -1076,7 +1076,7 @@ describe('EscrowService', () => {
 
       expect(prisma.refundReviewRequest.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          investigationReason: '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 응답 SLA로 진행합니다.',
+          investigationReason: '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 답변 기한으로 진행합니다.',
         }),
         include: { escrow: { include: { business: true, consumer: true } } },
       });

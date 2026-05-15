@@ -294,14 +294,14 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
         </View>}
 
         <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>{effectiveEscrowType === 'monthly' ? '월별 릴리즈 금액' : '보호 금액권 잔액'}</Text>
+          <Text style={styles.infoLabel}>{effectiveEscrowType === 'monthly' ? '월별 정산 금액' : '보호 금액권 잔액'}</Text>
           <Text style={styles.infoValue}>{effectiveEscrowType === 'monthly' ? `월 ${formatKrw(monthlyAmountKrw)}` : formatKrw(effectiveAmountKrw)}</Text>
           <Text style={styles.infoSecondary}>{infoSecondary}</Text>
           <View style={styles.infoDivider} />
           {effectiveEscrowType === 'monthly' ? (
             <>
               <Text style={styles.infoDesc}>
-                총액은 {effectiveMonths || '0'}개의 Token Escrow로 나뉘어 잠기고, finishAfter 이후 매월 {formatKrw(monthlyAmountKrw)}가 {businessName}에게 릴리즈됩니다
+                총액은 {effectiveMonths || '0'}개월로 나뉘어 보호 원장에 보관되고, 정산 가능 시점 이후 매월 {formatKrw(monthlyAmountKrw)}가 {businessName}에게 정산됩니다
               </Text>
               <Text style={styles.infoHint}>취소 시 아직 대기 중인 월차는 소비자에게 환불됩니다</Text>
             </>

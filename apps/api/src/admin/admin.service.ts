@@ -3,8 +3,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { AdminRefundReviewListInput, AdminRequestMerchantResponseInput, AdminResolveRefundReviewInput } from '@prepaid-shield/validators';
 
 type AdminSession = { role: string };
-const TERMINAL_REFUND_REVIEW_STATUSES = new Set(['platform_approved', 'rejected', 'refunded']);
+const RESOLVED_REFUND_REVIEW_STATUSES = ['platform_approved', 'rejected', 'refunded'];
+const TERMINAL_REFUND_REVIEW_STATUSES = new Set(RESOLVED_REFUND_REVIEW_STATUSES);
 const OPEN_REFUND_REVIEW_STATUSES = ['platform_review', 'merchant_response_requested', 'merchant_responded', 'merchant_review', 'platform_investigation'];
+const WAITING_MERCHANT_STATUSES = new Set(['merchant_response_requested', 'merchant_review']);
+const DASHBOARD_REFUND_REVIEW_STATUSES = [...OPEN_REFUND_REVIEW_STATUSES, ...RESOLVED_REFUND_REVIEW_STATUSES];
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 function parsePhotoDataUrls(value?: string | null): string[] {
   if (!value) return [];
@@ -27,13 +31,100 @@ function addBusinessDays(value: Date, days: number): Date {
   return result;
 }
 
+function asNumber(value: unknown): number {
+  return Number(value || 0);
+}
+
+function daysUntil(value: Date | string | null | undefined, now = new Date()): number {
+  const deadline = value ? new Date(value).getTime() : now.getTime();
+  return Math.floor((deadline - now.getTime()) / ONE_DAY_MS);
+}
+
+function getParticipantName(review: any, role: 'business' | 'consumer'): string {
+  return review.escrow?.[role]?.name ?? `${role === 'business' ? '사업자' : '소비자'} 미확인`;
+}
+
+function buildDashboardByStatus(reviews: any[]) {
+  return {
+    platformReview: reviews.filter((review) => review.status === 'platform_review').length,
+    waitingMerchant: reviews.filter((review) => WAITING_MERCHANT_STATUSES.has(review.status)).length,
+    merchantResponded: reviews.filter((review) => review.status === 'merchant_responded').length,
+    platformInvestigation: reviews.filter((review) => review.status === 'platform_investigation').length,
+    resolved: reviews.filter((review) => TERMINAL_REFUND_REVIEW_STATUSES.has(review.status)).length,
+  };
+}
+
+function buildDashboardSlaMetrics(reviews: any[]) {
+  const slaRisks = reviews
+    .filter((review) => WAITING_MERCHANT_STATUSES.has(review.status))
+    .map((review) => ({
+      id: review.id,
+      businessName: getParticipantName(review, 'business'),
+      consumerName: getParticipantName(review, 'consumer'),
+      refundableAmount: asNumber(review.refundableAmount),
+      daysRemaining: daysUntil(review.merchantRespondBy),
+      status: review.status,
+    }))
+    .sort((a, b) => a.daysRemaining - b.daysRemaining);
+
+  return {
+    slaRisks,
+    slaOverdue: slaRisks.filter((risk) => risk.daysRemaining < 0).length,
+    slaDueSoon: slaRisks.filter((risk) => risk.daysRemaining >= 0 && risk.daysRemaining <= 1).length,
+  };
+}
+
+function buildDashboardEscrowAmounts(escrows: any[]) {
+  return escrows.reduce((totals, escrow) => {
+    const entries = escrow.entries ?? [];
+    const released = entries.filter((entry: any) => entry.status === 'released').reduce((sum: number, entry: any) => sum + asNumber(entry.amount), 0);
+    const pending = entries.filter((entry: any) => entry.status === 'pending').reduce((sum: number, entry: any) => sum + asNumber(entry.amount), 0);
+    const refunded = entries.filter((entry: any) => entry.status === 'refunded').reduce((sum: number, entry: any) => sum + asNumber(entry.amount), 0);
+    const frozen = Math.max(0, ...(escrow.refundReviewRequests ?? [])
+      .filter((review: any) => OPEN_REFUND_REVIEW_STATUSES.includes(review.status))
+      .map((review: any) => asNumber(review.refundableAmount)));
+
+    totals.releasedAmount += released;
+    totals.pendingAmount += Math.max(pending - frozen, 0);
+    totals.frozenByRefundReviewAmount += frozen;
+    totals.refundedAmount += refunded;
+    return totals;
+  }, { releasedAmount: 0, pendingAmount: 0, frozenByRefundReviewAmount: 0, refundedAmount: 0 });
+}
+
+function buildDashboardRecentEvents(reviews: any[]) {
+  return reviews
+    .map((review) => {
+      const isResolved = TERMINAL_REFUND_REVIEW_STATUSES.has(review.status);
+      const isMerchantResponded = review.status === 'merchant_responded' || review.merchantRespondedAt;
+      const type = isResolved ? review.status : isMerchantResponded ? 'merchant_responded' : review.status;
+      const label = isResolved
+        ? review.status === 'platform_approved' ? '환불 승인' : review.status === 'rejected' ? '환불 거절' : '환불 완료'
+        : isMerchantResponded ? '사업자 답변 도착' : review.status === 'platform_investigation' ? '추가 확인' : '환불 검토 접수';
+      const occurredAt = (isResolved ? review.resolvedAt : isMerchantResponded ? review.merchantRespondedAt : review.requestedAt) ?? review.requestedAt;
+      return {
+        id: review.id,
+        type,
+        label,
+        businessName: getParticipantName(review, 'business'),
+        consumerName: getParticipantName(review, 'consumer'),
+        amount: asNumber(review.refundableAmount),
+        occurredAt: occurredAt ? new Date(occurredAt).toISOString() : null,
+        status: review.status,
+      };
+    })
+    .filter((event) => event.occurredAt)
+    .sort((a, b) => new Date(b.occurredAt ?? 0).getTime() - new Date(a.occurredAt ?? 0).getTime())
+    .slice(0, 6);
+}
+
 @Injectable()
 export class AdminService {
   constructor(private prisma: PrismaService) {}
 
   async getDashboard(user: AdminSession) {
     this.assertAdmin(user);
-    const [open, merchantResponseRequested, merchantResponded, platformInvestigation, businesses, consumers, activeEscrows] = await Promise.all([
+    const [open, merchantResponseRequested, merchantResponded, platformInvestigation, businesses, consumers, activeEscrows, dashboardReviews, dashboardEscrows] = await Promise.all([
       this.prisma.refundReviewRequest.count({ where: { status: { in: OPEN_REFUND_REVIEW_STATUSES } } }),
       this.prisma.refundReviewRequest.count({ where: { status: 'merchant_response_requested' } }),
       this.prisma.refundReviewRequest.count({ where: { status: 'merchant_responded' } }),
@@ -41,7 +132,33 @@ export class AdminService {
       this.prisma.business.count(),
       this.prisma.consumer.count(),
       this.prisma.escrow.count({ where: { status: 'active' } }),
+      this.prisma.refundReviewRequest.findMany({
+        where: { status: { in: DASHBOARD_REFUND_REVIEW_STATUSES } },
+        select: {
+          id: true,
+          status: true,
+          refundableAmount: true,
+          requestedAt: true,
+          resolvedAt: true,
+          merchantRespondBy: true,
+          merchantRespondedAt: true,
+          escrow: {
+            select: {
+              business: { select: { name: true } },
+              consumer: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: [{ requestedAt: 'desc' }],
+      }),
+      this.prisma.escrow.findMany({
+        select: {
+          entries: { select: { status: true, amount: true } },
+          refundReviewRequests: { select: { status: true, refundableAmount: true } },
+        },
+      }),
     ]);
+    const slaMetrics = buildDashboardSlaMetrics(dashboardReviews);
 
     return {
       refundReviews: {
@@ -49,10 +166,13 @@ export class AdminService {
         merchantResponseRequested,
         merchantResponded,
         platformInvestigation,
+        byStatus: buildDashboardByStatus(dashboardReviews),
+        ...slaMetrics,
       },
       businesses: { total: businesses },
       consumers: { total: consumers },
-      escrows: { active: activeEscrows },
+      escrows: { active: activeEscrows, ...buildDashboardEscrowAmounts(dashboardEscrows) },
+      recentEvents: buildDashboardRecentEvents(dashboardReviews),
     };
   }
 
@@ -162,7 +282,7 @@ export class AdminService {
   }
 
   private assertAdmin(user: AdminSession) {
-    if (user.role !== 'admin') throw new ForbiddenException('관리자 권한이 필요합니다');
+    if (user.role !== 'admin') throw new ForbiddenException('운영자 권한이 필요합니다');
   }
 
   private refundReviewInclude() {
