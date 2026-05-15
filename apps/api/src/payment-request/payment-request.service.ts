@@ -91,10 +91,26 @@ export class PaymentRequestService {
     return this.paymentRequests.filter((item) => item.businessId === businessId && item.status === 'pending');
   }
 
+  cancel(id: string, user: SessionUser): PaymentRequest {
+    const request = this.paymentRequests.find((item) => item.id === id);
+    if (!request) throw new NotFoundException('Payment request not found');
+    if (user.role !== 'business' || user.userId !== request.businessId) {
+      throw new ForbiddenException('해당 사업자만 결제 QR을 취소할 수 있습니다');
+    }
+    if (request.status !== 'pending') {
+      throw new BadRequestException('이미 처리된 결제 QR입니다');
+    }
+    request.status = 'cancelled';
+    return request;
+  }
+
   markUsedByCode(code: string, businessId: string): PaymentRequest {
     const request = this.findByCode(code);
     if (request.businessId !== businessId) {
       throw new BadRequestException('결제 QR 사업자 정보가 일치하지 않습니다');
+    }
+    if (request.status !== 'pending') {
+      throw new BadRequestException('이미 처리된 결제 QR입니다');
     }
     request.status = 'used';
     return request;

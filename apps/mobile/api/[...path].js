@@ -1301,6 +1301,20 @@ module.exports = async function handler(req, res) {
     return send(res, 201, request);
   }
 
+  if (req.method === 'POST' && parts[0] === 'payment-requests' && parts[2] === 'cancel') {
+    const session = getDemoSession(req);
+    const request = paymentRequests.find((item) => item.id === parts[1]);
+    if (!request) return send(res, 404, { message: 'Payment request not found' });
+    if (!session || session.role !== 'business' || session.userId !== request.businessId) {
+      return send(res, 403, { message: '해당 사업자만 결제 QR을 취소할 수 있습니다' });
+    }
+    if (request.status !== 'pending') {
+      return send(res, 400, { message: '이미 처리된 결제 QR입니다' });
+    }
+    request.status = 'cancelled';
+    return send(res, 200, request);
+  }
+
   if (req.method === 'GET' && parts[0] === 'payment-requests' && parts[1]) {
     const code = decodeURIComponent(parts[1]).toUpperCase();
     const request = paymentRequests.find((item) => item.code === code);
@@ -1447,6 +1461,13 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'POST' && path === '/escrow') {
+    const paymentRequestCode = body.paymentRequestCode ? String(body.paymentRequestCode).toUpperCase() : '';
+    const paymentRequest = paymentRequestCode
+      ? paymentRequests.find((item) => item.code === paymentRequestCode && item.businessId === body.businessId)
+      : null;
+    if (paymentRequestCode && !paymentRequest) return send(res, 404, { message: 'Payment request not found' });
+    if (paymentRequest && paymentRequest.status !== 'pending') return send(res, 400, { message: '이미 처리된 결제 QR입니다' });
+
     const product = products.find((item) => item.id === body.productId);
     const escrowType = product?.escrowType || body.escrowType || 'monthly';
     const totalAmount = product?.totalAmount || body.totalAmount;
@@ -1473,10 +1494,7 @@ module.exports = async function handler(req, res) {
       entryStatuses: Array.from({ length: entryCount }, (_, index) => !isPrepaid && index === 0 ? 'released' : 'pending'),
     });
     escrows = [escrow, ...escrows];
-    if (body.paymentRequestCode) {
-      const request = paymentRequests.find((item) => item.code === String(body.paymentRequestCode).toUpperCase() && item.businessId === body.businessId);
-      if (request) request.status = 'used';
-    }
+    if (paymentRequest) paymentRequest.status = 'used';
     return send(res, 201, withRelations(escrow, 'consumer'));
   }
 

@@ -399,6 +399,8 @@ describe('static Demo API fixture', () => {
       months: 6,
     });
     const dashboardAfterApprovalResponse = await callApi('GET', '/api/business/00000000-0000-4000-a000-000000000020/dashboard');
+    const dashboard = dashboardResponse.body as any;
+    const dashboardAfterApproval = dashboardAfterApprovalResponse.body as any;
 
     expect(createResponse.statusCode).toBe(201);
     expect(created).toMatchObject({
@@ -415,11 +417,48 @@ describe('static Demo API fixture', () => {
     expect(lookupResponse.statusCode).toBe(200);
     expect(lookupResponse.body).toMatchObject({ code: created.code, businessName: '파워짐 피트니스' });
     expect(dashboardResponse.statusCode).toBe(200);
-    expect(dashboardResponse.body.pendingPaymentRequests).toEqual(
+    expect(dashboard.pendingPaymentRequests).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: created.code, status: 'pending' })]),
     );
     expect(approvalResponse.statusCode).toBe(201);
-    expect(dashboardAfterApprovalResponse.body.pendingPaymentRequests).not.toEqual(
+    expect(dashboardAfterApproval.pendingPaymentRequests).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: created.code })]),
+    );
+  });
+
+  it('cancels merchant-originated QR payment requests before customer approval', async () => {
+    const businessHeaders = { authorization: 'Bearer demo-token-business-00000000-0000-4000-a000-000000000020' };
+    const createResponse = await callApi('POST', '/api/payment-requests', {
+      businessId: '00000000-0000-4000-a000-000000000020',
+      paymentAmount: 720,
+      totalAmount: 720,
+      months: 6,
+      paymentModel: 'monthly',
+      escrowType: 'monthly',
+    });
+    const created = createResponse.body as any;
+    const cancelResponse = await callApi(
+      'POST',
+      `/api/payment-requests/${created.id}/cancel`,
+      undefined,
+      businessHeaders,
+    );
+    const approvalResponse = await callApi('POST', '/api/escrow', {
+      consumerId: '00000000-0000-4000-a000-000000000001',
+      businessId: '00000000-0000-4000-a000-000000000020',
+      paymentRequestCode: created.code,
+      totalAmount: 720,
+      months: 6,
+    });
+    const dashboardResponse = await callApi('GET', '/api/business/00000000-0000-4000-a000-000000000020/dashboard');
+    const dashboard = dashboardResponse.body as any;
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(cancelResponse.statusCode).toBe(200);
+    expect(cancelResponse.body).toMatchObject({ id: created.id, status: 'cancelled' });
+    expect(approvalResponse.statusCode).toBe(400);
+    expect(approvalResponse.body).toMatchObject({ message: '이미 처리된 결제 QR입니다' });
+    expect(dashboard.pendingPaymentRequests).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ code: created.code })]),
     );
   });

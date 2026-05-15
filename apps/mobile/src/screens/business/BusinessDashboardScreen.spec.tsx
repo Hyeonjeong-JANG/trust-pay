@@ -8,11 +8,14 @@ jest.mock('../../utils/toast', () => ({
   showErrorToast: jest.fn(),
 }));
 
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn().mockResolvedValue(undefined) }));
+
 jest.mock('../../api/client', () => ({
   api: {
     getBusinessDashboard: jest.fn(),
     getBalance: jest.fn().mockResolvedValue({ xrplAddress: 'rBusiness123456', balance: '1200' }),
     finishEscrow: jest.fn(),
+    cancelPaymentRequest: jest.fn(),
     createChargeRequest: jest.fn(),
     getBusinessProducts: jest.fn(),
     createPaymentRequest: jest.fn(),
@@ -39,6 +42,7 @@ describe('BusinessDashboardScreen', () => {
     const { api } = require('../../api/client');
     api.getBusinessProducts.mockResolvedValue([]);
     api.finishEscrow.mockResolvedValue({ txHash: 'AUTO_FINISH_TX' });
+    api.cancelPaymentRequest.mockResolvedValue({ id: 'request-1', status: 'cancelled' });
   });
 
   it('should periodically refresh the dashboard so merchant screens reflect customer approvals', async () => {
@@ -92,20 +96,31 @@ describe('BusinessDashboardScreen', () => {
       ],
     });
 
-    const { findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+    const { findAllByText, findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
-    expect(await findByText('승인 대기 결제 (1건)')).toBeTruthy();
+    expect((await findAllByText('승인 대기 QR')).length).toBeGreaterThan(0);
     expect(await findByText('TP-000001')).toBeTruthy();
     expect(await findByText('손님 승인 전')).toBeTruthy();
     expect(await findByText('결제 ₩300,000 · 보호 ₩330,000')).toBeTruthy();
     expect(await findByText('진행중 보호 결제 (0건)')).toBeTruthy();
   });
 
-  it('should automatically receive eligible monthly settlements without a manual receive button', async () => {
+  it('should show server-side settlement state without finishing escrows from the screen', async () => {
     const { api } = require('../../api/client');
     api.getBusinessDashboard.mockResolvedValue({
       totalReceived: 300,
       totalPending: 300,
+      summary: {
+        receivedAmount: 300,
+        protectedPendingAmount: 300,
+        pendingApprovalAmount: 0,
+        activeEscrowCount: 1,
+        refundActionRequiredCount: 0,
+        refundMonitoringCount: 0,
+        refundCompletedCount: 0,
+        dueSettlementCount: 1,
+        dueSettlementAmount: 100,
+      },
       escrows: [
         {
           id: 'e-1',
@@ -123,14 +138,17 @@ describe('BusinessDashboardScreen', () => {
 
     const { findAllByText, findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
-    expect(await findByText(/정산 가능한 월차만 자동 처리/)).toBeTruthy();
+    expect(await findByText('오늘 처리할 일')).toBeTruthy();
+    expect(await findByText('이번 달 정산 예정')).toBeTruthy();
+    expect((await findAllByText('1건')).length).toBeGreaterThan(0);
     expect(await findByText('수령 가능 ₩1,620,000')).toBeTruthy();
+    expect(await findByText('수령 완료')).toBeTruthy();
+    expect(await findByText('보호 대기')).toBeTruthy();
+    expect(await findByText('승인 대기')).toBeTruthy();
     expect((await findAllByText('100.00 RLUSD')).length).toBeGreaterThan(0);
     expect(await findByText('1,200.00 RLUSD')).toBeTruthy();
     expect(queryByText('1월차 수령 가능 (₩135,000)')).toBeNull();
-    await waitFor(() => {
-      expect(api.finishEscrow).toHaveBeenCalledWith('e-1', 1);
-    });
+    expect(api.finishEscrow).not.toHaveBeenCalled();
   });
 
   it('should not auto-finish monthly settlements while a refund review is open', async () => {
@@ -268,7 +286,7 @@ describe('BusinessDashboardScreen', () => {
 
     const { findByText, queryByText, queryByPlaceholderText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
-    expect(await findByText(/이미 보호된 금액권에서 실제 사용금액 차감 요청을 보냅니다/)).toBeTruthy();
+    expect(await findByText(/금액권은 손님 승인 후 실제 이용분만 보호 잔액에서 정산됩니다/)).toBeTruthy();
     expect(await findByText('사용 ₩33,750 · 잔액 ₩168,750')).toBeTruthy();
     expect(await findByText('25.00 RLUSD 사용 · 125.00 RLUSD 잔액')).toBeTruthy();
     expect(queryByText(/\/회/)).toBeNull();
@@ -314,10 +332,10 @@ describe('BusinessDashboardScreen', () => {
       ],
     });
 
-    const { findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={navigation as any} />);
+    const { findAllByText, findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={navigation as any} />);
 
-    expect(await findByText('환불 검토 요청')).toBeTruthy();
-    expect(await findByText('1건 대기')).toBeTruthy();
+    expect((await findAllByText('환불 답변 필요')).length).toBeGreaterThan(0);
+    expect((await findAllByText('1건')).length).toBeGreaterThan(0);
     expect(await findByText(/이서연 · 환불 가능 ₩13,500/)).toBeTruthy();
     expect(await findByText(/고객이 장기 휴업을 주장했습니다/)).toBeTruthy();
     fireEvent.press(await findByText('요청 확인'));
@@ -356,9 +374,8 @@ describe('BusinessDashboardScreen', () => {
     const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
 
     expect(await findByText('이서연')).toBeTruthy();
-    expect(await findByText('환불 검토 요청')).toBeTruthy();
-    expect(await findByText('TrustPay 확인 중')).toBeTruthy();
-    expect(await findByText('환불 검토 중: TrustPay 확인 중')).toBeTruthy();
+    expect(await findByText(/TrustPay 확인 중인 환불 검토 1건/)).toBeTruthy();
+    expect(await findByText(/환불 검토 중:/)).toBeTruthy();
     expect(queryByText(/2주 넘게 안 열고 전화도 받지 않아/)).toBeNull();
   });
 
@@ -423,5 +440,153 @@ describe('BusinessDashboardScreen', () => {
 
     expect(await findByText('김민수')).toBeTruthy();
     expect(queryByText('조건 충족 월차는 사업자 조작 없이 자동 수령됩니다.')).toBeNull();
+  });
+
+  it('should count only action-required refund reviews as pending merchant work', async () => {
+    const { api } = require('../../api/client');
+    const navigation = { navigate: jest.fn() };
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 25,
+      totalPending: 125,
+      summary: {
+        receivedAmount: 25,
+        protectedPendingAmount: 125,
+        pendingApprovalAmount: 0,
+        activeEscrowCount: 2,
+        refundActionRequiredCount: 1,
+        refundMonitoringCount: 0,
+        refundCompletedCount: 1,
+        dueSettlementCount: 0,
+        dueSettlementAmount: 0,
+      },
+      escrows: [
+        {
+          id: 'e-needs-response',
+          status: 'active',
+          escrowType: 'prepaid',
+          totalAmount: 100,
+          monthlyAmount: 10,
+          months: 10,
+          consumer: { id: 'consumer-1', name: '김민수' },
+          entries: [],
+          chargeRequests: [],
+          refundReviewRequests: [
+            {
+              id: 'review-open',
+              status: 'merchant_response_requested',
+              refundableAmount: 40,
+              merchantNotice: '이용권 처리 방안을 답변해주세요.',
+              requestedAt: '2026-05-15T00:00:00.000Z',
+            },
+          ],
+        },
+        {
+          id: 'e-refunded',
+          status: 'cancelled',
+          escrowType: 'prepaid',
+          totalAmount: 100,
+          monthlyAmount: 10,
+          months: 10,
+          consumer: { id: 'consumer-2', name: '이서연' },
+          entries: [],
+          chargeRequests: [],
+          refundReviewRequests: [
+            {
+              id: 'review-done',
+              status: 'refunded',
+              refundableAmount: 10,
+              requestedAt: '2026-05-14T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+    });
+
+    const { findAllByLabelText, findAllByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={navigation as any} />);
+
+    expect((await findAllByText('환불 답변 필요')).length).toBeGreaterThan(0);
+    expect((await findAllByText('1건')).length).toBeGreaterThan(0);
+    expect(queryByText('2건 대기')).toBeNull();
+    fireEvent.press((await findAllByLabelText('환불 요청 확인'))[0]);
+    expect(navigation.navigate).toHaveBeenCalledWith('BusinessEscrowDetail', { id: 'e-needs-response' });
+  });
+
+  it('should provide pending QR actions and accessible search controls', async () => {
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 0,
+      totalPending: 0,
+      summary: {
+        receivedAmount: 0,
+        protectedPendingAmount: 0,
+        pendingApprovalAmount: 222.222222,
+        activeEscrowCount: 0,
+        refundActionRequiredCount: 0,
+        refundMonitoringCount: 0,
+        refundCompletedCount: 0,
+        dueSettlementCount: 0,
+        dueSettlementAmount: 0,
+      },
+      escrows: [],
+      pendingPaymentRequests: [
+        {
+          id: 'request-1',
+          code: 'TP-000001',
+          businessId: 'business-1',
+          businessName: '파워짐',
+          paymentAmount: 222.222222,
+          totalAmount: 244.444444,
+          paymentModel: 'voucher',
+          escrowType: 'prepaid',
+          validFrom: '2026-05-15',
+          validUntil: '2026-07-22',
+          status: 'pending',
+          createdAt: '2026-05-15T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const { findAllByText, findByLabelText, findByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+    expect((await findAllByText('승인 대기 QR')).length).toBeGreaterThan(0);
+    expect(await findByText('승인 대기 총액')).toBeTruthy();
+    expect(await findByText('코드 복사')).toBeTruthy();
+    expect(await findByText('QR 취소')).toBeTruthy();
+    expect(await findByLabelText('소비자 이름 검색')).toBeTruthy();
+    expect(await findByLabelText('결제 코드 TP-000001 복사')).toBeTruthy();
+    fireEvent.press(await findByLabelText('결제 QR TP-000001 취소'));
+    expect(await findByText('QR 결제 취소')).toBeTruthy();
+    fireEvent.press(await findByLabelText('QR 취소하기'));
+    await waitFor(() => expect(api.cancelPaymentRequest).toHaveBeenCalledWith('request-1'));
+  });
+
+  it('should show an empty state that matches search results', async () => {
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 0,
+      totalPending: 600,
+      escrows: [
+        {
+          id: 'e-search',
+          status: 'active',
+          escrowType: 'monthly',
+          totalAmount: 600,
+          monthlyAmount: 100,
+          months: 6,
+          consumer: { id: 'consumer-1', name: '김민수' },
+          entries: [
+            { id: 'en-1', month: 1, amount: '100', status: 'pending', finishAfter: 830607775 },
+          ],
+        },
+      ],
+    });
+
+    const { findByLabelText, findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+    fireEvent.changeText(await findByLabelText('소비자 이름 검색'), '없는고객');
+
+    expect(await findByText('검색 결과가 없습니다')).toBeTruthy();
+    expect(await findByText('다른 고객 이름으로 다시 검색해보세요')).toBeTruthy();
+    expect(queryByText('활성 보호 결제가 없습니다')).toBeNull();
   });
 });

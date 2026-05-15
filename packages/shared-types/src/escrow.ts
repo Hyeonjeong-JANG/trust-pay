@@ -197,7 +197,7 @@ export interface PaymentRequest {
   validityMonths?: number | null;
   validFrom?: string | null;
   validUntil?: string | null;
-  status: 'pending' | 'used' | 'expired';
+  status: 'pending' | 'used' | 'expired' | 'cancelled';
   createdAt: Date | string;
 }
 
@@ -265,8 +265,23 @@ export interface BusinessDashboard {
   totalReceived: number;
   totalPending: number;
   activeEscrows: number;
+  summary?: BusinessDashboardSummary;
   escrows: EscrowRecord[];
   pendingPaymentRequests?: PaymentRequest[];
+}
+
+export interface BusinessDashboardSummary {
+  receivedAmount: number;
+  protectedPendingAmount: number;
+  pendingApprovalAmount: number;
+  activeEscrowCount: number;
+  refundActionRequiredCount: number;
+  refundMonitoringCount: number;
+  refundCompletedCount: number;
+  dueSettlementCount: number;
+  dueSettlementAmount: number;
+  autoSettledCount?: number;
+  autoSettledAmount?: number;
 }
 
 export interface BalanceResponse {

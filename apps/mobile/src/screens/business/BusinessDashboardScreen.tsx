@@ -1,17 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
   FlatList,
+  Modal,
   StyleSheet,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Platform,
   RefreshControl,
   ScrollView,
 } from 'react-native';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as Clipboard from 'expo-clipboard';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
@@ -43,14 +44,16 @@ const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
   'refunded',
   'rejected',
 ]);
-const OPEN_REFUND_REVIEW_STATUSES = new Set([
-  'platform_review',
+const REFUND_REVIEW_ACTION_REQUIRED_STATUSES = new Set([
   'merchant_response_requested',
-  'merchant_responded',
   'merchant_review',
+]);
+const REFUND_REVIEW_MONITORING_STATUSES = new Set([
+  'platform_review',
+  'merchant_responded',
+  'merchant_disputed',
   'platform_investigation',
 ]);
-
 const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
   platform_review: 'TrustPay 확인 중',
   merchant_response_requested: '사업자 답변 대기',
@@ -65,11 +68,6 @@ const REFUND_REVIEW_STATUS_KO: Record<string, string> = {
 };
 
 type EscrowWithConsumer = EscrowRecord & { consumer?: { id: string; name: string } };
-
-function hasOpenRefundReview(escrow: EscrowWithConsumer): boolean {
-  return (escrow.refundReviewRequests ?? [])
-    .some((request) => OPEN_REFUND_REVIEW_STATUSES.has(request.status));
-}
 
 function sumEntryAmounts(entries: EscrowEntry[], status: EscrowEntry['status']): number {
   return entries
@@ -96,7 +94,7 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
-  const autoFinishedKeysRef = useRef<Set<string>>(new Set());
+  const [pendingCancelRequest, setPendingCancelRequest] = useState<PaymentRequest | null>(null);
 
   const { data: dashboard, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['businessDashboard', userId],
@@ -119,31 +117,32 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
     refetchBalance();
   }, [refetch, refetchBalance]);
 
-  useEffect(() => {
-    const escrows = (dashboard?.escrows ?? []) as EscrowWithConsumer[];
-    const nowRipple = Math.floor(Date.now() / 1000) - 946684800;
-    const eligibleEntries = escrows.flatMap((escrow) => {
-      if (escrow.status !== 'active' || escrow.escrowType === 'prepaid') return [];
-      if (hasOpenRefundReview(escrow)) return [];
-      return (escrow.entries ?? [])
-        .filter((entry) => entry.status === 'pending' && entry.finishAfter <= nowRipple)
-        .map((entry) => ({ escrowId: escrow.id, month: entry.month, key: `${escrow.id}:${entry.month}` }));
-    });
-    const pendingAutoFinishes = eligibleEntries.filter((entry) => !autoFinishedKeysRef.current.has(entry.key));
-    if (pendingAutoFinishes.length === 0) return;
+  const cancelPaymentRequestMutation = useMutation({
+    mutationFn: (requestId: string) => api.cancelPaymentRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
+      showSuccessToast('QR 결제 취소', '손님 승인 전 결제 QR을 취소했습니다.');
+    },
+    onError: (err: Error) => {
+      const apiErr = err as ApiError;
+      showErrorToast('QR 취소 실패', apiErr.userMessage ?? err.message);
+    },
+  });
 
-    pendingAutoFinishes.forEach((entry) => autoFinishedKeysRef.current.add(entry.key));
-    Promise.all(pendingAutoFinishes.map((entry) => api.finishEscrow(entry.escrowId, entry.month)))
-      .then(() => {
-        queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
-        queryClient.invalidateQueries({ queryKey: ['balance'] });
-        showSuccessToast('자동 정산 완료', `${pendingAutoFinishes.length}건이 조건 충족으로 자동 수령되었습니다.`);
-      })
-      .catch((err: Error) => {
-        const apiErr = err as ApiError;
-        showErrorToast('자동 정산 실패', apiErr.userMessage ?? err.message);
-      });
-  }, [dashboard?.escrows, queryClient]);
+  const copyPaymentCode = useCallback(async (request: PaymentRequest) => {
+    await Clipboard.setStringAsync(request.code);
+    showSuccessToast('결제 코드 복사', `${request.code}를 복사했습니다.`);
+  }, []);
+
+  const confirmCancelPaymentRequest = useCallback((request: PaymentRequest) => {
+    setPendingCancelRequest(request);
+  }, []);
+
+  const cancelPendingPaymentRequest = useCallback(() => {
+    if (!pendingCancelRequest) return;
+    cancelPaymentRequestMutation.mutate(pendingCancelRequest.id);
+    setPendingCancelRequest(null);
+  }, [cancelPaymentRequestMutation, pendingCancelRequest]);
 
   const filteredEscrows = useMemo(() => {
     const all = (dashboard?.escrows ?? []) as EscrowWithConsumer[];
@@ -165,13 +164,36 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
     : statusFilter === 'all'
       ? '보호 결제'
       : `${FILTER_OPTIONS.find((option) => option.key === statusFilter)?.label ?? '진행중'} 보호 결제`;
+  const pendingPaymentRequests = (dashboard?.pendingPaymentRequests ?? []) as PaymentRequest[];
   const refundReviewItems = ((dashboard?.escrows ?? []) as EscrowWithConsumer[])
     .flatMap((escrow) => (escrow.refundReviewRequests ?? [])
       .filter((request: RefundReviewRequest) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
       .map((request: RefundReviewRequest) => ({ escrow, request })))
     .sort((a, b) => new Date(b.request.requestedAt).getTime() - new Date(a.request.requestedAt).getTime());
-  const latestRefundReviewItem = refundReviewItems[0];
-  const pendingPaymentRequests = (dashboard?.pendingPaymentRequests ?? []) as PaymentRequest[];
+  const actionRequiredRefundReviewItems = refundReviewItems.filter(({ request }) => REFUND_REVIEW_ACTION_REQUIRED_STATUSES.has(request.status));
+  const monitoringRefundReviewItems = refundReviewItems.filter(({ request }) => REFUND_REVIEW_MONITORING_STATUSES.has(request.status));
+  const latestActionRequiredRefundReviewItem = actionRequiredRefundReviewItems[0];
+  const summary = dashboard?.summary;
+  const receivedAmount = summary?.receivedAmount ?? dashboard?.totalReceived ?? 0;
+  const protectedPendingAmount = summary?.protectedPendingAmount ?? dashboard?.totalPending ?? 0;
+  const pendingApprovalAmount = summary?.pendingApprovalAmount ?? pendingPaymentRequests.reduce(
+    (sum, request) => sum + Number(request.paymentAmount ?? request.totalAmount ?? 0),
+    0,
+  );
+  const refundActionRequiredCount = summary?.refundActionRequiredCount ?? actionRequiredRefundReviewItems.length;
+  const refundMonitoringCount = summary?.refundMonitoringCount ?? monitoringRefundReviewItems.length;
+  const dueSettlementCount = summary?.dueSettlementCount ?? 0;
+  const hasDashboardWork = refundActionRequiredCount > 0 || pendingPaymentRequests.length > 0 || dueSettlementCount > 0;
+  const emptyTitle = searchQuery.trim()
+    ? '검색 결과가 없습니다'
+    : statusFilter === 'active'
+      ? '진행중 보호 결제가 없습니다'
+      : `${FILTER_OPTIONS.find((option) => option.key === statusFilter)?.label ?? '선택한'} 보호 결제가 없습니다`;
+  const emptyDesc = searchQuery.trim()
+    ? '다른 고객 이름으로 다시 검색해보세요'
+    : statusFilter === 'active'
+      ? '손님이 보호 결제를 승인하면 여기에 표시됩니다'
+      : '다른 필터를 선택해 보호 결제를 확인해보세요';
 
   if (isLoading) {
     return (
@@ -200,6 +222,69 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
         }
         ListHeaderComponent={
           <>
+            <View style={styles.workCard}>
+              <View style={styles.workHeader}>
+                <View>
+                  <Text style={styles.workEyebrow}>사업자 홈</Text>
+                  <Text style={styles.workTitle}>오늘 처리할 일</Text>
+                </View>
+                <Text style={styles.workCount}>{hasDashboardWork ? `${refundActionRequiredCount + pendingPaymentRequests.length + dueSettlementCount}건` : '0건'}</Text>
+              </View>
+              {hasDashboardWork ? (
+                <View style={styles.workItems}>
+                  {refundActionRequiredCount > 0 && latestActionRequiredRefundReviewItem && (
+                    <TouchableOpacity
+                      accessibilityLabel="환불 요청 확인"
+                      accessibilityRole="button"
+                      activeOpacity={0.82}
+                      onPress={() => navigation.navigate('BusinessEscrowDetail', { id: latestActionRequiredRefundReviewItem.escrow.id })}
+                      style={styles.workItem}
+                    >
+                      <View style={[styles.workIcon, styles.workIconWarning]}>
+                        <Text style={styles.workIconText}>!</Text>
+                      </View>
+                      <View style={styles.workCopy}>
+                        <Text style={styles.workItemTitle}>환불 답변 필요</Text>
+                        <Text style={styles.workItemDesc} numberOfLines={1}>
+                          {latestActionRequiredRefundReviewItem.escrow.consumer?.name ?? '손님'} · {formatKrwFromRlusd(latestActionRequiredRefundReviewItem.request.refundableAmount)}
+                        </Text>
+                      </View>
+                      <Text style={styles.workItemCount}>{refundActionRequiredCount}건</Text>
+                    </TouchableOpacity>
+                  )}
+                  {pendingPaymentRequests.length > 0 && (
+                    <View style={styles.workItem}>
+                      <View style={[styles.workIcon, styles.workIconPrimary]}>
+                        <Text style={styles.workIconText}>QR</Text>
+                      </View>
+                      <View style={styles.workCopy}>
+                        <Text style={styles.workItemTitle}>승인 대기 QR</Text>
+                        <Text style={styles.workItemDesc}>손님 계좌 승인 전입니다</Text>
+                      </View>
+                      <Text style={styles.workItemCount}>{pendingPaymentRequests.length}건</Text>
+                    </View>
+                  )}
+                  {dueSettlementCount > 0 && (
+                    <View style={styles.workItem}>
+                      <View style={[styles.workIcon, styles.workIconSuccess]}>
+                        <Text style={styles.workIconText}>₩</Text>
+                      </View>
+                      <View style={styles.workCopy}>
+                        <Text style={styles.workItemTitle}>이번 달 정산 예정</Text>
+                        <Text style={styles.workItemDesc}>{formatKrwFromRlusd(summary?.dueSettlementAmount ?? 0)} 자동 처리 대상</Text>
+                      </View>
+                      <Text style={styles.workItemCount}>{dueSettlementCount}건</Text>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <Text style={styles.workEmpty}>지금 바로 처리할 환불 답변이나 승인 대기 QR이 없습니다.</Text>
+              )}
+              {refundMonitoringCount > 0 && (
+                <Text style={styles.workFootnote}>TrustPay 확인 중인 환불 검토 {refundMonitoringCount}건은 상태만 추적합니다.</Text>
+              )}
+            </View>
+
             {/* 잔액 카드 */}
             {balanceLoading ? (
               <View style={styles.balanceCard}>
@@ -207,12 +292,12 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
               </View>
             ) : balanceError ? (
               <View style={[styles.balanceCard, styles.balanceCardError]}>
-                <Text style={styles.balanceLabel}>TrustPay 정산 원장</Text>
+                <Text style={styles.balanceLabel}>원장 잔액</Text>
                 <Text style={styles.balanceValue}>조회 실패</Text>
               </View>
             ) : balanceData ? (
               <View style={styles.balanceCard}>
-                <Text style={styles.balanceLabel}>TrustPay 정산 원장</Text>
+                <Text style={styles.balanceLabel}>원장 잔액</Text>
                 <Text style={styles.balanceValue}>
                   수령 가능 {formatKrwFromRlusd(balanceData.balance)}
                 </Text>
@@ -226,55 +311,70 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
             {/* 수령/대기 요약 */}
             <View style={styles.summaryRow}>
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryIcon}>✅</Text>
                 <Text style={styles.summaryValue}>
-                  {formatKrwFromRlusd(dashboard?.totalReceived ?? 0)}
+                  {formatKrwFromRlusd(receivedAmount)}
                 </Text>
-                <Text style={styles.summarySub}>{formatRlusd(dashboard?.totalReceived ?? 0)}</Text>
-                <Text style={styles.summaryLabel}>수령액</Text>
+                <Text style={styles.summarySub}>{formatRlusd(receivedAmount)}</Text>
+                <Text style={styles.summaryLabel}>수령 완료</Text>
               </View>
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryIcon}>⏳</Text>
                 <Text style={styles.summaryValue}>
-                  {formatKrwFromRlusd(dashboard?.totalPending ?? 0)}
+                  {formatKrwFromRlusd(protectedPendingAmount)}
                 </Text>
-                <Text style={styles.summarySub}>{formatRlusd(dashboard?.totalPending ?? 0)}</Text>
-                <Text style={styles.summaryLabel}>대기액</Text>
+                <Text style={styles.summarySub}>{formatRlusd(protectedPendingAmount)}</Text>
+                <Text style={styles.summaryLabel}>보호 대기</Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryValue}>
+                  {formatKrwFromRlusd(pendingApprovalAmount)}
+                </Text>
+                <Text style={styles.summarySub}>{formatRlusd(pendingApprovalAmount)}</Text>
+                <Text style={styles.summaryLabel}>승인 대기</Text>
               </View>
             </View>
 
-            {latestRefundReviewItem && (
+            {latestActionRequiredRefundReviewItem && (
               <View style={styles.refundReviewCard}>
                 <View style={styles.refundReviewHeader}>
                   <View>
-                    <Text style={styles.refundReviewEyebrow}>환불 검토 요청</Text>
-                    <Text style={styles.refundReviewTitle}>{refundReviewItems.length}건 대기</Text>
-                    <Text style={styles.refundReviewStatus}>{REFUND_REVIEW_STATUS_KO[latestRefundReviewItem.request.status] ?? latestRefundReviewItem.request.status}</Text>
+                    <Text style={styles.refundReviewEyebrow}>환불 답변 필요</Text>
+                    <Text style={styles.refundReviewTitle}>{refundActionRequiredCount}건</Text>
+                    <Text style={styles.refundReviewStatus}>{REFUND_REVIEW_STATUS_KO[latestActionRequiredRefundReviewItem.request.status] ?? latestActionRequiredRefundReviewItem.request.status}</Text>
                   </View>
                   <TouchableOpacity
+                    accessibilityLabel="환불 요청 확인"
+                    accessibilityRole="button"
                     style={styles.refundReviewAction}
-                    onPress={() => navigation.navigate('BusinessEscrowDetail', { id: latestRefundReviewItem.escrow.id })}
+                    onPress={() => navigation.navigate('BusinessEscrowDetail', { id: latestActionRequiredRefundReviewItem.escrow.id })}
                     activeOpacity={0.8}
                   >
                     <Text style={styles.refundReviewActionText}>요청 확인</Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.refundReviewSummary}>
-                  {latestRefundReviewItem.escrow.consumer?.name ?? '손님'} · 환불 가능 {formatKrwFromRlusd(latestRefundReviewItem.request.refundableAmount)}
+                  {latestActionRequiredRefundReviewItem.escrow.consumer?.name ?? '손님'} · 환불 가능 {formatKrwFromRlusd(latestActionRequiredRefundReviewItem.request.refundableAmount)}
                 </Text>
-                {!!latestRefundReviewItem.request.merchantNotice && (
-                  <Text style={styles.refundReviewReason} numberOfLines={2}>{latestRefundReviewItem.request.merchantNotice}</Text>
+                {!!latestActionRequiredRefundReviewItem.request.merchantNotice && (
+                  <Text style={styles.refundReviewReason} numberOfLines={2}>{latestActionRequiredRefundReviewItem.request.merchantNotice}</Text>
                 )}
               </View>
             )}
 
             {pendingPaymentRequests.length > 0 && (
               <View style={styles.pendingPaymentBox}>
-                <Text style={styles.pendingPaymentTitle}>승인 대기 결제 ({pendingPaymentRequests.length}건)</Text>
-                <Text style={styles.pendingPaymentDesc}>손님이 QR을 스캔하고 계좌 승인하면 보호 결제로 이동합니다.</Text>
+                <View style={styles.pendingPaymentHeader}>
+                  <View>
+                    <Text style={styles.pendingPaymentTitle}>승인 대기 QR</Text>
+                    <Text style={styles.pendingPaymentDesc}>손님이 계좌 승인하면 보호 결제로 이동합니다.</Text>
+                  </View>
+                  <View style={styles.pendingPaymentTotalBlock}>
+                    <Text style={styles.pendingPaymentTotalLabel}>승인 대기 총액</Text>
+                    <Text style={styles.pendingPaymentTotalValue}>{formatKrwFromRlusd(pendingApprovalAmount)}</Text>
+                  </View>
+                </View>
                 {pendingPaymentRequests.map((request) => (
                   <View key={request.id} style={styles.pendingPaymentCard}>
-                    <View>
+                    <View style={styles.pendingPaymentCodeBlock}>
                       <Text style={styles.pendingPaymentCode}>{request.code}</Text>
                       <Text style={styles.pendingPaymentMeta}>손님 승인 전</Text>
                     </View>
@@ -283,6 +383,26 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
                         결제 {formatKrwFromRlusd(request.paymentAmount ?? request.totalAmount)} · 보호 {formatKrwFromRlusd(request.totalAmount)}
                       </Text>
                       <Text style={styles.pendingPaymentAmountSub}>{formatRlusd(request.totalAmount)}</Text>
+                      <View style={styles.pendingPaymentActions}>
+                        <TouchableOpacity
+                          accessibilityLabel={`결제 코드 ${request.code} 복사`}
+                          accessibilityRole="button"
+                          activeOpacity={0.75}
+                          onPress={() => copyPaymentCode(request)}
+                          style={styles.pendingPaymentActionButton}
+                        >
+                          <Text style={styles.pendingPaymentActionText}>코드 복사</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          accessibilityLabel={`결제 QR ${request.code} 취소`}
+                          accessibilityRole="button"
+                          activeOpacity={0.75}
+                          onPress={() => confirmCancelPaymentRequest(request)}
+                          style={[styles.pendingPaymentActionButton, styles.pendingPaymentCancelButton]}
+                        >
+                          <Text style={[styles.pendingPaymentActionText, styles.pendingPaymentCancelText]}>QR 취소</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 ))}
@@ -290,6 +410,8 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
             )}
 
             <TouchableOpacity
+              accessibilityLabel="새 보호 결제 만들기"
+              accessibilityRole="button"
               style={styles.createPaymentCard}
               onPress={() => navigation.navigate('BusinessCreatePayment')}
               activeOpacity={0.85}
@@ -307,14 +429,20 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
             {/* 검색 + 필터 */}
             <View style={styles.searchRow}>
               <TextInput
+                accessibilityLabel="소비자 이름 검색"
                 style={styles.searchInput}
-                placeholder="소비자 이름 검색..."
+                placeholder="소비자 이름 검색…"
                 placeholderTextColor={colors.gray400}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
               {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearBtn}>
+                <TouchableOpacity
+                  accessibilityLabel="검색어 지우기"
+                  accessibilityRole="button"
+                  onPress={() => setSearchQuery('')}
+                  style={styles.clearBtn}
+                >
                   <Text style={styles.clearBtnText}>✕</Text>
                 </TouchableOpacity>
               )}
@@ -335,9 +463,11 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
             </ScrollView>
 
             <Text style={styles.settlementHint}>
-              {filteredEscrows.some((e) => e.escrowType === 'prepaid')
-                ? '이미 보호된 금액권에서 실제 사용금액 차감 요청을 보냅니다. 소비자 승인 후 잔액에서 정산됩니다'
-                : '정산 가능한 월차만 자동 처리됩니다'}
+              {(summary?.autoSettledCount ?? 0) > 0
+                ? `이번 조회에서 ${summary?.autoSettledCount}건이 자동 정산되었습니다`
+                : filteredEscrows.some((e) => e.escrowType === 'prepaid')
+                  ? '금액권은 손님 승인 후 실제 이용분만 보호 잔액에서 정산됩니다'
+                  : '정산 조건이 된 월차는 서버에서 자동 처리됩니다'}
             </Text>
             <Text style={styles.sectionTitle}>
               {sectionLabel} ({filteredEscrows.length}건)
@@ -350,9 +480,10 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
           const releasedCount = (item.entries?.length ?? 0) - pendingEntries.length;
           const totalEntries = item.entries?.length || item.months;
           const prepaidAmounts = isPrepaid ? getPrepaidAmounts(item) : null;
-          const progressPct = isPrepaid
+          const rawProgressPct = isPrepaid
             ? Number(item.totalAmount) > 0 ? ((prepaidAmounts?.usedAmount ?? 0) / Number(item.totalAmount)) * 100 : 0
             : totalEntries > 0 ? (releasedCount / totalEntries) * 100 : 0;
+          const progressPct = Math.max(0, Math.min(rawProgressPct, 100));
           const latestRefundReview = (item.refundReviewRequests ?? [])
             .filter((request: RefundReviewRequest) => MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES.has(request.status))
             .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())[0];
@@ -401,12 +532,47 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📭</Text>
-            <Text style={styles.emptyTitle}>활성 보호 결제가 없습니다</Text>
-            <Text style={styles.emptyDesc}>소비자가 보호 결제를 생성하면 여기에 표시됩니다</Text>
+            <Text style={styles.emptyTitle}>{emptyTitle}</Text>
+            <Text style={styles.emptyDesc}>{emptyDesc}</Text>
           </View>
         }
         contentContainerStyle={styles.listContent}
       />
+      <Modal
+        visible={!!pendingCancelRequest}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingCancelRequest(null)}
+      >
+        <View style={styles.confirmBackdrop}>
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>QR 결제 취소</Text>
+            <Text style={styles.confirmMessage}>
+              {pendingCancelRequest?.code ?? ''} 결제 QR을 취소할까요? 손님이 아직 승인하지 않은 QR만 취소됩니다.
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                accessibilityLabel="QR 취소하지 않기"
+                accessibilityRole="button"
+                activeOpacity={0.8}
+                onPress={() => setPendingCancelRequest(null)}
+                style={[styles.confirmButton, styles.confirmKeepButton]}
+              >
+                <Text style={styles.confirmKeepText}>유지</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityLabel="QR 취소하기"
+                accessibilityRole="button"
+                activeOpacity={0.8}
+                onPress={cancelPendingPaymentRequest}
+                style={[styles.confirmButton, styles.confirmCancelButton]}
+              >
+                <Text style={styles.confirmCancelText}>취소하기</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -415,6 +581,86 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
   listContent: { padding: spacing.lg, paddingBottom: spacing.xxxl },
+  workCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
+    padding: spacing.lg,
+    ...shadow.sm,
+  },
+  workHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  workEyebrow: {
+    color: colors.gray500,
+    fontSize: font.size.xs,
+    fontWeight: font.weight.semibold,
+    marginBottom: 2,
+  },
+  workTitle: {
+    color: colors.gray900,
+    fontSize: font.size.xl,
+    fontWeight: font.weight.bold,
+  },
+  workCount: {
+    color: colors.primary,
+    fontSize: font.size.md,
+    fontWeight: font.weight.bold,
+  },
+  workItems: { gap: spacing.sm },
+  workItem: {
+    alignItems: 'center',
+    backgroundColor: colors.gray50,
+    borderRadius: radius.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  workIcon: {
+    alignItems: 'center',
+    borderRadius: radius.full,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  workIconWarning: { backgroundColor: colors.warningLight },
+  workIconPrimary: { backgroundColor: colors.primaryLight },
+  workIconSuccess: { backgroundColor: colors.successLight },
+  workIconText: {
+    color: colors.primary,
+    fontSize: font.size.xs,
+    fontWeight: font.weight.bold,
+  },
+  workCopy: { flex: 1 },
+  workItemTitle: {
+    color: colors.gray900,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.bold,
+  },
+  workItemDesc: {
+    color: colors.gray500,
+    fontSize: font.size.xs,
+    marginTop: 2,
+  },
+  workItemCount: {
+    color: colors.gray900,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.bold,
+  },
+  workEmpty: {
+    color: colors.gray500,
+    fontSize: font.size.sm,
+    lineHeight: 20,
+  },
+  workFootnote: {
+    color: colors.gray500,
+    fontSize: font.size.xs,
+    lineHeight: 18,
+    marginTop: spacing.sm,
+  },
   balanceCard: {
     backgroundColor: colors.primary,
     padding: spacing.xl,
@@ -443,18 +689,17 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.semibold,
     marginBottom: spacing.xs,
   },
-  summaryRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl },
+  summaryRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xl },
   summaryCard: {
     flex: 1,
     backgroundColor: colors.white,
-    padding: spacing.lg,
+    padding: spacing.md,
     borderRadius: radius.md,
     alignItems: 'center',
     ...shadow.sm,
   },
-  summaryIcon: { fontSize: 20, marginBottom: spacing.xs },
   summaryValue: {
-    fontSize: font.size.xl,
+    fontSize: font.size.md,
     fontWeight: font.weight.bold,
     color: colors.gray900,
   },
@@ -509,6 +754,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     padding: spacing.lg,
   },
+  pendingPaymentHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
   pendingPaymentTitle: {
     color: colors.gray900,
     fontSize: font.size.lg,
@@ -519,7 +771,19 @@ const styles = StyleSheet.create({
     fontSize: font.size.sm,
     lineHeight: 20,
     marginTop: spacing.xs,
-    marginBottom: spacing.md,
+  },
+  pendingPaymentTotalBlock: {
+    alignItems: 'flex-end',
+  },
+  pendingPaymentTotalLabel: {
+    color: colors.gray500,
+    fontSize: font.size.xs,
+    marginBottom: 2,
+  },
+  pendingPaymentTotalValue: {
+    color: colors.primary,
+    fontSize: font.size.md,
+    fontWeight: font.weight.bold,
   },
   pendingPaymentCard: {
     backgroundColor: colors.white,
@@ -530,6 +794,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
   },
+  pendingPaymentCodeBlock: { flexShrink: 0 },
   pendingPaymentCode: {
     color: colors.primary,
     fontSize: font.size.md,
@@ -551,6 +816,29 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     fontSize: font.size.xs,
     marginTop: 2,
+  },
+  pendingPaymentActions: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'flex-end',
+    marginTop: spacing.sm,
+  },
+  pendingPaymentActionButton: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  pendingPaymentCancelButton: {
+    backgroundColor: colors.gray100,
+  },
+  pendingPaymentActionText: {
+    color: colors.primary,
+    fontSize: font.size.xs,
+    fontWeight: font.weight.bold,
+  },
+  pendingPaymentCancelText: {
+    color: colors.gray600,
   },
   createPaymentCard: {
     flexDirection: 'row',
@@ -648,122 +936,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.success,
     borderRadius: 2,
   },
-  releaseButton: {
-    backgroundColor: colors.success,
-    paddingVertical: spacing.md,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  releaseButtonText: { color: colors.white, fontWeight: font.weight.semibold, fontSize: font.size.sm },
-  releaseButtonSub: { color: 'rgba(255,255,255,0.75)', fontSize: font.size.xs, marginTop: 2 },
-  autoSettlementHint: {
-    backgroundColor: colors.successLight,
-    color: colors.success,
-    fontSize: font.size.sm,
-    fontWeight: font.weight.semibold,
-    lineHeight: 20,
-    borderRadius: radius.sm,
-    padding: spacing.md,
-    marginTop: spacing.md,
-    overflow: 'hidden',
-    textAlign: 'center',
-  },
-  chargeRequestBox: {
-    backgroundColor: colors.gray50,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginTop: spacing.md,
-    gap: spacing.md,
-  },
-  menuBuilderBox: {
-    backgroundColor: colors.white,
-    borderRadius: radius.sm,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  menuDraftRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  menuNameInput: { flex: 1 },
-  menuAmountInput: { width: 128 },
-  secondaryButton: {
-    backgroundColor: colors.successLight,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-  },
-  secondaryButtonText: { color: colors.success, fontWeight: font.weight.semibold, fontSize: font.size.sm },
-  addedMenuList: { gap: spacing.xs },
-  addedMenuText: { fontSize: font.size.xs, color: colors.gray500 },
-  manualChargeBox: {
-    backgroundColor: colors.white,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  manualChargeTitle: {
-    fontSize: font.size.sm,
-    fontWeight: font.weight.semibold,
-    color: colors.gray800,
-  },
-  manualChargeDesc: {
-    fontSize: font.size.xs,
-    color: colors.gray500,
-    lineHeight: 18,
-  },
-  manualChargeInput: {
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.md : spacing.sm,
-    fontSize: font.size.md,
-    color: colors.gray900,
-  },
-  manualChargeButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-  },
-  manualChargeButtonText: { color: colors.white, fontWeight: font.weight.semibold, fontSize: font.size.sm },
-  menuRequestList: {
-    gap: spacing.sm,
-  },
-  menuRequestTitle: {
-    fontSize: font.size.sm,
-    fontWeight: font.weight.semibold,
-    color: colors.gray700,
-  },
-  dropdownButton: {
-    backgroundColor: colors.white,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    padding: spacing.md,
-  },
-  dropdownLabel: { fontSize: font.size.xs, color: colors.gray400, marginBottom: 2 },
-  dropdownValue: { fontSize: font.size.md, color: colors.gray900, fontWeight: font.weight.semibold },
-  dropdownList: {
-    backgroundColor: colors.white,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    overflow: 'hidden',
-  },
-  dropdownOption: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray100,
-  },
-  dropdownOptionText: { fontSize: font.size.sm, color: colors.gray800, fontWeight: font.weight.semibold },
-  dropdownOptionSub: { fontSize: font.size.xs, color: colors.gray400, marginTop: 1 },
-  menuRequestButtonSub: { color: 'rgba(255,255,255,0.75)', fontSize: font.size.xs, marginTop: 2 },
   emptyContainer: { alignItems: 'center', paddingTop: 60 },
   emptyIcon: { fontSize: 40, marginBottom: spacing.md },
   emptyTitle: {
@@ -773,6 +945,52 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   emptyDesc: { fontSize: font.size.sm, color: colors.gray400, textAlign: 'center' },
+  confirmBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.46)',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  confirmCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    ...shadow.lg,
+  },
+  confirmTitle: {
+    color: colors.gray900,
+    fontSize: font.size.xl,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.sm,
+  },
+  confirmMessage: {
+    color: colors.gray600,
+    fontSize: font.size.md,
+    lineHeight: 22,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+  },
+  confirmButton: {
+    alignItems: 'center',
+    borderRadius: radius.md,
+    flex: 1,
+    paddingVertical: spacing.md,
+  },
+  confirmKeepButton: { backgroundColor: colors.gray100 },
+  confirmCancelButton: { backgroundColor: colors.danger },
+  confirmKeepText: {
+    color: colors.gray700,
+    fontSize: font.size.md,
+    fontWeight: font.weight.semibold,
+  },
+  confirmCancelText: {
+    color: colors.white,
+    fontSize: font.size.md,
+    fontWeight: font.weight.semibold,
+  },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',

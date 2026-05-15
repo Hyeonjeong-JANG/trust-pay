@@ -153,6 +153,9 @@ export const api = {
   createPaymentRequest: (data: CreatePaymentRequest) =>
     request<PaymentRequest>('/payment-requests', { method: 'POST', body: JSON.stringify(data) }),
 
+  cancelPaymentRequest: (id: string) =>
+    request<PaymentRequest>(`/payment-requests/${id}/cancel`, { method: 'POST' }),
+
   getPaymentRequest: (code: string) =>
     request<PaymentRequest>(`/payment-requests?code=${encodeURIComponent(code)}`),
 

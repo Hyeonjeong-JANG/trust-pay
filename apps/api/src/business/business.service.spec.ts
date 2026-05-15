@@ -41,6 +41,8 @@ describe('BusinessService', () => {
         findUnique: jest.fn(),
         findMany: jest.fn(),
       },
+      escrowEntry: { update: jest.fn() },
+      escrow: { update: jest.fn() },
       businessProduct: { findMany: jest.fn() },
     };
 
@@ -51,6 +53,7 @@ describe('BusinessService', () => {
         secret: 'sBizSecret123',
       }),
       setTrustLine: jest.fn().mockResolvedValue('TX_HASH'),
+      finishEscrow: jest.fn().mockResolvedValue('FINISH_TX_HASH'),
     };
 
     businessClosureService = {
@@ -308,6 +311,153 @@ describe('BusinessService', () => {
 
       expect(paymentRequestService.listForBusiness).toHaveBeenCalledWith('biz-1');
       expect(result.pendingPaymentRequests).toEqual([pendingRequest]);
+      expect(result.summary).toMatchObject({
+        pendingApprovalAmount: 222.222222,
+        refundActionRequiredCount: 0,
+        dueSettlementCount: 0,
+      });
+    });
+
+    it('should summarize merchant action counts by dashboard concern', async () => {
+      paymentRequestService.listForBusiness.mockReturnValue([
+        {
+          id: 'request-1',
+          code: 'TP-000001',
+          businessId: 'biz-1',
+          businessName: '테스트카페',
+          paymentAmount: 20,
+          totalAmount: 30,
+          escrowType: 'monthly',
+          status: 'pending',
+          createdAt: '2026-05-15T00:00:00.000Z',
+        },
+      ]);
+      prisma.business.findUnique.mockResolvedValue({
+        ...mockBusiness,
+        escrows: [
+          {
+            id: 'e-action-required',
+            status: 'active',
+            escrowType: 'prepaid',
+            totalAmount: 100,
+            monthlyAmount: 10,
+            entries: [{ id: 'en-1', status: 'pending', amount: '10', finishAfter: 999999999 }],
+            chargeRequests: [],
+            refundReviewRequests: [{ id: 'review-1', status: 'merchant_response_requested' }],
+            consumer: { id: 'c-1', name: '소비자1' },
+          },
+          {
+            id: 'e-monitoring',
+            status: 'active',
+            escrowType: 'monthly',
+            totalAmount: 100,
+            monthlyAmount: 10,
+            entries: [{ id: 'en-2', status: 'pending', amount: '10', finishAfter: 999999999 }],
+            chargeRequests: [],
+            refundReviewRequests: [{ id: 'review-2', status: 'platform_review' }],
+            consumer: { id: 'c-2', name: '소비자2' },
+          },
+          {
+            id: 'e-completed-review',
+            status: 'cancelled',
+            escrowType: 'prepaid',
+            totalAmount: 100,
+            monthlyAmount: 10,
+            entries: [{ id: 'en-3', status: 'refunded', amount: '10', finishAfter: 999999999 }],
+            chargeRequests: [],
+            refundReviewRequests: [{ id: 'review-3', status: 'refunded' }],
+            consumer: { id: 'c-3', name: '소비자3' },
+          },
+        ],
+      });
+
+      const result = await service.dashboard('biz-1', businessUser);
+
+      expect(result.summary).toMatchObject({
+        pendingApprovalAmount: 20,
+        refundActionRequiredCount: 1,
+        refundMonitoringCount: 1,
+        refundCompletedCount: 1,
+      });
+    });
+
+    it('should auto-finish eligible monthly entries before returning dashboard totals', async () => {
+      const eligibleEntry = { id: 'entry-due', month: 2, amount: '10', status: 'pending', finishAfter: 1, sequence: 321 };
+      prisma.business.findUnique.mockResolvedValue({
+        ...mockBusiness,
+        escrows: [
+          {
+            id: 'e-due',
+            status: 'active',
+            escrowType: 'monthly',
+            consumerAddress: 'rConsumerAddr',
+            totalAmount: 30,
+            monthlyAmount: 10,
+            entries: [
+              { id: 'entry-released', month: 1, amount: '10', status: 'released', finishAfter: 1, sequence: 320 },
+              eligibleEntry,
+            ],
+            chargeRequests: [],
+            refundReviewRequests: [],
+            consumer: { id: 'c-1', name: '소비자1' },
+          },
+        ],
+      });
+
+      const result = await service.dashboard('biz-1', businessUser);
+
+      expect(xrplService.finishEscrow).toHaveBeenCalledWith(expect.anything(), 'rConsumerAddr', 321);
+      expect(prisma.escrowEntry.update).toHaveBeenCalledWith({
+        where: { id: 'entry-due' },
+        data: { status: 'released', txHash: 'FINISH_TX_HASH' },
+      });
+      expect(result.totalReceived).toBe(20);
+      expect(result.totalPending).toBe(0);
+      expect(result.summary).toMatchObject({
+        receivedAmount: 20,
+        protectedPendingAmount: 0,
+        autoSettledCount: 1,
+        autoSettledAmount: 10,
+      });
+    });
+
+    it('should not retry a failed automatic settlement on every dashboard refresh', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-05-15T00:00:00.000Z'));
+      xrplService.finishEscrow.mockRejectedValue(new Error('XRPL unavailable'));
+      const businessWithDueEntry = {
+        ...mockBusiness,
+        escrows: [
+          {
+            id: 'e-retry-guard',
+            status: 'active',
+            escrowType: 'monthly',
+            consumerAddress: 'rConsumerAddr',
+            totalAmount: 30,
+            monthlyAmount: 10,
+            entries: [
+              { id: 'entry-retry-guard', month: 1, amount: '10', status: 'pending', finishAfter: 1, sequence: 321 },
+            ],
+            chargeRequests: [],
+            refundReviewRequests: [],
+            consumer: { id: 'c-1', name: '소비자1' },
+          },
+        ],
+      };
+      prisma.business.findUnique.mockResolvedValue(businessWithDueEntry);
+
+      try {
+        await service.dashboard('biz-1', businessUser);
+        await service.dashboard('biz-1', businessUser);
+
+        expect(xrplService.finishEscrow).toHaveBeenCalledTimes(1);
+
+        jest.setSystemTime(new Date('2026-05-15T00:01:01.000Z'));
+        await service.dashboard('biz-1', businessUser);
+
+        expect(xrplService.finishEscrow).toHaveBeenCalledTimes(2);
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('should return zero amounts when no escrows', async () => {

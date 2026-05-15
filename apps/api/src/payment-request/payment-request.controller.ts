@@ -23,4 +23,9 @@ export class PaymentRequestController {
   findByParam(@Param('code') code: string) {
     return this.paymentRequestService.findByCode(code);
   }
+
+  @Post(':id/cancel')
+  cancel(@Param('id') id: string, @Req() req: { user: SessionUser }) {
+    return this.paymentRequestService.cancel(id, req.user);
+  }
 }
