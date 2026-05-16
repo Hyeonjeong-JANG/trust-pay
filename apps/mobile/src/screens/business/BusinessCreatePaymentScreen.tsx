@@ -478,8 +478,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     ...shadow.sm,
   },
-  generatedQrInfo: { alignItems: 'center' },
-  generatedQrLabel: { fontSize: font.size.xs, color: colors.gray500, marginBottom: 2, textAlign: 'center' },
+  generatedQrInfo: { flex: 1 },
+  generatedQrLabel: { fontSize: font.size.xs, color: colors.gray500, marginBottom: 2 },
   generatedQrCode: {
     fontSize: font.size.xl,
     fontWeight: font.weight.bold,

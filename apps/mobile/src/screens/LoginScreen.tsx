@@ -127,6 +127,9 @@ export function LoginScreen() {
       setIsNewConsumer(role === 'consumer' && data.isNewUser === true);
       setIsNewBusiness(role === 'business' && data.isNewUser === true);
       setCodeSent(true);
+      if (data.code) {
+        setCode(data.code);
+      }
     },
     onError: (err: Error) => {
       const apiErr = err as import('../api/client').ApiError;
