@@ -83,6 +83,23 @@ describe('OnboardingScreen', () => {
     expect(getByText('다음')).toBeTruthy();
   });
 
+  it('should show start button on the final slide and navigate to login', () => {
+    const { getByText, queryByText } = render(
+      <OnboardingScreen navigation={mockNavigation} route={mockRoute} />,
+    );
+
+    fireEvent.press(getByText('다음'));
+    fireEvent.press(getByText('다음'));
+    fireEvent.press(getByText('다음'));
+
+    expect(queryByText('건너뛰기')).toBeNull();
+
+    fireEvent.press(getByText('시작하기'));
+
+    expect(mockSetHasSeenOnboarding).toHaveBeenCalledWith(true);
+    expect(mockNavigation.replace).toHaveBeenCalledWith('Login');
+  });
+
   it('should call setHasSeenOnboarding and navigate on skip', () => {
     const { getByText } = render(
       <OnboardingScreen navigation={mockNavigation} route={mockRoute} />,

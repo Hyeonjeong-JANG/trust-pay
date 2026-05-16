@@ -88,11 +88,16 @@ describe('EscrowService', () => {
         findMany: jest.fn(),
         update: jest.fn(),
       },
-      escrowEntry: { update: jest.fn() },
+      escrowEntry: {
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn().mockResolvedValue([{ status: 'pending' }]),
+      },
       chargeRequest: {
         create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       refundReviewRequest: {
         create: jest.fn(),
@@ -756,15 +761,14 @@ describe('EscrowService', () => {
       businessId: 'business-1',
       consumerAddress: 'rConsumerAddr',
       entries: [
-        { id: 'entry-1', month: 1, sequence: 100, status: entryStatus },
-        { id: 'entry-2', month: 2, sequence: 101, status: 'pending' },
+        { id: 'entry-1', month: 1, sequence: 100, status: entryStatus, version: 0 },
+        { id: 'entry-2', month: 2, sequence: 101, status: 'pending', version: 0 },
       ],
     });
 
     it('should finish a pending entry and update status to released', async () => {
       prisma.escrow.findUnique.mockResolvedValue(makeEscrow());
       prisma.business.findUnique.mockResolvedValue(mockBusiness);
-      prisma.escrowEntry.update.mockResolvedValue({});
 
       const result = await service.finishEntry('escrow-1', 1, businessUser);
 
@@ -773,9 +777,9 @@ describe('EscrowService', () => {
         'rConsumerAddr',
         100,
       );
-      expect(prisma.escrowEntry.update).toHaveBeenCalledWith({
-        where: { id: 'entry-1' },
-        data: { status: 'released', txHash: 'FINISH_TX_HASH' },
+      expect(prisma.escrowEntry.updateMany).toHaveBeenCalledWith({
+        where: { id: 'entry-1', version: 0, status: 'pending' },
+        data: { status: 'released', txHash: 'FINISH_TX_HASH', version: 1 },
       });
       expect(result).toEqual({ txHash: 'FINISH_TX_HASH' });
     });
@@ -786,13 +790,16 @@ describe('EscrowService', () => {
         businessId: 'business-1',
         consumerAddress: 'rConsumerAddr',
         entries: [
-          { id: 'entry-1', month: 1, sequence: 100, status: 'pending' },
-          { id: 'entry-2', month: 2, sequence: 101, status: 'released' },
+          { id: 'entry-1', month: 1, sequence: 100, status: 'pending', version: 0 },
+          { id: 'entry-2', month: 2, sequence: 101, status: 'released', version: 0 },
         ],
       };
       prisma.escrow.findUnique.mockResolvedValue(escrow);
       prisma.business.findUnique.mockResolvedValue(mockBusiness);
-      prisma.escrowEntry.update.mockResolvedValue({});
+      prisma.escrowEntry.findMany.mockResolvedValue([
+        { id: 'entry-1', status: 'released' },
+        { id: 'entry-2', status: 'released' },
+      ]);
 
       await service.finishEntry('escrow-1', 1, businessUser);
 
@@ -817,7 +824,7 @@ describe('EscrowService', () => {
 
       await expect(service.finishEntry('escrow-1', 1, businessUser)).rejects.toThrow('환불 검토가 진행 중인 보호 결제는 정산할 수 없습니다');
       expect(xrplService.finishEscrow).not.toHaveBeenCalled();
-      expect(prisma.escrowEntry.update).not.toHaveBeenCalled();
+      expect(prisma.escrowEntry.updateMany).not.toHaveBeenCalled();
     });
 
     it('should throw if entry month not found', async () => {
@@ -854,10 +861,10 @@ describe('EscrowService', () => {
       unitPrice: 10,
       monthlyAmount: 10,
       entries: [
-        { id: 'entry-1', month: 1, sequence: 201, amount: '10', status: 'pending' },
-        { id: 'entry-2', month: 2, sequence: 202, amount: '10', status: 'pending' },
-        { id: 'entry-3', month: 3, sequence: 203, amount: '10', status: 'pending' },
-        { id: 'entry-4', month: 4, sequence: 204, amount: '10', status: 'pending' },
+        { id: 'entry-1', month: 1, sequence: 201, amount: '10', status: 'pending', version: 0 },
+        { id: 'entry-2', month: 2, sequence: 202, amount: '10', status: 'pending', version: 0 },
+        { id: 'entry-3', month: 3, sequence: 203, amount: '10', status: 'pending', version: 0 },
+        { id: 'entry-4', month: 4, sequence: 204, amount: '10', status: 'pending', version: 0 },
       ],
       chargeRequests: [],
     };
@@ -973,6 +980,7 @@ describe('EscrowService', () => {
         businessId: 'business-1',
         amount: 30,
         status: 'pending_approval',
+        version: 0,
         entryIds: JSON.stringify(['entry-1', 'entry-2', 'entry-3']),
         escrow: prepaidEscrow,
       });
@@ -981,7 +989,6 @@ describe('EscrowService', () => {
         .mockResolvedValueOnce('FINISH_TX_1')
         .mockResolvedValueOnce('FINISH_TX_2')
         .mockResolvedValueOnce('FINISH_TX_3');
-      prisma.escrowEntry.update.mockResolvedValue({});
       prisma.chargeRequest.update.mockResolvedValue({
         id: 'charge-1',
         status: 'settled',
@@ -994,7 +1001,11 @@ describe('EscrowService', () => {
       expect(xrplService.finishEscrow).toHaveBeenNthCalledWith(1, expect.anything(), 'rConsumerAddr', 201);
       expect(xrplService.finishEscrow).toHaveBeenNthCalledWith(2, expect.anything(), 'rConsumerAddr', 202);
       expect(xrplService.finishEscrow).toHaveBeenNthCalledWith(3, expect.anything(), 'rConsumerAddr', 203);
-      expect(prisma.escrowEntry.update).toHaveBeenCalledTimes(3);
+      expect(prisma.chargeRequest.updateMany).toHaveBeenCalledWith({
+        where: { id: 'charge-1', version: 0, status: 'pending_approval' },
+        data: { version: 1 },
+      });
+      expect(prisma.escrowEntry.updateMany).toHaveBeenCalledTimes(3);
       expect(prisma.chargeRequest.update).toHaveBeenCalledWith({
         where: { id: 'charge-1' },
         data: expect.objectContaining({
@@ -1260,20 +1271,19 @@ describe('EscrowService', () => {
         consumerId: 'consumer-1',
         consumerAddress: 'rConsumerAddr',
         entries: [
-          { id: 'entry-1', month: 1, sequence: 100, status: 'released' },
-          { id: 'entry-2', month: 2, sequence: 101, status: 'pending' },
-          { id: 'entry-3', month: 3, sequence: 102, status: 'pending' },
+          { id: 'entry-1', month: 1, sequence: 100, status: 'released', version: 0 },
+          { id: 'entry-2', month: 2, sequence: 101, status: 'pending', version: 0 },
+          { id: 'entry-3', month: 3, sequence: 102, status: 'pending', version: 0 },
         ],
       };
       prisma.escrow.findUnique.mockResolvedValue(escrow);
       prisma.consumer.findUnique.mockResolvedValue(mockConsumer);
-      prisma.escrowEntry.update.mockResolvedValue({});
 
       const result = await service.cancelEscrow('escrow-1', consumerUser);
 
       // Should only cancel pending entries (2 and 3), not released (1)
       expect(xrplService.cancelEscrow).toHaveBeenCalledTimes(2);
-      expect(prisma.escrowEntry.update).toHaveBeenCalledTimes(2);
+      expect(prisma.escrowEntry.updateMany).toHaveBeenCalledTimes(2);
       expect(prisma.escrow.update).toHaveBeenCalledWith({
         where: { id: 'escrow-1' },
         data: { status: 'cancelled' },
@@ -1287,8 +1297,8 @@ describe('EscrowService', () => {
         consumerId: 'consumer-1',
         consumerAddress: 'rConsumerAddr',
         entries: [
-          { id: 'entry-1', month: 1, sequence: 100, status: 'pending' },
-          { id: 'entry-2', month: 2, sequence: 101, status: 'pending' },
+          { id: 'entry-1', month: 1, sequence: 100, status: 'pending', version: 0 },
+          { id: 'entry-2', month: 2, sequence: 101, status: 'pending', version: 0 },
         ],
       };
       prisma.escrow.findUnique.mockResolvedValue(escrow);
@@ -1296,7 +1306,6 @@ describe('EscrowService', () => {
       xrplService.cancelEscrow
         .mockRejectedValueOnce(new Error('XRPL error'))
         .mockResolvedValueOnce('CANCEL_TX_2');
-      prisma.escrowEntry.update.mockResolvedValue({});
 
       const result = await service.cancelEscrow('escrow-1', consumerUser);
 
@@ -1305,7 +1314,7 @@ describe('EscrowService', () => {
         data: { status: 'cancel_failed' },
       });
       // Only the successful entry gets DB update
-      expect(prisma.escrowEntry.update).toHaveBeenCalledTimes(1);
+      expect(prisma.escrowEntry.updateMany).toHaveBeenCalledTimes(1);
       expect(result).toEqual({ cancelled: 1, failed: 1 });
     });
 

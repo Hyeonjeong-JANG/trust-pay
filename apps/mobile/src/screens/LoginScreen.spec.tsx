@@ -117,7 +117,7 @@ describe('LoginScreen', () => {
     expect(getByText('인증코드 받기')).toBeTruthy();
   });
 
-  it('should request an OTP and require manual code entry', async () => {
+  it('should request an OTP and prefill demo code without exposing helper text', async () => {
     const { api } = require('../api/client');
     api.requestCode.mockResolvedValue({ delivery: 'demo', code: '123456', expiresInSeconds: 300 });
 
@@ -141,7 +141,7 @@ describe('LoginScreen', () => {
     });
 
     expect(queryByText('데모 인증코드: 123456')).toBeNull();
-    expect(getByPlaceholderText('123456').props.value).toBe('');
+    expect(getByPlaceholderText('123456').props.value).toBe('123456');
   });
 
   it('should show request-code errors in an in-app modal', async () => {

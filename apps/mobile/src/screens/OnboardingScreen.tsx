@@ -73,6 +73,12 @@ export function OnboardingScreen({ navigation }: ScreenProps<'Onboarding'>) {
 
   const isLast = activeIndex === SLIDES.length - 1;
 
+  const onNext = useCallback(() => {
+    const nextIndex = Math.min(activeIndex + 1, SLIDES.length - 1);
+    setActiveIndex(nextIndex);
+    flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+  }, [activeIndex]);
+
   return (
     <View style={s.container}>
       {/* Skip button */}
@@ -92,6 +98,7 @@ export function OnboardingScreen({ navigation }: ScreenProps<'Onboarding'>) {
         style={s.slides}
         contentContainerStyle={s.slidesContent}
         keyExtractor={(item) => item.key}
+        getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         renderItem={({ item }) => (
@@ -120,7 +127,7 @@ export function OnboardingScreen({ navigation }: ScreenProps<'Onboarding'>) {
         ) : (
           <TouchableOpacity
             style={s.nextBtn}
-            onPress={() => flatListRef.current?.scrollToIndex({ index: activeIndex + 1 })}
+            onPress={onNext}
             activeOpacity={0.7}
           >
             <Text style={s.nextText}>다음</Text>

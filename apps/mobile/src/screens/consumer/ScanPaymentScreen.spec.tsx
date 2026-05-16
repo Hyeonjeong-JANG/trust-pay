@@ -3,6 +3,15 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ScanPaymentScreen } from './ScanPaymentScreen';
 
+jest.mock('expo-camera', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    CameraView: (props: any) => React.createElement(View, props),
+    useCameraPermissions: () => [{ granted: false }, jest.fn()],
+  };
+});
+
 jest.mock('../../api/client', () => ({
   api: {
     getPaymentRequest: jest.fn(),
@@ -47,6 +56,7 @@ describe('ScanPaymentScreen', () => {
     );
 
     expect(await findByText('QR 코드 입력')).toBeTruthy();
+    fireEvent.press(await findByText('직접 입력으로 전환'));
     expect(await findByText('사업자 화면에 표시된 TP-xxxxxx 코드를 입력하세요.')).toBeTruthy();
     fireEvent.changeText(await findByPlaceholderText('예: TP-123456'), 'tp-123456');
     fireEvent.press(await findByText('결제 QR 불러오기'));
