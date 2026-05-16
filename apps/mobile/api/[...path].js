@@ -582,6 +582,43 @@ function createPaymentRequest(body) {
   return request;
 }
 
+function normalizePaymentRequestCode(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function createStatelessDemoPaymentRequest(code) {
+  if (!/^TP-\d{6}$/.test(code)) return null;
+  const business = businesses.find((item) => item.id === BUSINESS_GYM_ID);
+  if (!business) return null;
+  return {
+    id: `stateless-${code}`,
+    code,
+    businessId: business.id,
+    businessName: business.name,
+    businessCategory: business.category,
+    productId: null,
+    productName: null,
+    paymentModel: 'monthly',
+    paymentAmount: 600,
+    totalAmount: 600,
+    monthlyAmount: 100,
+    months: 6,
+    escrowType: 'monthly',
+    unitPrice: null,
+    validityMonths: null,
+    validFrom: null,
+    validUntil: null,
+    status: 'pending',
+    createdAt: '2026-05-15T00:00:00.000Z',
+  };
+}
+
+function findPaymentRequestByCode(code) {
+  const normalizedCode = normalizePaymentRequestCode(code);
+  if (!normalizedCode) return null;
+  return paymentRequests.find((item) => item.code === normalizedCode) || createStatelessDemoPaymentRequest(normalizedCode);
+}
+
 let escrows = [
   makeEscrow({
     id: '00000000-0000-4000-a000-000000000100',
@@ -1335,14 +1372,14 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'GET' && parts[0] === 'payment-requests' && parts[1]) {
-    const code = decodeURIComponent(parts[1]).toUpperCase();
-    const request = paymentRequests.find((item) => item.code === code);
+    const code = decodeURIComponent(parts[1]);
+    const request = findPaymentRequestByCode(code);
     return request ? send(res, 200, request) : send(res, 404, { message: 'Payment request not found' });
   }
 
   if (req.method === 'GET' && path === '/payment-requests') {
-    const code = (url.searchParams.get('code') || '').toUpperCase();
-    const request = paymentRequests.find((item) => item.code === code);
+    const code = url.searchParams.get('code') || '';
+    const request = findPaymentRequestByCode(code);
     return request ? send(res, 200, request) : send(res, 404, { message: 'Payment request not found' });
   }
 
@@ -1480,10 +1517,11 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'POST' && path === '/escrow') {
-    const paymentRequestCode = body.paymentRequestCode ? String(body.paymentRequestCode).toUpperCase() : '';
+    const paymentRequestCode = normalizePaymentRequestCode(body.paymentRequestCode);
     const paymentRequest = paymentRequestCode
-      ? paymentRequests.find((item) => item.code === paymentRequestCode && item.businessId === body.businessId)
+      ? findPaymentRequestByCode(paymentRequestCode)
       : null;
+    if (paymentRequest && paymentRequest.businessId !== body.businessId) return send(res, 404, { message: 'Payment request not found' });
     if (paymentRequestCode && !paymentRequest) return send(res, 404, { message: 'Payment request not found' });
     if (paymentRequest && paymentRequest.status !== 'pending') return send(res, 400, { message: '이미 처리된 결제 QR입니다' });
 

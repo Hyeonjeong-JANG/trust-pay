@@ -1,6 +1,11 @@
 const handler = require('../../api/[...path].js');
 const vercelConfig = require('../../../../vercel.json');
 
+function loadFreshHandler() {
+  jest.resetModules();
+  return require('../../api/[...path].js');
+}
+
 function createResponse() {
   const response = {
     statusCode: 0,
@@ -17,7 +22,7 @@ function createResponse() {
   return response;
 }
 
-async function callApi(method: string, url: string, body?: unknown, headers: Record<string, string> = {}) {
+async function callApiWith(apiHandler: any, method: string, url: string, body?: unknown, headers: Record<string, string> = {}) {
   const response = createResponse();
   const payload = body === undefined ? '' : JSON.stringify(body);
   const request = {
@@ -30,8 +35,12 @@ async function callApi(method: string, url: string, body?: unknown, headers: Rec
       return request;
     },
   };
-  await handler(request, response);
+  await apiHandler(request, response);
   return response;
+}
+
+async function callApi(method: string, url: string, body?: unknown, headers: Record<string, string> = {}) {
+  return callApiWith(handler, method, url, body, headers);
 }
 
 function callAdminApi(method: string, url: string, body?: unknown) {
@@ -434,6 +443,36 @@ describe('static Demo API fixture', () => {
     expect(dashboardAfterApproval.pendingPaymentRequests).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ code: created.code })]),
     );
+  });
+
+  it('resolves merchant-originated QR requests after a serverless cold start', async () => {
+    const createHandler = loadFreshHandler();
+    const lookupHandler = loadFreshHandler();
+    const approveHandler = loadFreshHandler();
+    const createResponse = await callApiWith(createHandler, 'POST', '/api/payment-requests', {
+      businessId: '00000000-0000-4000-a000-000000000020',
+      paymentAmount: 600,
+      totalAmount: 600,
+      months: 6,
+      paymentModel: 'monthly',
+      escrowType: 'monthly',
+    });
+    const created = createResponse.body as any;
+    const lookupResponse = await callApiWith(lookupHandler, 'GET', `/api/payment-requests?code=${created.code}`);
+    const approvalResponse = await callApiWith(approveHandler, 'POST', '/api/escrow', {
+      consumerId: '00000000-0000-4000-a000-000000000001',
+      businessId: '00000000-0000-4000-a000-000000000020',
+      paymentRequestCode: created.code,
+      totalAmount: 600,
+      months: 6,
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(created.code).toMatch(/^TP-\d{6}$/);
+    expect(lookupResponse.statusCode).toBe(200);
+    expect(lookupResponse.body).toMatchObject({ code: created.code, businessName: '파워짐 피트니스', status: 'pending' });
+    expect(approvalResponse.statusCode).toBe(201);
+    expect(approvalResponse.body).toMatchObject({ businessId: '00000000-0000-4000-a000-000000000020', status: 'active' });
   });
 
   it('cancels merchant-originated QR payment requests before customer approval', async () => {
