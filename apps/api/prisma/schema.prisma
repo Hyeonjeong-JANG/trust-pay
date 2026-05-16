@@ -181,6 +181,7 @@ model EscrowEntry {
   cancelAfter Int
   status      String   @default("pending")
   txHash      String?
+  version     Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   escrow      Escrow   @relation(fields: [escrowId], references: [id])
@@ -206,6 +207,7 @@ model ChargeRequest {
   txHash      String?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+  version     Int              @default(0)
   escrow      Escrow           @relation(fields: [escrowId], references: [id])
   consumer    Consumer         @relation("ConsumerChargeRequests", fields: [consumerId], references: [id])
   business    Business         @relation("BusinessChargeRequests", fields: [businessId], references: [id])

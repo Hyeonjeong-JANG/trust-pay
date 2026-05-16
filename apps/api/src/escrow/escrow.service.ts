@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { BusinessClosureService } from '../business/business-closure.service';
@@ -388,15 +388,18 @@ export class EscrowService {
       entry.sequence,
     );
 
-    await this.prisma.escrowEntry.update({
-      where: { id: entry.id },
-      data: { status: 'released', txHash },
+    const updated = await this.prisma.escrowEntry.updateMany({
+      where: { id: entry.id, version: entry.version, status: 'pending' },
+      data: { status: 'released', txHash, version: entry.version + 1 },
     });
+    if (updated.count === 0) {
+      throw new ConflictException('이 항목이 다른 요청에 의해 이미 처리되었습니다');
+    }
 
-    const allReleased = escrow.entries.every(
-      (e) => e.id === entry.id || e.status === 'released',
-    );
-    if (allReleased) {
+    const freshEntries = await this.prisma.escrowEntry.findMany({
+      where: { escrowId },
+    });
+    if (freshEntries.every((e) => e.status === 'released')) {
       await this.prisma.escrow.update({
         where: { id: escrowId },
         data: { status: 'completed' },
@@ -488,6 +491,15 @@ export class EscrowService {
       throw new BadRequestException(`Charge request already ${chargeRequest.status}`);
     }
 
+    // Optimistic lock: claim charge request to prevent concurrent approval
+    const claimed = await this.prisma.chargeRequest.updateMany({
+      where: { id: requestId, version: chargeRequest.version, status: 'pending_approval' },
+      data: { version: chargeRequest.version + 1 },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictException('이 차감 요청이 다른 요청에 의해 이미 처리되었습니다');
+    }
+
     const requestedEntryIds = this.parseChargeEntryIds(chargeRequest.entryIds);
     const entries = requestedEntryIds.map((entryId) => {
       const entry = chargeRequest.escrow.entries.find((candidate) => candidate.id === entryId);
@@ -511,17 +523,19 @@ export class EscrowService {
         entry.sequence,
       );
       txHashes.push(txHash);
-      await this.prisma.escrowEntry.update({
-        where: { id: entry.id },
-        data: { status: 'released', txHash },
+      const entryUpdated = await this.prisma.escrowEntry.updateMany({
+        where: { id: entry.id, version: entry.version, status: 'pending' },
+        data: { status: 'released', txHash, version: entry.version + 1 },
       });
+      if (entryUpdated.count === 0) {
+        throw new ConflictException('에스크로 항목이 다른 요청에 의해 이미 처리되었습니다');
+      }
     }
 
-    const releasedEntryIds = new Set(requestedEntryIds);
-    const allReleased = chargeRequest.escrow.entries.every(
-      (entry) => releasedEntryIds.has(entry.id) || entry.status === 'released',
-    );
-    if (allReleased) {
+    const freshEntries = await this.prisma.escrowEntry.findMany({
+      where: { escrowId: chargeRequest.escrowId },
+    });
+    if (freshEntries.every((e) => e.status === 'released')) {
       await this.prisma.escrow.update({
         where: { id: chargeRequest.escrowId },
         data: { status: 'completed' },
@@ -592,10 +606,13 @@ export class EscrowService {
           escrow.consumerAddress,
           entry.sequence,
         );
-        await this.prisma.escrowEntry.update({
-          where: { id: entry.id },
-          data: { status: 'refunded', txHash },
+        const entryUpdated = await this.prisma.escrowEntry.updateMany({
+          where: { id: entry.id, version: entry.version, status: 'pending' },
+          data: { status: 'refunded', txHash, version: entry.version + 1 },
         });
+        if (entryUpdated.count === 0) {
+          this.logger.warn(`Entry ${entry.month} was already processed by another request`);
+        }
         cancelled += 1;
       } catch (err) {
         failed += 1;

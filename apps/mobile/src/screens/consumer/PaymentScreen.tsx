@@ -23,6 +23,11 @@ import type { BusinessProduct, EscrowType } from '@prepaid-shield/shared-types';
 const MONTHLY_CATEGORY_KEYWORDS = ['헬스장', '피트니스', '학원', '어학원', '독서실', '스터디카페', '필라테스', '요가'];
 const PREPAID_CATEGORY_KEYWORDS = ['카페', '미용실', '네일', '피부관리', '에스테틱', '마사지', '세탁', 'PT', '피티', '레슨'];
 
+const MAX_AMOUNT_KRW = 100_000_000;
+const MAX_UNIT_PRICE_KRW = 10_000_000;
+const MAX_MONTHS = 24;
+const MAX_VALIDITY_MONTHS = 36;
+
 function getDefaultEscrowType(businessCategory?: string): EscrowType {
   if (!businessCategory) return 'monthly';
   const normalizedCategory = businessCategory.trim().toUpperCase();
@@ -75,9 +80,13 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
   const effectiveUnitPriceKrw = paymentRequest && effectiveUnitPrice ? rlusdToKrw(effectiveUnitPrice) : selectedProduct && effectiveUnitPrice ? rlusdToKrw(effectiveUnitPrice) : unitPriceValue;
   const prepaidEntryCount = getWholeUnitCount(effectiveAmountKrw, effectiveUnitPriceKrw);
   const isPrepaidDivisible = prepaidEntryCount !== null;
+  const amountExceedsMax = amountValue > MAX_AMOUNT_KRW;
+  const unitPriceExceedsMax = unitPriceValue > MAX_UNIT_PRICE_KRW;
+  const monthsExceedsMax = monthsValue > MAX_MONTHS;
+  const validityMonthsExceedsMax = validityMonthsValue > MAX_VALIDITY_MONTHS;
   const canSubmit = paymentRequest ? true : selectedProduct ? true : escrowType === 'monthly'
-    ? amountValue > 0 && monthsValue > 0
-    : amountValue > 0 && unitPriceValue > 0 && validityMonthsValue > 0 && isPrepaidDivisible;
+    ? amountValue > 0 && monthsValue > 0 && !amountExceedsMax && !monthsExceedsMax
+    : amountValue > 0 && unitPriceValue > 0 && validityMonthsValue > 0 && isPrepaidDivisible && !amountExceedsMax && !unitPriceExceedsMax && !validityMonthsExceedsMax;
   const payloadTotalAmount = effectiveEscrowType === 'prepaid' && effectiveUnitPrice && prepaidEntryCount
     ? roundRlusd(effectiveUnitPrice * prepaidEntryCount)
     : effectiveAmount;
@@ -250,6 +259,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
               placeholderTextColor={colors.gray400}
             />
             {!!amountValue && <Text style={styles.inputHint}>{formatRlusd(effectiveAmount)}</Text>}
+            {amountExceedsMax && <Text style={styles.inputError}>최대 {formatKrw(MAX_AMOUNT_KRW)}까지 입력 가능합니다</Text>}
           </View>
 
           {effectiveEscrowType === 'monthly' ? (
@@ -263,6 +273,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
                 placeholder="예: 6"
                 placeholderTextColor={colors.gray400}
               />
+              {monthsExceedsMax && <Text style={styles.inputError}>최대 {MAX_MONTHS}개월까지 입력 가능합니다</Text>}
             </View>
           ) : (
             <>
@@ -277,6 +288,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
                   placeholderTextColor={colors.gray400}
                 />
                 {!!unitPriceValue && <Text style={styles.inputHint}>{formatRlusd(effectiveUnitPrice)}</Text>}
+                {unitPriceExceedsMax && <Text style={styles.inputError}>최대 {formatKrw(MAX_UNIT_PRICE_KRW)}까지 입력 가능합니다</Text>}
               </View>
 
               <View style={styles.inputGroup}>
@@ -289,6 +301,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
                   placeholder="예: 3"
                   placeholderTextColor={colors.gray400}
                 />
+                {validityMonthsExceedsMax && <Text style={styles.inputError}>최대 {MAX_VALIDITY_MONTHS}개월까지 입력 가능합니다</Text>}
               </View>
             </>
           )}
@@ -589,6 +602,11 @@ const styles = StyleSheet.create({
   inputHint: {
     fontSize: font.size.xs,
     color: colors.gray400,
+    marginTop: spacing.xs,
+  },
+  inputError: {
+    fontSize: font.size.xs,
+    color: '#EF4444',
     marginTop: spacing.xs,
   },
   infoCard: {

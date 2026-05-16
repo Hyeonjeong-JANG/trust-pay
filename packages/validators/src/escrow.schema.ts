@@ -42,7 +42,7 @@ export const createEscrowSchema = z
       .max(24, 'Maximum 24 months')
       .optional(),
     escrowType: z.enum(['monthly', 'prepaid']).default('monthly'),
-    unitPrice: z.number().positive('Unit price must be positive').optional(),
+    unitPrice: z.number().positive('Unit price must be positive').max(100_000_000, 'Unit price exceeds maximum').optional(),
     validityMonths: z
       .number()
       .int()

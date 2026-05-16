@@ -151,7 +151,23 @@ export class AuthService {
       // 자동 등록: 지갑 생성 + Trust Line
       const { wallet, address: xrplAddress, secret: xrplSecret } =
         await this.xrplService.createWallet();
-      await this.xrplService.setTrustLine(wallet);
+
+      let trustLineSet = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await this.xrplService.setTrustLine(wallet);
+          trustLineSet = true;
+          break;
+        } catch (err) {
+          this.logger.warn(`Trust line attempt ${attempt}/3 failed for ${xrplAddress}: ${err}`);
+          if (attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+          }
+        }
+      }
+      if (!trustLineSet) {
+        throw new BadRequestException('XRPL Trust Line 설정에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      }
 
       // Auto-fund RLUSD for testnet (non-fatal if it fails)
       try {
