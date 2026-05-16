@@ -8,8 +8,9 @@ describe('XrplService', () => {
     return new Date((rippleTime + rippleEpoch) * 1000);
   }
 
-  it('should create demo monthly escrows from the approval date on calendar month boundaries', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-05-13T09:00:00.000Z'));
+  it('should create demo monthly escrows with 2-minute intervals in demo mode', async () => {
+    const baseTime = new Date('2026-05-13T09:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(baseTime);
     const configService = {
       get: jest.fn((key: string) => ({ demoMode: true } as Record<string, unknown>)[key]),
     } as unknown as ConfigService;
@@ -23,15 +24,17 @@ describe('XrplService', () => {
         3,
       );
 
-      expect(results.map((entry) => rippleTimeToDate(entry.finishAfter).toISOString().slice(0, 10))).toEqual([
-        '2026-05-13',
-        '2026-06-13',
-        '2026-07-13',
+      // Demo mode uses 2-minute intervals per month
+      const twoMin = 2 * 60 * 1000;
+      expect(results.map((entry) => rippleTimeToDate(entry.finishAfter).getTime())).toEqual([
+        baseTime.getTime() + 0 * twoMin,
+        baseTime.getTime() + 1 * twoMin,
+        baseTime.getTime() + 2 * twoMin,
       ]);
-      expect(results.map((entry) => rippleTimeToDate(entry.cancelAfter).toISOString().slice(0, 10))).toEqual([
-        '2026-06-13',
-        '2026-07-13',
-        '2026-08-13',
+      expect(results.map((entry) => rippleTimeToDate(entry.cancelAfter).getTime())).toEqual([
+        baseTime.getTime() + 1 * twoMin,
+        baseTime.getTime() + 2 * twoMin,
+        baseTime.getTime() + 3 * twoMin,
       ]);
     } finally {
       jest.useRealTimers();

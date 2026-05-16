@@ -108,8 +108,8 @@ export class XrplService implements OnModuleDestroy {
       const results: EscrowResult[] = [];
       for (let month = 1; month <= months; month++) {
         // Synthetic tx hashes let the app display ledger-like evidence without Testnet latency.
-        const finishDate = monthsFromNow(month - 1, false);
-        const cancelDate = monthsFromNow(month, false);
+        const finishDate = monthsFromNow(month - 1, true);
+        const cancelDate = monthsFromNow(month, true);
         results.push({
           month,
           sequence: this.demoSequence++,

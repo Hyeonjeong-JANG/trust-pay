@@ -108,12 +108,14 @@ function selectEntriesCoveringAmount<T extends { id: string; amount: string | nu
   return null;
 }
 
-function safeWalletFromSeed(secret: string): Wallet {
+function safeWalletFromSeed(secret: string, demoMode: boolean): Wallet {
   try {
     return Wallet.fromSeed(secret);
-  } catch {
-    // Dummy/demo seed — generate a throwaway wallet for mock XRPL calls
-    return Wallet.generate();
+  } catch (err) {
+    if (demoMode) {
+      return Wallet.generate();
+    }
+    throw new Error(`Failed to restore wallet from seed: ${(err as Error).message}`);
   }
 }
 
@@ -179,7 +181,8 @@ export class EscrowService {
     }
 
     // Reconstruct sender wallet from encrypted secret
-    const senderWallet = safeWalletFromSeed(this.crypto.decrypt(consumer.xrplSecret));
+    const isDemoMode = this.configService.get<boolean>('demoMode') ?? false;
+    const senderWallet = safeWalletFromSeed(this.crypto.decrypt(consumer.xrplSecret), isDemoMode);
 
     let monthlyAmount: number;
     let entryMonths: number;
@@ -274,7 +277,7 @@ export class EscrowService {
       );
       const firstEntry = escrowResults.find((result) => result.month === 1);
       if (firstEntry) {
-        const businessWallet = safeWalletFromSeed(this.crypto.decrypt(business.xrplSecret));
+        const businessWallet = safeWalletFromSeed(this.crypto.decrypt(business.xrplSecret), isDemoMode);
         const txHash = await this.xrplService.finishEscrow(
           businessWallet,
           consumer.xrplAddress,
@@ -376,7 +379,8 @@ export class EscrowService {
     const business = await this.prisma.business.findUnique({
       where: { id: escrow.businessId },
     });
-    const wallet = safeWalletFromSeed(this.crypto.decrypt(business!.xrplSecret));
+    const isDemoMode = this.configService.get<boolean>('demoMode') ?? false;
+    const wallet = safeWalletFromSeed(this.crypto.decrypt(business!.xrplSecret), isDemoMode);
 
     const txHash = await this.xrplService.finishEscrow(
       wallet,
@@ -497,7 +501,8 @@ export class EscrowService {
     });
     if (!business) throw new NotFoundException('Business not found');
 
-    const wallet = safeWalletFromSeed(this.crypto.decrypt(business.xrplSecret));
+    const isDemoMode = this.configService.get<boolean>('demoMode') ?? false;
+    const wallet = safeWalletFromSeed(this.crypto.decrypt(business.xrplSecret), isDemoMode);
     const txHashes: string[] = [];
     for (const entry of entries) {
       const txHash = await this.xrplService.finishEscrow(
@@ -573,7 +578,8 @@ export class EscrowService {
     const consumer = await this.prisma.consumer.findUnique({
       where: { id: escrow.consumerId },
     });
-    const wallet = safeWalletFromSeed(this.crypto.decrypt(consumer!.xrplSecret));
+    const isDemoMode = this.configService.get<boolean>('demoMode') ?? false;
+    const wallet = safeWalletFromSeed(this.crypto.decrypt(consumer!.xrplSecret), isDemoMode);
 
     const pendingEntries = escrow.entries.filter((e) => e.status === 'pending');
     let cancelled = 0;

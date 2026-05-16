@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { BusinessService } from './business.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
@@ -72,6 +73,7 @@ describe('BusinessService', () => {
         BusinessService,
         { provide: PrismaService, useValue: prisma },
         { provide: XrplService, useValue: xrplService },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(true) } },
         { provide: CryptoService, useValue: { encrypt: jest.fn((v: string) => 'encrypted:' + v), decrypt: jest.fn((v: string) => v.replace('encrypted:', '')) } },
         { provide: BusinessClosureService, useValue: businessClosureService },
         { provide: PaymentRequestService, useValue: paymentRequestService },

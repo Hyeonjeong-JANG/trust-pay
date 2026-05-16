@@ -76,8 +76,8 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
   const prepaidEntryCount = getWholeUnitCount(effectiveAmountKrw, effectiveUnitPriceKrw);
   const isPrepaidDivisible = prepaidEntryCount !== null;
   const canSubmit = paymentRequest ? true : selectedProduct ? true : escrowType === 'monthly'
-    ? amountValue > 0 && !!months
-    : amountValue > 0 && unitPriceValue > 0 && !!validityMonths && isPrepaidDivisible;
+    ? amountValue > 0 && monthsValue > 0
+    : amountValue > 0 && unitPriceValue > 0 && validityMonthsValue > 0 && isPrepaidDivisible;
   const payloadTotalAmount = effectiveEscrowType === 'prepaid' && effectiveUnitPrice && prepaidEntryCount
     ? roundRlusd(effectiveUnitPrice * prepaidEntryCount)
     : effectiveAmount;

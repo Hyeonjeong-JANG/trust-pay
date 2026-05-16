@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException, Logger, ForbiddenException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { XrplService } from '../xrpl/xrpl.service';
 import { CryptoService } from '../common/crypto.service';
@@ -54,11 +55,14 @@ const REFUND_REVIEW_COMPLETED_STATUSES = new Set([
 ]);
 const AUTO_SETTLEMENT_RETRY_DELAY_MS = 60_000;
 
-function safeWalletFromSeed(secret: string): Wallet {
+function safeWalletFromSeed(secret: string, demoMode: boolean): Wallet {
   try {
     return Wallet.fromSeed(secret);
-  } catch {
-    return Wallet.generate();
+  } catch (err) {
+    if (demoMode) {
+      return Wallet.generate();
+    }
+    throw new Error(`Failed to restore wallet from seed: ${(err as Error).message}`);
   }
 }
 
@@ -74,6 +78,7 @@ export class BusinessService {
   constructor(
     private prisma: PrismaService,
     private xrplService: XrplService,
+    private configService: ConfigService,
     private crypto: CryptoService,
     private businessClosureService: BusinessClosureService,
     private paymentRequestService: PaymentRequestService,
@@ -342,7 +347,8 @@ export class BusinessService {
   private async autoFinishEligibleMonthlyEntries(business: any): Promise<{ count: number; amount: number }> {
     const nowMs = Date.now();
     const nowRipple = Math.floor(nowMs / 1000) - 946684800;
-    const businessWallet = safeWalletFromSeed(this.crypto.decrypt(business.xrplSecret));
+    const isDemoMode = this.configService.get<boolean>('demoMode') ?? false;
+    const businessWallet = safeWalletFromSeed(this.crypto.decrypt(business.xrplSecret), isDemoMode);
     let count = 0;
     let amount = 0;
 
