@@ -466,6 +466,15 @@ describe('static Demo API fixture', () => {
       totalAmount: 600,
       months: 6,
     });
+    const approvedCookie = String(approvalResponse.headers['Set-Cookie'] || approvalResponse.headers['set-cookie'] || '').split(';')[0];
+    const dashboardHandler = loadFreshHandler();
+    const consumerEscrowsResponse = await callApiWith(
+      dashboardHandler,
+      'GET',
+      '/api/escrow/consumer/00000000-0000-4000-a000-000000000001',
+      undefined,
+      { cookie: approvedCookie },
+    );
 
     expect(createResponse.statusCode).toBe(201);
     expect(created.code).toMatch(/^TP-\d{6}$/);
@@ -473,6 +482,18 @@ describe('static Demo API fixture', () => {
     expect(lookupResponse.body).toMatchObject({ code: created.code, businessName: '파워짐 피트니스', status: 'pending' });
     expect(approvalResponse.statusCode).toBe(201);
     expect(approvalResponse.body).toMatchObject({ businessId: '00000000-0000-4000-a000-000000000020', status: 'active' });
+    expect(approvedCookie).toBe(`trustpay_demo_approved_qr=${created.code}`);
+    expect(consumerEscrowsResponse.statusCode).toBe(200);
+    expect(consumerEscrowsResponse.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: `demo-approved-${created.code}`,
+          businessId: '00000000-0000-4000-a000-000000000020',
+          totalAmount: 600,
+          status: 'active',
+        }),
+      ]),
+    );
   });
 
   it('cancels merchant-originated QR payment requests before customer approval', async () => {

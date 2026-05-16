@@ -74,6 +74,7 @@ const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
   'rejected',
 ]);
 const DEMO_REFUND_INVESTIGATION_REASON = '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 답변 기한으로 진행합니다.';
+const APPROVED_PAYMENT_REQUEST_COOKIE = 'trustpay_demo_approved_qr';
 
 const consumers = [
   {
@@ -619,6 +620,32 @@ function findPaymentRequestByCode(code) {
   return paymentRequests.find((item) => item.code === normalizedCode) || createStatelessDemoPaymentRequest(normalizedCode);
 }
 
+function createApprovedPaymentRequestEscrow(paymentRequest, consumerId) {
+  const isPrepaid = paymentRequest.escrowType === 'prepaid';
+  const entryCount = isPrepaid
+    ? Math.max(1, Math.round(Number(paymentRequest.totalAmount) / Number(paymentRequest.unitPrice || paymentRequest.totalAmount)))
+    : Number(paymentRequest.months || 1);
+  const monthlyAmount = isPrepaid
+    ? Number(paymentRequest.unitPrice || paymentRequest.totalAmount)
+    : Number(paymentRequest.monthlyAmount || paymentRequest.totalAmount / entryCount);
+  return makeEscrow({
+    id: `demo-approved-${paymentRequest.code}`,
+    consumerId,
+    businessId: paymentRequest.businessId,
+    productId: paymentRequest.productId || null,
+    totalAmount: Number(paymentRequest.totalAmount),
+    monthlyAmount,
+    months: entryCount,
+    escrowType: isPrepaid ? 'prepaid' : 'monthly',
+    unitPrice: isPrepaid ? Number(paymentRequest.unitPrice || paymentRequest.totalAmount) : null,
+    validityMonths: isPrepaid ? paymentRequest.validityMonths : null,
+    validFrom: isPrepaid ? paymentRequest.validFrom || null : null,
+    validUntil: isPrepaid ? paymentRequest.validUntil || null : null,
+    status: 'active',
+    entryStatuses: Array.from({ length: entryCount }, (_, index) => !isPrepaid && index === 0 ? 'released' : 'pending'),
+  });
+}
+
 let escrows = [
   makeEscrow({
     id: '00000000-0000-4000-a000-000000000100',
@@ -1037,6 +1064,17 @@ function getHeader(req, name) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function getCookie(req, name) {
+  const cookieHeader = getHeader(req, 'cookie') || '';
+  const prefix = `${name}=`;
+  const match = String(cookieHeader).split(';').map((item) => item.trim()).find((item) => item.startsWith(prefix));
+  return match ? decodeURIComponent(match.slice(prefix.length)) : '';
+}
+
+function setApprovedPaymentRequestCookie(res, code) {
+  res.setHeader('Set-Cookie', `${APPROVED_PAYMENT_REQUEST_COOKIE}=${encodeURIComponent(code)}; Path=/; Max-Age=3600; SameSite=Lax`);
+}
+
 function isAdminRequest(req) {
   const expectedId = process.env.ADMIN_ID || 'admin';
   const expectedSecret = process.env.ADMIN_API_SECRET || 'admin1234';
@@ -1437,7 +1475,13 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'GET' && parts[0] === 'escrow' && parts[1] === 'consumer') {
-    return send(res, 200, escrows.filter((item) => item.consumerId === parts[2]).map((escrow) => withRelations(escrow, 'consumer')));
+    const scoped = escrows.filter((item) => item.consumerId === parts[2]);
+    const approvedCode = normalizePaymentRequestCode(getCookie(req, APPROVED_PAYMENT_REQUEST_COOKIE));
+    const approvedRequest = findPaymentRequestByCode(approvedCode);
+    if (approvedRequest && !scoped.some((item) => item.id === `demo-approved-${approvedRequest.code}`)) {
+      scoped.unshift(createApprovedPaymentRequestEscrow(approvedRequest, parts[2]));
+    }
+    return send(res, 200, scoped.map((escrow) => withRelations(escrow, 'consumer')));
   }
 
   if (req.method === 'POST' && parts[0] === 'escrow' && parts[1] === 'refund-review-requests' && parts[3] === 'merchant-response') {
@@ -1535,7 +1579,7 @@ module.exports = async function handler(req, res) {
     const entryCount = isPrepaid ? totalAmount / unitPrice : months;
     const monthlyAmount = isPrepaid ? unitPrice : totalAmount / months;
     const escrow = makeEscrow({
-      id: `demo-created-${Date.now()}`,
+      id: paymentRequestCode ? `demo-approved-${paymentRequestCode}` : `demo-created-${Date.now()}`,
       consumerId: body.consumerId,
       businessId: body.businessId,
       productId: product?.id || null,
@@ -1551,7 +1595,10 @@ module.exports = async function handler(req, res) {
       entryStatuses: Array.from({ length: entryCount }, (_, index) => !isPrepaid && index === 0 ? 'released' : 'pending'),
     });
     escrows = [escrow, ...escrows];
-    if (paymentRequest) paymentRequest.status = 'used';
+    if (paymentRequest) {
+      paymentRequest.status = 'used';
+      setApprovedPaymentRequestCookie(res, paymentRequest.code);
+    }
     return send(res, 201, withRelations(escrow, 'consumer'));
   }
 
