@@ -58,7 +58,7 @@ model BusinessProduct {
   isActive       Boolean           @default(true)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
-  business       Business          @relation(fields: [businessId], references: [id])
+  business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   menuItems      ProductMenuItem[]
   escrows        Escrow[]
   paymentRequests PaymentRequest[]
@@ -103,7 +103,7 @@ model ProductMenuItem {
   isActive       Boolean         @default(true)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
-  product        BusinessProduct @relation(fields: [productId], references: [id])
+  product        BusinessProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
   chargeRequests ChargeRequest[]
 
   @@index([productId, isActive])
@@ -127,9 +127,11 @@ model Escrow {
   status               String                @default("active")
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
-  consumer             Consumer              @relation("ConsumerEscrows", fields: [consumerId], references: [id])
-  business             Business              @relation("BusinessEscrows", fields: [businessId], references: [id])
-  product              BusinessProduct?      @relation(fields: [productId], references: [id])
+  validFrom            String?
+  validUntil           String?
+  consumer             Consumer              @relation("ConsumerEscrows", fields: [consumerId], references: [id], onDelete: Cascade)
+  business             Business              @relation("BusinessEscrows", fields: [businessId], references: [id], onDelete: Cascade)
+  product              BusinessProduct?      @relation(fields: [productId], references: [id], onDelete: SetNull)
   entries              EscrowEntry[]
   chargeRequests       ChargeRequest[]
   refundReviewRequests RefundReviewRequest[]
@@ -161,9 +163,9 @@ model RefundReviewRequest {
   resolvedAt               DateTime?
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
-  escrow                   Escrow    @relation(fields: [escrowId], references: [id])
-  consumer                 Consumer  @relation("ConsumerRefundReviewRequests", fields: [consumerId], references: [id])
-  business                 Business  @relation("BusinessRefundReviewRequests", fields: [businessId], references: [id])
+  escrow                   Escrow    @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+  consumer                 Consumer  @relation("ConsumerRefundReviewRequests", fields: [consumerId], references: [id], onDelete: Cascade)
+  business                 Business  @relation("BusinessRefundReviewRequests", fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([status, requestedAt])
   @@index([businessId, status, requestedAt])
@@ -184,7 +186,7 @@ model EscrowEntry {
   version     Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  escrow      Escrow   @relation(fields: [escrowId], references: [id])
+  escrow      Escrow   @relation(fields: [escrowId], references: [id], onDelete: Cascade)
 
   @@index([escrowId, status])
 }
@@ -208,11 +210,11 @@ model ChargeRequest {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   version     Int              @default(0)
-  escrow      Escrow           @relation(fields: [escrowId], references: [id])
-  consumer    Consumer         @relation("ConsumerChargeRequests", fields: [consumerId], references: [id])
-  business    Business         @relation("BusinessChargeRequests", fields: [businessId], references: [id])
-  product     BusinessProduct? @relation(fields: [productId], references: [id])
-  menuItem    ProductMenuItem? @relation(fields: [menuItemId], references: [id])
+  escrow      Escrow           @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+  consumer    Consumer         @relation("ConsumerChargeRequests", fields: [consumerId], references: [id], onDelete: Cascade)
+  business    Business         @relation("BusinessChargeRequests", fields: [businessId], references: [id], onDelete: Cascade)
+  product     BusinessProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  menuItem    ProductMenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
 
   @@index([escrowId, status])
   @@index([businessId, status, requestedAt])

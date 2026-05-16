@@ -209,6 +209,8 @@ export class EscrowService {
         unitPrice,
         validityMonths,
         issuer,
+        validFrom: dto.validFrom,
+        validUntil: dto.validUntil,
         entries: {
           create: results.map((r) => ({
             month: r.month,
