@@ -1340,14 +1340,15 @@ function snapshotPersistentDemoState() {
 async function loadPersistentDemoState() {
   if (!isPersistentDemoStateEnabled()) return;
   try {
-    const { get } = getBlobClient();
-    const stateBlob = await get(DEMO_STATE_BLOB_PATH, { access: 'public', useCache: false });
-    if (!stateBlob?.stream) return;
-    let body = '';
-    for await (const chunk of stateBlob.stream) {
-      body += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
-    }
-    if (body) applyPersistentDemoState(JSON.parse(body));
+    const { list } = getBlobClient();
+    const { blobs = [] } = await list({ prefix: DEMO_STATE_BLOB_PATH, limit: 10 });
+    const stateBlob = blobs.find((blob) => blob.pathname === DEMO_STATE_BLOB_PATH);
+    if (!stateBlob) return;
+    const stateUrl = new URL(stateBlob.downloadUrl || stateBlob.url);
+    stateUrl.searchParams.set('cache', '0');
+    const response = await fetch(stateUrl);
+    if (!response.ok) return;
+    applyPersistentDemoState(await response.json());
   } catch {
     // Persistence is a production demo enhancement; API fixtures still work without it.
   }

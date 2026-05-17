@@ -5,23 +5,8 @@ const mockBlobStorage = new Map<string, string>();
 const mockPublicBlobStorage = new Map<string, string>();
 
 jest.mock('@vercel/blob', () => ({
-  get: jest.fn(async (pathname: string) => {
-    const body = mockBlobStorage.get(pathname);
-    if (!body) return null;
-    return {
-      stream: {
-        [Symbol.asyncIterator]() {
-          let done = false;
-          return {
-            next: async () => {
-              if (done) return { done: true, value: undefined };
-              done = true;
-              return { done: false, value: body };
-            },
-          };
-        },
-      },
-    };
+  get: jest.fn(async () => {
+    throw new Error('pathname get is unavailable for this linked Blob token');
   }),
   list: jest.fn(async ({ prefix } = {}) => ({
     blobs: Array.from(mockBlobStorage.keys())
@@ -622,8 +607,11 @@ describe('static Demo API fixture', () => {
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('https://blob.test/')) {
-        const pathname = decodeURIComponent(new URL(url).pathname.slice(1));
-        const body = mockPublicBlobStorage.get(pathname);
+        const parsedUrl = new URL(url);
+        const pathname = decodeURIComponent(parsedUrl.pathname.slice(1));
+        const body = parsedUrl.searchParams.get('cache') === '0'
+          ? mockBlobStorage.get(pathname)
+          : mockPublicBlobStorage.get(pathname);
         return {
           ok: body !== undefined,
           status: body === undefined ? 404 : 200,
