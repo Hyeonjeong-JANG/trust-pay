@@ -94,6 +94,10 @@ const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
   'refunded',
   'rejected',
 ]);
+const MERCHANT_RESPONSE_ALLOWED_REFUND_REVIEW_STATUSES = new Set([
+  'merchant_response_requested',
+  'merchant_review',
+]);
 
 function rippleTimeToDate(rippleTime: number): string {
   const RIPPLE_EPOCH = 946684800;
@@ -378,7 +382,7 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                     <Text style={styles.refundReviewReason}>{latestRefundReview.merchantNotice}</Text>
                   </View>
                 )}
-                {latestRefundReview.status === 'merchant_response_requested' && (
+                {MERCHANT_RESPONSE_ALLOWED_REFUND_REVIEW_STATUSES.has(latestRefundReview.status) && (
                   <View style={styles.refundReviewResponseBox}>
                     <TextInput
                       style={styles.refundReviewResponseInput}

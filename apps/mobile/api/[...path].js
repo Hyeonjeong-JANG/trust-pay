@@ -1823,7 +1823,7 @@ module.exports = async function handler(req, res) {
     if (!session || session.role !== 'business' || session.userId !== review.businessId) {
       return send(res, 403, { message: '해당 사업자만 환불 검토 답변을 제출할 수 있습니다' });
     }
-    if (review.status !== 'merchant_response_requested') {
+    if (!WAITING_MERCHANT_STATUSES.has(review.status)) {
       return send(res, 400, { message: '사업자 답변 요청 상태에서만 응답할 수 있습니다' });
     }
     const response = typeof body.response === 'string' ? body.response.trim() : '';

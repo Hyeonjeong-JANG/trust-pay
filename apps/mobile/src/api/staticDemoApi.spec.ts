@@ -376,6 +376,29 @@ describe('static Demo API fixture', () => {
     expect(review).not.toHaveProperty('photoDataUrls');
   });
 
+  it('accepts merchant responses for legacy merchant-review refund requests', async () => {
+    const businessHeaders = { authorization: 'Bearer demo-token-business-00000000-0000-4000-a000-000000000020' };
+    const response = await callApi(
+      'POST',
+      '/api/escrow/refund-review-requests/00000000-0000-4000-a000-000000004001/merchant-response',
+      { response: '현재 정상 영업 중이며 남은 이용권은 미사용분 환불 가능합니다.' },
+      businessHeaders,
+    );
+    const dashboardResponse = await callApi('GET', '/api/business/00000000-0000-4000-a000-000000000020/dashboard');
+    const dashboard = dashboardResponse.body as any;
+    const refundEscrow = dashboard.escrows.find((escrow: any) => escrow.id === '00000000-0000-4000-a000-000000000700');
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      id: '00000000-0000-4000-a000-000000004001',
+      status: 'merchant_responded',
+      merchantResponse: '현재 정상 영업 중이며 남은 이용권은 미사용분 환불 가능합니다.',
+    });
+    expect(refundEscrow.refundReviewRequests).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: '00000000-0000-4000-a000-000000004001', status: 'merchant_responded' })]),
+    );
+  });
+
   it('keeps consumer-created refund reviews visible to admin and merchant dashboards', async () => {
     const consumerHeaders = { authorization: 'Bearer demo-token-consumer-00000000-0000-4000-a000-000000000001' };
     const businessHeaders = { authorization: 'Bearer demo-token-business-00000000-0000-4000-a000-000000000020' };

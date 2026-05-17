@@ -298,6 +298,55 @@ describe('BusinessEscrowDetailScreen', () => {
     }));
   });
 
+  it('should let the merchant respond from the detail screen when the review is in merchant review state', async () => {
+    const { api } = require('../../api/client');
+    api.getEscrow.mockResolvedValue({
+      id: 'e-prepaid-merchant-review-response',
+      consumerId: 'consumer-1',
+      businessId: 'business-1',
+      status: 'active',
+      escrowType: 'prepaid',
+      totalAmount: 150,
+      monthlyAmount: 5,
+      unitPrice: 5,
+      months: 30,
+      business: { name: '강남 블루보틀' },
+      consumer: { name: '이서연' },
+      entries: [{ id: 'en-1', month: 1, amount: '5', status: 'pending', finishAfter: 830607775, cancelAfter: 837000000 }],
+      chargeRequests: [],
+      refundReviewRequests: [
+        {
+          id: 'refund-review-merchant-review-response',
+          status: 'merchant_review',
+          refundableAmount: 10,
+          merchantRespondBy: '2026-05-18T00:00:00.000Z',
+          merchantNotice: '고객 이용 가능 여부와 미사용분 환불 가능 여부를 답변해주세요.',
+          requestedAt: '2026-05-14T00:00:00.000Z',
+        },
+      ],
+    });
+    api.respondToRefundReviewRequest.mockResolvedValue({ id: 'refund-review-merchant-review-response', status: 'merchant_responded' });
+
+    const { findByPlaceholderText, findByText } = renderWithProviders(
+      <BusinessEscrowDetailScreen route={{ params: { id: 'e-prepaid-merchant-review-response' } } as any} navigation={{} as any} />,
+    );
+
+    expect(await findByText('사업자 답변 대기')).toBeTruthy();
+    fireEvent.changeText(await findByPlaceholderText('TrustPay에 전달할 답변 내용을 입력해주세요'), '현재 정상 영업 중이며 미사용분은 환불 가능합니다.');
+    fireEvent.press(await findByText('답변 제출'));
+
+    await waitFor(() => expect(api.respondToRefundReviewRequest).toHaveBeenCalledWith('refund-review-merchant-review-response', {
+      response: '현재 정상 영업 중이며 미사용분은 환불 가능합니다.',
+      escrowId: 'e-prepaid-merchant-review-response',
+      consumerId: 'consumer-1',
+      businessId: 'business-1',
+      refundableAmount: 10,
+      merchantNotice: '고객 이용 가능 여부와 미사용분 환불 가능 여부를 답변해주세요.',
+      merchantRespondBy: '2026-05-18T00:00:00.000Z',
+      requestedAt: '2026-05-14T00:00:00.000Z',
+    }));
+  });
+
   it('should surface platform-review refund status without consumer evidence in merchant detail', async () => {
     const { api } = require('../../api/client');
     api.getEscrow.mockResolvedValue({
