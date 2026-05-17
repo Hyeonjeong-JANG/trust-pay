@@ -3,14 +3,17 @@
   "outputDirectory": "apps/mobile/dist",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": null,
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/demo?path=:path*"
+      "src": "/api/(.*)",
+      "dest": "/api/demo?path=$1"
     },
     {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
+      "handle": "filesystem"
+    },
+    {
+      "src": "/((?!api/).*)",
+      "dest": "/index.html"
     }
   ]
 }

@@ -92,9 +92,9 @@ function rippleTimeToIsoDate(value: number) {
 
 describe('static Demo API fixture', () => {
   it('routes nested API paths through a single Vercel demo function', () => {
-    expect(vercelConfig.rewrites).toContainEqual({
-      source: '/api/:path*',
-      destination: '/api/demo?path=:path*',
+    expect(vercelConfig.routes[0]).toEqual({
+      src: '/api/(.*)',
+      dest: '/api/demo?path=$1',
     });
   });
 
