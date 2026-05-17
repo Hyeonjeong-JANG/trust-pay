@@ -868,6 +868,138 @@ describe('static Demo API fixture', () => {
     }
   });
 
+  it('merges recent persistent snapshots so stale pending QR snapshots do not hide approved voucher escrows', async () => {
+    const originalFetch = globalThis.fetch;
+    mockBlobStorage.clear();
+    mockPublicBlobStorage.clear();
+    mockBlobUploadedAt.clear();
+    process.env.BLOB_READ_WRITE_TOKEN = 'test-token';
+
+    const baseState = {
+      version: 1,
+      savedAt: '2026-05-17T10:00:00.000Z',
+      consumers: [
+        {
+          id: '00000000-0000-4000-a000-000000000001',
+          name: '김민수',
+          phone: '010-2000-0001',
+          email: 'minsu@demo.com',
+          xrplAddress: 'rDemoConsumer1234567890ABCDEF',
+        },
+      ],
+      paymentRequests: [],
+      escrows: [],
+      chargeRequests: [],
+      refundReviewRequests: [],
+    };
+    const approvedState = {
+      ...baseState,
+      savedAt: '2026-05-17T10:01:00.000Z',
+      paymentRequests: [
+        {
+          id: 'payment-request-approved-race',
+          code: 'TP-000003',
+          businessId: '00000000-0000-4000-a000-000000000020',
+          businessName: '파워짐 피트니스',
+          paymentModel: 'voucher',
+          paymentAmount: 66.666667,
+          totalAmount: 74.074074,
+          monthlyAmount: null,
+          months: null,
+          escrowType: 'prepaid',
+          unitPrice: 7.407407,
+          validityMonths: 3,
+          validFrom: '2026-05-17',
+          validUntil: '2026-08-17',
+          status: 'used',
+          createdAt: '2026-05-17T10:00:00.000Z',
+        },
+      ],
+      escrows: [
+        {
+          id: 'demo-approved-TP-000003',
+          consumerId: '00000000-0000-4000-a000-000000000001',
+          businessId: '00000000-0000-4000-a000-000000000020',
+          consumerAddress: 'rDemoConsumer1234567890ABCDEF',
+          businessAddress: 'rDemoBusiness2GymABCDEF123456',
+          totalAmount: 74.074074,
+          monthlyAmount: 7.407407,
+          months: 10,
+          escrowType: 'prepaid',
+          unitPrice: 7.407407,
+          validityMonths: 3,
+          validFrom: '2026-05-17',
+          validUntil: '2026-08-17',
+          currency: 'RLUSD',
+          issuer: 'rDemoIssuerRLUSD000000000001',
+          status: 'active',
+          createdAt: '2026-05-17T10:01:00.000Z',
+          updatedAt: '2026-05-17T10:01:00.000Z',
+          entries: [{ id: 'race-entry-1', escrowId: 'demo-approved-TP-000003', month: 1, sequence: 1, amount: '7.407407', status: 'pending', txHash: null }],
+        },
+      ],
+    };
+    const stalePendingState = {
+      ...baseState,
+      savedAt: '2026-05-17T10:02:00.000Z',
+      paymentRequests: [{ ...approvedState.paymentRequests[0], status: 'pending' }],
+      escrows: [],
+    };
+
+    mockBlobStorage.set('trustpay-demo-state/approved-race.json', JSON.stringify(approvedState));
+    mockPublicBlobStorage.set('trustpay-demo-state/approved-race.json', JSON.stringify(approvedState));
+    mockBlobUploadedAt.set('trustpay-demo-state/approved-race.json', '2026-05-17T10:01:00.000Z');
+    mockBlobStorage.set('trustpay-demo-state/stale-pending-race.json', JSON.stringify(stalePendingState));
+    mockPublicBlobStorage.set('trustpay-demo-state/stale-pending-race.json', JSON.stringify(stalePendingState));
+    mockBlobUploadedAt.set('trustpay-demo-state/stale-pending-race.json', '2026-05-17T10:02:00.000Z');
+
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('https://blob.test/')) {
+        const pathname = decodeURIComponent(new URL(url).pathname.slice(1));
+        const body = mockPublicBlobStorage.get(pathname);
+        return {
+          ok: body !== undefined,
+          status: body === undefined ? 404 : 200,
+          json: async () => JSON.parse(body || '{}'),
+          text: async () => body || '',
+        } as Response;
+      }
+      if (originalFetch) return originalFetch(input);
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const apiHandler = loadFreshHandler();
+      const detailResponse = await callApiWith(apiHandler, 'GET', '/api/escrow/demo-approved-TP-000003');
+      const dashboardResponse = await callApiWith(apiHandler, 'GET', '/api/business/00000000-0000-4000-a000-000000000020/dashboard');
+      const lookupResponse = await callApiWith(apiHandler, 'GET', '/api/payment-requests?code=TP-000003');
+      const chargeResponse = await callApiWith(apiHandler, 'POST', '/api/escrow/demo-approved-TP-000003/charge-requests', {
+        menuName: '직접 입력 이용금액',
+        amount: 7.407407,
+      });
+      const dashboard = dashboardResponse.body as any;
+
+      expect(detailResponse.statusCode).toBe(200);
+      expect(detailResponse.body).toMatchObject({ id: 'demo-approved-TP-000003', escrowType: 'prepaid', status: 'active' });
+      expect(lookupResponse.body).toMatchObject({ code: 'TP-000003', status: 'used' });
+      expect(dashboard.pendingPaymentRequests).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'TP-000003' })]),
+      );
+      expect(dashboard.escrows).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 'demo-approved-TP-000003' })]),
+      );
+      expect(chargeResponse.statusCode).toBe(201);
+      expect(chargeResponse.body).toMatchObject({ escrowId: 'demo-approved-TP-000003', status: 'pending_approval' });
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete process.env.BLOB_READ_WRITE_TOKEN;
+      mockBlobStorage.clear();
+      mockPublicBlobStorage.clear();
+      mockBlobUploadedAt.clear();
+    }
+  });
+
   it('loads the newest persisted demo state beyond the first Blob list page', async () => {
     const originalFetch = globalThis.fetch;
     mockBlobStorage.clear();

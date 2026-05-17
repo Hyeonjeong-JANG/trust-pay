@@ -67,6 +67,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const DEMO_STATE_VERSION = 1;
 const DEMO_STATE_BLOB_PATH = process.env.DEMO_STATE_BLOB_PATH || 'trustpay-demo-state.json';
 const DEMO_STATE_BLOB_PREFIX = (process.env.DEMO_STATE_BLOB_PREFIX || DEMO_STATE_BLOB_PATH.replace(/\.json$/, '')).replace(/\/+$/, '');
+const DEMO_STATE_RECENT_MERGE_LIMIT = Number(process.env.DEMO_STATE_RECENT_MERGE_LIMIT || 50);
 const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
   'platform_review',
   'merchant_response_requested',
@@ -1293,6 +1294,77 @@ function replaceArrayContents(target, source) {
   if (Array.isArray(source)) target.splice(0, target.length, ...source);
 }
 
+function timestampFor(value) {
+  const timestamp = new Date(value || 0).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function rowTimestamp(row, fallbackTimestamp) {
+  return Math.max(
+    fallbackTimestamp,
+    timestampFor(row.updatedAt),
+    timestampFor(row.settledAt),
+    timestampFor(row.approvedAt),
+    timestampFor(row.rejectedAt),
+    timestampFor(row.resolvedAt),
+    timestampFor(row.requestedAt),
+    timestampFor(row.createdAt),
+  );
+}
+
+const PAYMENT_REQUEST_STATUS_RANK = { pending: 0, used: 2, cancelled: 2 };
+
+function chooseLatestStateRow(current, candidate) {
+  const currentTimestamp = rowTimestamp(current.item, current.stateTimestamp);
+  const candidateTimestamp = rowTimestamp(candidate.item, candidate.stateTimestamp);
+  return candidateTimestamp >= currentTimestamp ? candidate : current;
+}
+
+function choosePaymentRequestStateRow(current, candidate) {
+  const currentRank = PAYMENT_REQUEST_STATUS_RANK[current.item.status] ?? 1;
+  const candidateRank = PAYMENT_REQUEST_STATUS_RANK[candidate.item.status] ?? 1;
+  if (candidateRank !== currentRank) return candidateRank > currentRank ? candidate : current;
+  return chooseLatestStateRow(current, candidate);
+}
+
+function mergeStateRows(stateEntries, property, keyForRow, chooseRow = chooseLatestStateRow) {
+  const rowsByKey = new Map();
+  for (const entry of stateEntries) {
+    const rows = entry.state[property];
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      const key = keyForRow(row);
+      if (!key) continue;
+      const candidate = { item: row, stateTimestamp: entry.stateTimestamp };
+      const current = rowsByKey.get(key);
+      rowsByKey.set(key, current ? chooseRow(current, candidate) : candidate);
+    }
+  }
+  return Array.from(rowsByKey.values()).map((entry) => entry.item);
+}
+
+function mergePersistentDemoStates(stateEntries) {
+  const validEntries = stateEntries.filter((entry) => entry.state?.version === DEMO_STATE_VERSION);
+  if (!validEntries.length) return null;
+  const latestEntry = validEntries[validEntries.length - 1];
+  const merged = {
+    version: DEMO_STATE_VERSION,
+    savedAt: latestEntry.state.savedAt || new Date(latestEntry.stateTimestamp).toISOString(),
+    consumers: mergeStateRows(validEntries, 'consumers', (row) => row.id),
+    paymentRequests: mergeStateRows(validEntries, 'paymentRequests', (row) => row.code || row.id, choosePaymentRequestStateRow),
+    escrows: mergeStateRows(validEntries, 'escrows', (row) => row.id),
+    chargeRequests: mergeStateRows(validEntries, 'chargeRequests', (row) => row.id),
+    refundReviewRequests: mergeStateRows(validEntries, 'refundReviewRequests', (row) => row.id),
+  };
+  const approvedCodes = new Set(merged.escrows
+    .map((escrow) => String(escrow.id || '').startsWith('demo-approved-') ? String(escrow.id).slice('demo-approved-'.length) : null)
+    .filter(Boolean));
+  for (const request of merged.paymentRequests) {
+    if (approvedCodes.has(request.code) && request.status === 'pending') request.status = 'used';
+  }
+  return merged;
+}
+
 function applyCanonicalDemoWalletAddresses() {
   const consumer = consumers.find((item) => item.id === CONSUMER_ID);
   if (consumer) consumer.xrplAddress = DEMO_CONSUMER_TESTNET_ADDRESS;
@@ -1332,13 +1404,14 @@ function isDemoStateBlob(pathname) {
   return pathname === DEMO_STATE_BLOB_PATH || pathname.startsWith(`${DEMO_STATE_BLOB_PREFIX}/`);
 }
 
-function newestDemoStateBlob(blobs) {
+function recentDemoStateBlobs(blobs) {
   return blobs
     .filter((blob) => isDemoStateBlob(blob.pathname))
     .sort((a, b) => (
-      new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime()
-      || String(b.pathname).localeCompare(String(a.pathname))
-    ))[0];
+      new Date(a.uploadedAt || 0).getTime() - new Date(b.uploadedAt || 0).getTime()
+      || String(a.pathname).localeCompare(String(b.pathname))
+    ))
+    .slice(-DEMO_STATE_RECENT_MERGE_LIMIT);
 }
 
 function nextDemoStateBlobPath() {
@@ -1361,12 +1434,17 @@ async function loadPersistentDemoState() {
   if (!isPersistentDemoStateEnabled()) return;
   try {
     const blobs = await listDemoStateBlobs();
-    const stateBlob = newestDemoStateBlob(blobs);
-    if (!stateBlob) return;
-    const stateUrl = new URL(stateBlob.downloadUrl || stateBlob.url);
-    const response = await fetch(stateUrl);
-    if (!response.ok) return;
-    applyPersistentDemoState(await response.json());
+    const stateBlobs = recentDemoStateBlobs(blobs);
+    if (!stateBlobs.length) return;
+    const stateEntries = [];
+    for (const stateBlob of stateBlobs) {
+      const stateUrl = new URL(stateBlob.downloadUrl || stateBlob.url);
+      const response = await fetch(stateUrl);
+      if (!response.ok) continue;
+      stateEntries.push({ state: await response.json(), stateTimestamp: timestampFor(stateBlob.uploadedAt) });
+    }
+    const state = mergePersistentDemoStates(stateEntries);
+    if (state) applyPersistentDemoState(state);
   } catch {
     // Persistence is a production demo enhancement; API fixtures still work without it.
   }
