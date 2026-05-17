@@ -1,5 +1,7 @@
 const handler = require('../../api/[...path].js');
 const vercelConfig = require('../../../../vercel.json');
+const fs = require('fs');
+const path = require('path');
 
 const mockBlobStorage = new Map<string, string>();
 const mockPublicBlobStorage = new Map<string, string>();
@@ -92,10 +94,21 @@ function rippleTimeToIsoDate(value: number) {
 
 describe('static Demo API fixture', () => {
   it('routes nested API paths through a single Vercel demo function', () => {
-    expect(vercelConfig.routes[0]).toEqual({
-      src: '/api/(.*)',
-      dest: '/api/demo?path=$1',
+    expect(vercelConfig.rewrites).toContainEqual({
+      source: '/api/:path*',
+      destination: '/api/demo?path=:path*',
     });
+  });
+
+  it('keeps only the catch-all root API shim so all demo API paths share one serverless function', () => {
+    const apiRoot = path.resolve(__dirname, '../../../../api');
+    const listJsFiles = (dir: string, prefix = ''): string[] => fs.readdirSync(dir).flatMap((name: string) => {
+      const fullPath = path.join(dir, name);
+      const relativePath = prefix ? `${prefix}/${name}` : name;
+      return fs.statSync(fullPath).isDirectory() ? listJsFiles(fullPath, relativePath) : relativePath.endsWith('.js') ? [relativePath] : [];
+    });
+
+    expect(listJsFiles(apiRoot)).toEqual(['[...path].js']);
   });
 
   it('serves admin API requests after Vercel rewrites them to the single demo path', async () => {
