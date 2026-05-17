@@ -1,6 +1,24 @@
 const handler = require('../../api/[...path].js');
 const vercelConfig = require('../../../../vercel.json');
 
+const mockBlobStorage = new Map<string, string>();
+
+jest.mock('@vercel/blob', () => ({
+  list: jest.fn(async ({ prefix } = {}) => ({
+    blobs: Array.from(mockBlobStorage.keys())
+      .filter((pathname) => !prefix || pathname.startsWith(prefix))
+      .map((pathname) => ({
+        pathname,
+        url: `https://blob.test/${pathname}`,
+        downloadUrl: `https://blob.test/${pathname}`,
+      })),
+  })),
+  put: jest.fn(async (pathname: string, body: string) => {
+    mockBlobStorage.set(pathname, String(body));
+    return { pathname, url: `https://blob.test/${pathname}` };
+  }),
+}), { virtual: true });
+
 function loadFreshHandler() {
   jest.resetModules();
   return require('../../api/[...path].js');
@@ -574,6 +592,99 @@ describe('static Demo API fixture', () => {
     );
     expect(adminDashboardResponse.statusCode).toBe(200);
     expect(adminDashboard.escrows.active).toBeGreaterThanOrEqual(10);
+  });
+
+  it('persists QR approval across fresh serverless instances without relying on cookies', async () => {
+    const originalFetch = globalThis.fetch;
+    mockBlobStorage.clear();
+    process.env.BLOB_READ_WRITE_TOKEN = 'test-token';
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('https://blob.test/')) {
+        const pathname = decodeURIComponent(new URL(url).pathname.slice(1));
+        const body = mockBlobStorage.get(pathname);
+        return {
+          ok: body !== undefined,
+          status: body === undefined ? 404 : 200,
+          json: async () => JSON.parse(body || '{}'),
+          text: async () => body || '',
+        } as Response;
+      }
+      if (originalFetch) return originalFetch(input);
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const createHandler = loadFreshHandler();
+      const createResponse = await callApiWith(createHandler, 'POST', '/api/payment-requests', {
+        businessId: '00000000-0000-4000-a000-000000000020',
+        paymentAmount: 185.185185,
+        totalAmount: 185.185185,
+        months: 6,
+        paymentModel: 'monthly',
+        escrowType: 'monthly',
+      });
+      const created = createResponse.body as any;
+
+      const approveHandler = loadFreshHandler();
+      const approvalResponse = await callApiWith(approveHandler, 'POST', '/api/escrow', {
+        consumerId: '00000000-0000-4000-a000-000000000001',
+        businessId: '00000000-0000-4000-a000-000000000020',
+        paymentRequestCode: created.code,
+        totalAmount: 185.185185,
+        months: 6,
+      });
+
+      const dashboardHandler = loadFreshHandler();
+      const businessDashboardResponse = await callApiWith(
+        dashboardHandler,
+        'GET',
+        '/api/business/00000000-0000-4000-a000-000000000020/dashboard',
+      );
+      const adminEscrowsResponse = await callApiWith(
+        dashboardHandler,
+        'GET',
+        '/api/admin/escrows',
+        undefined,
+        { 'x-admin-id': 'admin', 'x-admin-secret': 'admin1234' },
+      );
+      const businessDashboard = businessDashboardResponse.body as any;
+      const adminEscrows = adminEscrowsResponse.body as any[];
+
+      expect(createResponse.statusCode).toBe(201);
+      expect(created).toMatchObject({ code: 'TP-000001', paymentAmount: 185.185185, months: 6, status: 'pending' });
+      expect(approvalResponse.statusCode).toBe(201);
+      expect(businessDashboardResponse.statusCode).toBe(200);
+      expect(businessDashboard.pendingPaymentRequests).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: created.code })]),
+      );
+      expect(businessDashboard.escrows).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: `demo-approved-${created.code}`,
+            consumerId: '00000000-0000-4000-a000-000000000001',
+            businessId: '00000000-0000-4000-a000-000000000020',
+            totalAmount: 185.185185,
+            status: 'active',
+          }),
+        ]),
+      );
+      expect(adminEscrowsResponse.statusCode).toBe(200);
+      expect(adminEscrows).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: `demo-approved-${created.code}`,
+            consumerId: '00000000-0000-4000-a000-000000000001',
+            businessId: '00000000-0000-4000-a000-000000000020',
+            status: 'active',
+          }),
+        ]),
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete process.env.BLOB_READ_WRITE_TOKEN;
+      mockBlobStorage.clear();
+    }
   });
 
   it('cancels merchant-originated QR payment requests before customer approval', async () => {

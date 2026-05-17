@@ -61,6 +61,8 @@ const ACTIVE_REFUND_REVIEW_STATUSES = new Set([
 const TERMINAL_REFUND_REVIEW_STATUSES = new Set(['platform_approved', 'rejected', 'refunded']);
 const DASHBOARD_REFUND_REVIEW_STATUSES = new Set([...OPEN_REFUND_REVIEW_STATUSES, ...TERMINAL_REFUND_REVIEW_STATUSES]);
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const DEMO_STATE_VERSION = 1;
+const DEMO_STATE_BLOB_PATH = process.env.DEMO_STATE_BLOB_PATH || 'trustpay-demo-state.json';
 const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
   'platform_review',
   'merchant_response_requested',
@@ -75,6 +77,7 @@ const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
 ]);
 const DEMO_REFUND_INVESTIGATION_REASON = '국세청 사업자등록번호 인증은 데모 환경에서 제한되어 TrustPay 자체 검토와 사업자 답변 기한으로 진행합니다.';
 const APPROVED_PAYMENT_REQUEST_COOKIE = 'trustpay_demo_approved_qr';
+let blobClient = null;
 
 const consumers = [
   {
@@ -1300,6 +1303,75 @@ function send(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+function isPersistentDemoStateEnabled() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+function getBlobClient() {
+  if (!blobClient) blobClient = require('@vercel/blob');
+  return blobClient;
+}
+
+function replaceArrayContents(target, source) {
+  if (Array.isArray(source)) target.splice(0, target.length, ...source);
+}
+
+function applyPersistentDemoState(state) {
+  if (!state || state.version !== DEMO_STATE_VERSION) return;
+  replaceArrayContents(consumers, state.consumers);
+  if (Array.isArray(state.paymentRequests)) paymentRequests = state.paymentRequests;
+  if (Array.isArray(state.escrows)) escrows = state.escrows;
+  if (Array.isArray(state.chargeRequests)) chargeRequests = state.chargeRequests;
+  if (Array.isArray(state.refundReviewRequests)) refundReviewRequests = state.refundReviewRequests;
+}
+
+function snapshotPersistentDemoState() {
+  return {
+    version: DEMO_STATE_VERSION,
+    savedAt: new Date().toISOString(),
+    consumers,
+    paymentRequests,
+    escrows,
+    chargeRequests,
+    refundReviewRequests,
+  };
+}
+
+async function loadPersistentDemoState() {
+  if (!isPersistentDemoStateEnabled()) return;
+  try {
+    const { list } = getBlobClient();
+    const { blobs = [] } = await list({ prefix: DEMO_STATE_BLOB_PATH, limit: 10 });
+    const stateBlob = blobs.find((blob) => blob.pathname === DEMO_STATE_BLOB_PATH);
+    if (!stateBlob) return;
+    const response = await fetch(stateBlob.downloadUrl || stateBlob.url);
+    if (!response.ok) return;
+    applyPersistentDemoState(await response.json());
+  } catch {
+    // Persistence is a production demo enhancement; API fixtures still work without it.
+  }
+}
+
+async function persistDemoState() {
+  if (!isPersistentDemoStateEnabled()) return;
+  try {
+    const { put } = getBlobClient();
+    await put(DEMO_STATE_BLOB_PATH, JSON.stringify(snapshotPersistentDemoState()), {
+      access: 'public',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: 'application/json; charset=utf-8',
+    });
+  } catch {
+    // Keep the public demo responsive if Blob is temporarily unavailable.
+  }
+}
+
+async function sendPersisted(res, status, data) {
+  await persistDemoState();
+  return send(res, status, data);
+}
+
 function parseBody(req) {
   return new Promise((resolve) => {
     let body = '';
@@ -1331,6 +1403,7 @@ module.exports = async function handler(req, res) {
   }
   const parts = path.split('/').filter(Boolean);
   const body = req.method === 'POST' ? await parseBody(req) : {};
+  await loadPersistentDemoState();
 
   if (parts[0] === 'admin') {
     if (!isAdminRequest(req)) return send(res, 401, { message: '운영자 권한이 필요합니다' });
@@ -1373,7 +1446,7 @@ module.exports = async function handler(req, res) {
       review.status = 'merchant_response_requested';
       review.merchantNotice = body.merchantNotice;
       review.merchantRespondBy = addBusinessDays(new Date(), 3).toISOString();
-      return send(res, 200, serializeAdminReview(review, scopedEscrows));
+      return sendPersisted(res, 200, serializeAdminReview(review, scopedEscrows));
     }
 
     if (req.method === 'POST' && parts[1] === 'refund-reviews' && parts[3] === 'resolve') {
@@ -1396,7 +1469,7 @@ module.exports = async function handler(req, res) {
       }
       review.adminResolutionReason = body.reason;
       review.resolvedAt = body.decision === 'investigate' ? null : new Date().toISOString();
-      return send(res, 200, serializeAdminReview(review, scopedEscrows));
+      return sendPersisted(res, 200, serializeAdminReview(review, scopedEscrows));
     }
   }
 
@@ -1411,7 +1484,7 @@ module.exports = async function handler(req, res) {
       ? findBusinessByIdentifier(body)
       : findConsumerByIdentifier(body) || createDemoConsumer(body);
     if (!user) return send(res, 400, { message: '등록되지 않은 계정입니다' });
-    return send(res, 200, {
+    return sendPersisted(res, 200, {
       userId: user.id,
       role: body.role,
       name: user.name,
@@ -1428,7 +1501,7 @@ module.exports = async function handler(req, res) {
     if (!request || !Number.isFinite(request.totalAmount) || request.totalAmount <= 0) {
       return send(res, 400, { message: '결제 QR 요청 정보를 확인해주세요' });
     }
-    return send(res, 201, request);
+    return sendPersisted(res, 201, request);
   }
 
   if (req.method === 'POST' && parts[0] === 'payment-requests' && parts[2] === 'cancel') {
@@ -1442,7 +1515,7 @@ module.exports = async function handler(req, res) {
       return send(res, 400, { message: '이미 처리된 결제 QR입니다' });
     }
     request.status = 'cancelled';
-    return send(res, 200, request);
+    return sendPersisted(res, 200, request);
   }
 
   if (req.method === 'GET' && parts[0] === 'payment-requests' && parts[1]) {
@@ -1533,7 +1606,7 @@ module.exports = async function handler(req, res) {
     review.merchantResponse = response;
     review.merchantRespondedAt = new Date().toISOString();
     const escrow = escrows.find((item) => item.id === review.escrowId);
-    return send(res, 200, { ...stripRefundReviewForMerchant(review), escrow: escrow ? withRelations(escrow, 'merchant') : null });
+    return sendPersisted(res, 200, { ...stripRefundReviewForMerchant(review), escrow: escrow ? withRelations(escrow, 'merchant') : null });
   }
 
   if (req.method === 'POST' && parts[0] === 'escrow' && parts[2] === 'refund-review-requests') {
@@ -1582,7 +1655,7 @@ module.exports = async function handler(req, res) {
       resolvedAt: null,
     };
     refundReviewRequests = [review, ...refundReviewRequests];
-    return send(res, 201, { ...review, escrow: withRelations(escrow, 'consumer') });
+    return sendPersisted(res, 201, { ...review, escrow: withRelations(escrow, 'consumer') });
   }
 
   if (req.method === 'GET' && parts[0] === 'escrow' && parts[1]) {
@@ -1631,7 +1704,7 @@ module.exports = async function handler(req, res) {
       paymentRequest.status = 'used';
       setApprovedPaymentRequestCookie(res, paymentRequest.code, body.consumerId);
     }
-    return send(res, 201, withRelations(escrow, 'consumer'));
+    return sendPersisted(res, 201, withRelations(escrow, 'consumer'));
   }
 
   if (req.method === 'POST' && parts[0] === 'escrow' && parts[2] === 'charge-requests') {
@@ -1679,7 +1752,7 @@ module.exports = async function handler(req, res) {
       menuItem,
     };
     chargeRequests = [request, ...chargeRequests];
-    return send(res, 201, request);
+    return sendPersisted(res, 201, request);
   }
 
   if (req.method === 'POST' && parts[0] === 'escrow' && parts[1] === 'charge-requests' && parts[3] === 'approve') {
@@ -1700,7 +1773,7 @@ module.exports = async function handler(req, res) {
     request.approvedAt = new Date().toISOString();
     request.settledAt = request.approvedAt;
     request.txHash = txHashes.join(',');
-    return send(res, 200, request);
+    return sendPersisted(res, 200, request);
   }
 
   if (req.method === 'POST' && parts[0] === 'escrow' && parts[1] === 'charge-requests' && parts[3] === 'reject') {
@@ -1708,7 +1781,7 @@ module.exports = async function handler(req, res) {
     if (!request || request.status !== 'pending_approval') return send(res, 400, { message: '거절 가능한 차감 요청이 없습니다' });
     request.status = 'rejected';
     request.rejectedAt = new Date().toISOString();
-    return send(res, 200, request);
+    return sendPersisted(res, 200, request);
   }
 
   if (req.method === 'POST' && parts[0] === 'escrow' && parts[2] === 'finish') {
@@ -1722,7 +1795,7 @@ module.exports = async function handler(req, res) {
     entry.status = 'released';
     entry.txHash = `DEMO_FINISH_${Date.now()}`;
     if (escrow.entries.every((item) => item.status === 'released')) escrow.status = 'completed';
-    return send(res, 200, { txHash: entry.txHash });
+    return sendPersisted(res, 200, { txHash: entry.txHash });
   }
 
   if (req.method === 'POST' && parts[0] === 'escrow' && parts[2] === 'cancel') {
@@ -1737,7 +1810,7 @@ module.exports = async function handler(req, res) {
       }
     });
     escrow.status = 'cancelled';
-    return send(res, 200, { cancelled, failed: 0 });
+    return sendPersisted(res, 200, { cancelled, failed: 0 });
   }
 
   return send(res, 404, { message: 'Not found' });
