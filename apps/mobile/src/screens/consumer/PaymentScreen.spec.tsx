@@ -77,6 +77,24 @@ describe('PaymentScreen', () => {
     expect(getByText(/카드는 보조 옵션이며 현금이나 가게 단말기 직접 결제는 보호 대상이 아닙니다/)).toBeTruthy();
   });
 
+  it('should explain the first monthly installment before approval authentication', async () => {
+    const { api } = require('../../api/client');
+    const { findByText, getByPlaceholderText, getByText } = renderWithProviders(
+      <PaymentScreen
+        navigation={{ navigate: jest.fn() } as any}
+        route={{ params: { businessId: 'b-1', businessName: '파워짐 헬스장', businessCategory: '헬스장' } } as any}
+      />,
+    );
+
+    fireEvent.changeText(getByPlaceholderText('예: 810,000'), '810000');
+    fireEvent.changeText(getByPlaceholderText('예: 6'), '6');
+    fireEvent.press(getByText('계좌 승인 결제 요청'));
+
+    expect(api.createEscrow).not.toHaveBeenCalled();
+    expect(await findByText(/승인하면 결제와 함께 1회차 ₩135,000이 즉시 차감/)).toBeTruthy();
+    expect(await findByText(/남은 5회차는 TrustPay 보호 대기로 유지됩니다/)).toBeTruthy();
+  });
+
   it('should convert KRW input to decimal RLUSD before creating an escrow', async () => {
     const { api } = require('../../api/client');
     const { findByPlaceholderText, findByText, getByPlaceholderText, getByText } = renderWithProviders(

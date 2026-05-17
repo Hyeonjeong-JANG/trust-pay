@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BusinessCreatePaymentScreen } from './BusinessCreatePaymentScreen';
 
@@ -11,6 +11,7 @@ jest.mock('../../utils/toast', () => ({
 jest.mock('../../api/client', () => ({
   api: {
     createPaymentRequest: jest.fn(),
+    getBusinessDashboard: jest.fn(),
   },
 }));
 
@@ -29,7 +30,11 @@ function renderWithProviders(ui: React.ReactElement) {
 }
 
 describe('BusinessCreatePaymentScreen', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({ pendingPaymentRequests: [], escrows: [] });
+  });
 
   it('should return to the merchant dashboard from the QR creation task screen', async () => {
     const navigation = { navigate: jest.fn() };
@@ -116,6 +121,53 @@ describe('BusinessCreatePaymentScreen', () => {
     expect(await findByText('SCAN')).toBeTruthy();
     expect(queryByTestId('generated-qr-placeholder-grid')).toBeNull();
     expect(await findByText('QR 코드나 결제 코드를 손님에게 보여주세요.')).toBeTruthy();
+  });
+
+  it('should return to the dashboard when the generated QR is approved by the customer', async () => {
+    jest.useFakeTimers();
+    const { api } = require('../../api/client');
+    const navigation = { navigate: jest.fn() };
+    const request = {
+      id: 'request-approval-watch',
+      code: 'TP-123456',
+      businessId: 'business-1',
+      businessName: '파워짐',
+      paymentAmount: 600,
+      totalAmount: 600,
+      monthlyAmount: 100,
+      months: 6,
+      paymentModel: 'monthly',
+      escrowType: 'monthly',
+      status: 'pending',
+      createdAt: '2026-05-13T00:00:00Z',
+    };
+    api.createPaymentRequest.mockResolvedValue(request);
+    api.getBusinessDashboard
+      .mockResolvedValueOnce({ pendingPaymentRequests: [request], escrows: [] })
+      .mockResolvedValueOnce({
+        pendingPaymentRequests: [],
+        escrows: [{ id: 'demo-approved-TP-123456', status: 'active', totalAmount: 600 }],
+      });
+
+    try {
+      const { findByPlaceholderText, findByText } = renderWithProviders(
+        <BusinessCreatePaymentScreen route={{} as any} navigation={navigation as any} />,
+      );
+
+      fireEvent.changeText(await findByPlaceholderText('예: 810,000'), '810000');
+      fireEvent.changeText(await findByPlaceholderText('예: 6'), '6');
+      fireEvent.press(await findByText('QR 결제 만들기'));
+      expect(await findByText('TP-123456')).toBeTruthy();
+
+      await waitFor(() => expect(api.getBusinessDashboard).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      await waitFor(() => expect(navigation.navigate).toHaveBeenCalledWith('Dashboard'));
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should create a period voucher QR with paid amount, charged amount, and validity dates', async () => {

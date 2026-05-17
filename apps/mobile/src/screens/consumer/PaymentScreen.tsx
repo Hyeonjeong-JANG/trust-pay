@@ -126,6 +126,9 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
   const infoSecondary = effectiveEscrowType === 'monthly'
     ? formatRlusd(monthlyAmount)
     : formatRlusd(effectiveAmount);
+  const approvalDescription = effectiveEscrowType === 'monthly'
+    ? `승인하면 결제와 함께 1회차 ${formatKrw(monthlyAmountKrw)}이 즉시 차감/정산되고 남은 ${Math.max(Number(effectiveMonths || 0) - 1, 0)}회차는 TrustPay 보호 대기로 유지됩니다.`
+    : '승인하면 결제 금액이 TrustPay 보호 상태로 전환됩니다. 실제 이용 시 사업자 차감 요청과 소비자 승인을 거쳐 정산됩니다.';
 
   return (
     <KeyboardAvoidingView
@@ -347,7 +350,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
       <ApprovalAuthModal
         visible={approvalAuthVisible}
         title="결제 승인 인증"
-        description="계좌 승인 결제를 요청하려면 본인 인증이 필요합니다."
+        description={approvalDescription}
         onCancel={() => setApprovalAuthVisible(false)}
         onAuthenticated={() => {
           setApprovalAuthVisible(false);

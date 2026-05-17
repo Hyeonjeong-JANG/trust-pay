@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Platform,
   ScrollView,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ApiError } from '../../api/client';
 import { PaymentRequestQrCode } from '../../components/PaymentRequestQrCode';
@@ -122,6 +122,7 @@ export function BusinessCreatePaymentScreen({ navigation }: BusinessTabProps<'Bu
   const [qrValidFrom, setQrValidFrom] = useState('');
   const [qrValidUntil, setQrValidUntil] = useState('');
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
+  const [hasRedirectedAfterApproval, setHasRedirectedAfterApproval] = useState(false);
 
   const paymentRequestMutation = useMutation({
     mutationFn: () => {
@@ -183,6 +184,33 @@ export function BusinessCreatePaymentScreen({ navigation }: BusinessTabProps<'Bu
   const monthlyPreview = qrPaymentModel === 'monthly' && Number(qrMonths) > 0
     ? previewAmount / Number(qrMonths)
     : 0;
+  const { data: approvalDashboard } = useQuery({
+    queryKey: ['businessPaymentApprovalWatch', userId, paymentRequest?.code],
+    queryFn: () => api.getBusinessDashboard(userId!),
+    enabled: !!userId && !!paymentRequest && !hasRedirectedAfterApproval,
+    retry: 1,
+    staleTime: 0,
+    refetchInterval: paymentRequest && !hasRedirectedAfterApproval ? 2000 : false,
+  });
+
+  useEffect(() => {
+    setHasRedirectedAfterApproval(false);
+  }, [paymentRequest?.id]);
+
+  useEffect(() => {
+    if (!paymentRequest || !approvalDashboard || hasRedirectedAfterApproval) return;
+
+    const pendingRequests = approvalDashboard.pendingPaymentRequests ?? [];
+    const approvedEscrows = approvalDashboard.escrows ?? [];
+    const isStillPending = pendingRequests.some((request) => request.id === paymentRequest.id || request.code === paymentRequest.code);
+    const hasApprovedEscrow = approvedEscrows.some((escrow) => escrow.id === `demo-approved-${paymentRequest.code}`);
+    if (isStillPending || !hasApprovedEscrow) return;
+
+    setHasRedirectedAfterApproval(true);
+    queryClient.invalidateQueries({ queryKey: ['businessDashboard'] });
+    showSuccessToast('결제 승인 완료', '손님 승인 완료로 대시보드에 보호 결제가 반영됐습니다.');
+    navigation.navigate('Dashboard');
+  }, [approvalDashboard, hasRedirectedAfterApproval, navigation, paymentRequest, queryClient]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

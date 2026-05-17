@@ -1,4 +1,5 @@
 import React from 'react';
+import { Text } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BusinessDashboardScreen } from './BusinessDashboardScreen';
@@ -34,6 +35,12 @@ function renderWithProviders(ui: React.ReactElement) {
     },
   });
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
+function flattenText(value: unknown): string {
+  if (Array.isArray(value)) return value.map(flattenText).join('');
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  return '';
 }
 
 describe('BusinessDashboardScreen', () => {
@@ -274,6 +281,48 @@ describe('BusinessDashboardScreen', () => {
     expect(await findByText('진행중 보호 결제 (1건)')).toBeTruthy();
     expect(await findByText('김민수')).toBeTruthy();
     expect(queryByText('완료 고객')).toBeNull();
+  });
+
+  it('should show the newest approved escrow first on the merchant dashboard', async () => {
+    const { api } = require('../../api/client');
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 0,
+      totalPending: 1200,
+      escrows: [
+        {
+          id: 'e-older',
+          status: 'active',
+          escrowType: 'monthly',
+          totalAmount: 600,
+          monthlyAmount: 100,
+          months: 6,
+          consumer: { id: 'consumer-old', name: '기존 고객' },
+          entries: [{ id: 'en-old', month: 1, amount: '100', status: 'pending', finishAfter: 830607775 }],
+          createdAt: '2026-05-13T00:00:00.000Z',
+          updatedAt: '2026-05-13T00:00:00.000Z',
+        },
+        {
+          id: 'e-newer',
+          status: 'active',
+          escrowType: 'monthly',
+          totalAmount: 600,
+          monthlyAmount: 100,
+          months: 6,
+          consumer: { id: 'consumer-new', name: '신규 고객' },
+          entries: [{ id: 'en-new', month: 1, amount: '100', status: 'released', finishAfter: 830607775 }],
+          createdAt: '2026-05-17T00:00:00.000Z',
+          updatedAt: '2026-05-17T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const { findByText, UNSAFE_getAllByType } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={{} as any} />);
+
+    expect(await findByText('수령 가능 ₩1,620,000')).toBeTruthy();
+    expect(await findByText('신규 고객')).toBeTruthy();
+    expect(await findByText('기존 고객')).toBeTruthy();
+    const texts = UNSAFE_getAllByType(Text).map((node) => flattenText(node.props.children));
+    expect(texts.indexOf('신규 고객')).toBeLessThan(texts.indexOf('기존 고객'));
   });
 
   it('should keep prepaid charge controls out of dashboard cards', async () => {

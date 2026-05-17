@@ -90,6 +90,13 @@ function getPrepaidAmounts(escrow: EscrowWithConsumer) {
   };
 }
 
+function getEscrowSortTime(escrow: EscrowWithConsumer): number {
+  return Math.max(
+    new Date(escrow.updatedAt ?? 0).getTime() || 0,
+    new Date(escrow.createdAt ?? 0).getTime() || 0,
+  );
+}
+
 export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashboard'>) {
   const userId = useAuthStore((s) => s.userId);
   const queryClient = useQueryClient();
@@ -157,7 +164,7 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
         (e.consumer?.name ?? '').toLowerCase().includes(q),
       );
     }
-    return result;
+    return [...result].sort((a, b) => getEscrowSortTime(b) - getEscrowSortTime(a));
   }, [dashboard?.escrows, statusFilter, searchQuery]);
 
   const sectionLabel = searchQuery.trim()
