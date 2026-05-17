@@ -762,6 +762,80 @@ describe('static Demo API fixture', () => {
     }
   });
 
+  it('generates merchant QR codes from the highest persisted TP number to avoid direct-entry collisions', async () => {
+    const originalFetch = globalThis.fetch;
+    mockBlobStorage.clear();
+    mockPublicBlobStorage.clear();
+    mockBlobUploadedAt.clear();
+    process.env.BLOB_READ_WRITE_TOKEN = 'test-token';
+
+    const persistedState = {
+      version: 1,
+      savedAt: '2026-05-17T10:00:00.000Z',
+      consumers: [],
+      paymentRequests: [
+        {
+          id: 'payment-request-existing-high-code',
+          code: 'TP-000007',
+          businessId: '00000000-0000-4000-a000-000000000020',
+          businessName: '파워짐 피트니스',
+          paymentModel: 'monthly',
+          paymentAmount: 600,
+          totalAmount: 600,
+          monthlyAmount: 100,
+          months: 6,
+          escrowType: 'monthly',
+          status: 'pending',
+          createdAt: '2026-05-17T10:00:00.000Z',
+        },
+      ],
+      escrows: [],
+      chargeRequests: [],
+      refundReviewRequests: [],
+    };
+
+    mockBlobStorage.set('trustpay-demo-state/high-code.json', JSON.stringify(persistedState));
+    mockPublicBlobStorage.set('trustpay-demo-state/high-code.json', JSON.stringify(persistedState));
+    mockBlobUploadedAt.set('trustpay-demo-state/high-code.json', '2026-05-17T10:00:00.000Z');
+
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('https://blob.test/')) {
+        const pathname = decodeURIComponent(new URL(url).pathname.slice(1));
+        const body = mockPublicBlobStorage.get(pathname);
+        return {
+          ok: body !== undefined,
+          status: body === undefined ? 404 : 200,
+          json: async () => JSON.parse(body || '{}'),
+          text: async () => body || '',
+        } as Response;
+      }
+      if (originalFetch) return originalFetch(input);
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const apiHandler = loadFreshHandler();
+      const createResponse = await callApiWith(apiHandler, 'POST', '/api/payment-requests', {
+        businessId: '00000000-0000-4000-a000-000000000020',
+        paymentAmount: 300,
+        totalAmount: 300,
+        months: 3,
+        paymentModel: 'monthly',
+        escrowType: 'monthly',
+      });
+
+      expect(createResponse.statusCode).toBe(201);
+      expect(createResponse.body).toMatchObject({ code: 'TP-000008', status: 'pending' });
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete process.env.BLOB_READ_WRITE_TOKEN;
+      mockBlobStorage.clear();
+      mockPublicBlobStorage.clear();
+      mockBlobUploadedAt.clear();
+    }
+  });
+
   it('persists QR approval across fresh serverless instances without relying on cookies', async () => {
     const originalFetch = globalThis.fetch;
     mockBlobStorage.clear();

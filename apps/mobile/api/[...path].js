@@ -568,7 +568,7 @@ function createPaymentRequest(body) {
   );
   const request = {
     id: `payment-request-${Date.now()}`,
-    code: `TP-${String(paymentRequests.length + 1).padStart(6, '0')}`,
+    code: nextPaymentRequestCode(),
     businessId: business.id,
     businessName: business.name,
     businessCategory: business.category,
@@ -589,6 +589,14 @@ function createPaymentRequest(body) {
   };
   paymentRequests = [request, ...paymentRequests];
   return request;
+}
+
+function nextPaymentRequestCode() {
+  const maxExistingNumber = paymentRequests.reduce((max, request) => {
+    const match = String(request.code || '').match(/^TP-(\d{6})$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return `TP-${String(maxExistingNumber + 1).padStart(6, '0')}`;
 }
 
 function normalizePaymentRequestCode(value) {
