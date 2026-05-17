@@ -262,6 +262,10 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
   const usageRangeLabel = isPrepaid ? '사용기한' : '이용기간';
   const releasedAmount = sumEntries(escrow.entries, 'released');
   const refundedAmount = sumEntries(escrow.entries, 'refunded');
+  const refundCompleted = latestRefundReview?.status === 'refunded' || (escrow.status === 'cancelled' && refundedAmount > 0);
+  const refundProofTxHash = escrow.entries.find((entry) => entry.status === 'refunded' && entry.txHash)?.txHash;
+  const refundCompletedAmount = refundedAmount > 0 ? refundedAmount : Number(latestRefundReview?.refundableAmount || 0);
+  const refundCompletedStatusText = `소비자 환불 완료 ${formatKrwFromRlusd(refundCompletedAmount)}`;
   const settledChargeRequests = chargeHistory.filter((request) => request.status === 'settled');
   const settledChargeAmount = settledChargeRequests.reduce((sum, request) => sum + Number(request.amount), 0);
   const settledChargeCount = settledChargeRequests.length;
@@ -343,6 +347,22 @@ export function EscrowDetailScreen({ route }: ScreenProps<'EscrowDetail'>) {
                 </Text>
               </View>
             </View>
+            {refundCompleted && (
+              <View style={styles.refundReviewCard}>
+                <Text style={styles.refundReviewTitle}>TrustPay 환불 승인 완료</Text>
+                <Text style={styles.refundReviewStatus}>{refundCompletedStatusText}</Text>
+                <Text style={styles.refundReviewDesc}>
+                  사업자 답변과 TrustPay 운영 검토 후 미사용분이 소비자에게 환불되었습니다.
+                  {latestRefundReview?.resolvedAt ? ` 처리일 ${isoToDate(latestRefundReview.resolvedAt) ?? '-'}` : ''}
+                </Text>
+                {!!latestRefundReview?.adminResolutionReason && (
+                  <Text style={styles.refundReviewReason}>{latestRefundReview.adminResolutionReason}</Text>
+                )}
+                {refundProofTxHash && (
+                  <XrplTransactionProof txHash={refundProofTxHash} label="환불 처리 증빙" />
+                )}
+              </View>
+            )}
             {isPrepaid && escrow.status === 'cancelled' && (
               <View style={styles.refundSummaryCard}>
                 <Text style={styles.refundSummaryTitle}>취소/환불 요약</Text>

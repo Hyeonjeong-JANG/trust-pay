@@ -221,6 +221,17 @@ describe('EscrowDetailScreen', () => {
         { id: 'en-3', month: 3, amount: '100', status: 'refunded', finishAfter: 830607775, cancelAfter: 837000000, txHash: 'REFUND_3' },
         { id: 'en-4', month: 4, amount: '100', status: 'refunded', finishAfter: 830607775, cancelAfter: 837000000, txHash: 'REFUND_4' },
       ],
+      refundReviewRequests: [
+        {
+          id: 'refund-review-final',
+          status: 'refunded',
+          refundableAmount: 300,
+          merchantRespondBy: '2026-05-18T00:00:00.000Z',
+          requestedAt: '2026-05-14T00:00:00.000Z',
+          resolvedAt: '2026-05-17T10:00:00.000Z',
+          adminResolutionReason: '사업자 답변과 미사용 잔액 확인 후 환불 승인',
+        },
+      ],
     });
 
     const { findByText, queryByText } = renderWithProviders(
@@ -228,6 +239,10 @@ describe('EscrowDetailScreen', () => {
     );
 
     expect(await findByText('취소/환불 요약')).toBeTruthy();
+    expect(await findByText('TrustPay 환불 승인 완료')).toBeTruthy();
+    expect(await findByText('소비자 환불 완료 ₩405,000')).toBeTruthy();
+    expect(await findByText(/처리일 2026\. 5\. 17\./)).toBeTruthy();
+    expect(await findByText('REFUND_2')).toBeTruthy();
     expect(await findByText('사용 ₩135,000')).toBeTruthy();
     expect(await findByText('환불 ₩405,000')).toBeTruthy();
     expect(await findByText('환불 완료 ₩405,000')).toBeTruthy();

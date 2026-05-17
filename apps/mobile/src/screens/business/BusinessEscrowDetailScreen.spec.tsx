@@ -372,4 +372,46 @@ describe('BusinessEscrowDetailScreen', () => {
     expect(queryByText(/2주 넘게 문을 열지 않아/)).toBeNull();
     expect(queryByText('첨부 사진 1장')).toBeNull();
   });
+
+  it('should show a merchant-facing refund completion card after TrustPay approves the refund', async () => {
+    const { api } = require('../../api/client');
+    api.getEscrow.mockResolvedValue({
+      id: 'e-prepaid-refunded-business',
+      status: 'cancelled',
+      escrowType: 'prepaid',
+      totalAmount: 400,
+      monthlyAmount: 100,
+      unitPrice: 100,
+      months: 4,
+      business: { name: '헤어살롱 루나' },
+      consumer: { name: '김민수' },
+      entries: [
+        { id: 'en-1', month: 1, amount: '100', status: 'released', finishAfter: isoDateToRippleTime('2026-05-13'), cancelAfter: isoDateToRippleTime('2026-06-13'), txHash: 'USED_UNIT' },
+        { id: 'en-2', month: 2, amount: '100', status: 'refunded', finishAfter: isoDateToRippleTime('2026-06-13'), cancelAfter: isoDateToRippleTime('2026-07-13'), txHash: 'REFUND_2' },
+        { id: 'en-3', month: 3, amount: '100', status: 'refunded', finishAfter: isoDateToRippleTime('2026-07-13'), cancelAfter: isoDateToRippleTime('2026-08-13'), txHash: 'REFUND_3' },
+        { id: 'en-4', month: 4, amount: '100', status: 'refunded', finishAfter: isoDateToRippleTime('2026-08-13'), cancelAfter: isoDateToRippleTime('2026-09-13'), txHash: 'REFUND_4' },
+      ],
+      chargeRequests: [],
+      refundReviewRequests: [
+        {
+          id: 'refund-review-refunded-business',
+          status: 'refunded',
+          refundableAmount: 300,
+          merchantRespondBy: '2026-05-18T00:00:00.000Z',
+          requestedAt: '2026-05-14T00:00:00.000Z',
+          resolvedAt: '2026-05-17T10:00:00.000Z',
+          adminResolutionReason: '사업자 답변과 미사용 잔액 확인 후 환불 승인',
+        },
+      ],
+    });
+
+    const { findByText } = renderWithProviders(
+      <BusinessEscrowDetailScreen route={{ params: { id: 'e-prepaid-refunded-business' } } as any} navigation={{} as any} />,
+    );
+
+    expect(await findByText('환불 처리 완료')).toBeTruthy();
+    expect(await findByText('소비자에게 미사용분 환불 완료 ₩405,000')).toBeTruthy();
+    expect(await findByText(/처리일 2026\. 5\. 17\./)).toBeTruthy();
+    expect(await findByText('REFUND_2')).toBeTruthy();
+  });
 });

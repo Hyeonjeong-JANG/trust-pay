@@ -135,6 +135,12 @@ function getLatestRefundReview(requests?: RefundReviewRequest[]): RefundReviewRe
     .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())[0] ?? null;
 }
 
+function sumEntries(entries: EscrowEntry[], status: string): number {
+  return entries
+    .filter((entry) => entry.status === status)
+    .reduce((sum, entry) => sum + Number(entry.amount), 0);
+}
+
 export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscrowDetail'>) {
   const { id } = route.params;
   const queryClient = useQueryClient();
@@ -229,6 +235,11 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
   const localMenus = escrow.businessId ? menusByBusinessId[escrow.businessId] ?? [] : [];
   const chargeHistory = escrow.chargeRequests ?? [];
   const latestRefundReview = getLatestRefundReview(escrow.refundReviewRequests);
+  const refundedAmount = sumEntries(entries, 'refunded');
+  const refundCompleted = latestRefundReview?.status === 'refunded' || (escrow.status === 'cancelled' && refundedAmount > 0);
+  const refundCompletedAmount = refundedAmount > 0 ? refundedAmount : Number(latestRefundReview?.refundableAmount || 0);
+  const refundProofTxHash = entries.find((entry) => entry.status === 'refunded' && entry.txHash)?.txHash;
+  const refundCompletedDesc = `소비자에게 미사용분 환불 완료 ${formatKrwFromRlusd(refundCompletedAmount)}`;
   const listData: Array<EscrowEntry | ChargeRequest> = isPrepaid ? chargeHistory : entries;
   const chargeMenuOptions: ChargeMenuOption[] = [
     ...((escrow.product?.menuItems ?? []).map((menu: ProductMenuItem) => ({
@@ -332,7 +343,27 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
                 <Text style={styles.progressText}>{progressText}</Text>
               </View>
             </View>
-            {latestRefundReview && (
+            {refundCompleted ? (
+              <View style={styles.refundReviewCard}>
+                <View style={styles.refundReviewHeader}>
+                  <Text style={styles.refundReviewTitle}>환불 처리 완료</Text>
+                  <Text style={styles.refundReviewStatus}>환불 완료</Text>
+                </View>
+                <Text style={styles.refundReviewDesc}>{refundCompletedDesc}</Text>
+                {latestRefundReview?.resolvedAt && (
+                  <Text style={styles.refundReviewDesc}>처리일 {isoToDate(latestRefundReview.resolvedAt) ?? '-'}</Text>
+                )}
+                {!!latestRefundReview?.adminResolutionReason && (
+                  <View style={styles.refundReviewReasonBox}>
+                    <Text style={styles.refundReviewReasonLabel}>TrustPay 처리 메모</Text>
+                    <Text style={styles.refundReviewReason}>{latestRefundReview.adminResolutionReason}</Text>
+                  </View>
+                )}
+                {refundProofTxHash && (
+                  <XrplTransactionProof txHash={refundProofTxHash} label="환불 처리 증빙" />
+                )}
+              </View>
+            ) : latestRefundReview && (
               <View style={styles.refundReviewCard}>
                 <View style={styles.refundReviewHeader}>
                   <Text style={styles.refundReviewTitle}>환불 검토 요청 접수됨</Text>

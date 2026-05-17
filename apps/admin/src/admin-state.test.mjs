@@ -142,6 +142,29 @@ test('refund decision helper omits blank approval reasons and blocks short adver
   assert.equal(validateRefundDecisionReason('investigate', '현장 확인 필요'), '');
 });
 
+test('refund decision payload carries review context for retry-safe final approval', () => {
+  assert.deepEqual(buildRefundDecisionPayload('approve', '', {
+    escrowId: 'escrow-1',
+    consumerId: 'consumer-1',
+    businessId: 'business-1',
+    refundableAmount: 300,
+    merchantNotice: '사업자 확인 요청',
+    merchantResponse: '환불 가능합니다.',
+    merchantRespondBy: '2026-05-20T00:00:00.000Z',
+    requestedAt: '2026-05-17T10:00:00.000Z',
+  }), {
+    decision: 'approve',
+    escrowId: 'escrow-1',
+    consumerId: 'consumer-1',
+    businessId: 'business-1',
+    refundableAmount: 300,
+    merchantNotice: '사업자 확인 요청',
+    merchantResponse: '환불 가능합니다.',
+    merchantRespondBy: '2026-05-20T00:00:00.000Z',
+    requestedAt: '2026-05-17T10:00:00.000Z',
+  });
+});
+
 test('adminTabs defines standard operations sections', () => {
   assert.deepEqual(adminTabs.map((tab) => tab.id), ['dashboard', 'refunds', 'businesses', 'consumers', 'settings']);
   assert.equal(getTabMeta('businesses').label, '가맹점');

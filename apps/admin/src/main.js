@@ -1,4 +1,4 @@
-import { adminTabs, buildAdminAuthHeaders, buildDashboardAmountFlow, buildDashboardEvents, buildDashboardPipeline, buildDashboardSlaRisks, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getEscrowsForParticipant, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, getValidAdminTabId, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js?v=trustpay-admin-20260517-participant-drilldown1';
+import { adminTabs, buildAdminAuthHeaders, buildDashboardAmountFlow, buildDashboardEvents, buildDashboardPipeline, buildDashboardSlaRisks, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getEscrowsForParticipant, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, getValidAdminTabId, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js?v=trustpay-admin-20260517-refund-final1';
 
 const state = {
   apiBase: getApiBase(window.TRUSTPAY_ADMIN_API_BASE || '/api', window.location.hostname),
@@ -365,8 +365,8 @@ function closeDecisionModal() {
   renderDecisionModal();
 }
 
-function openDecisionModal(id, decision) {
-  state.decisionModal = { id, decision, error: '' };
+function openDecisionModal(review, decision) {
+  state.decisionModal = { id: review.id, decision, review, error: '' };
   renderDecisionModal();
 }
 
@@ -488,9 +488,9 @@ function renderDetail(review) {
   `;
 
   $('#request-merchant')?.addEventListener('click', () => requestMerchant(review.id));
-  $('#approve-review')?.addEventListener('click', () => openDecisionModal(review.id, 'approve'));
-  $('#reject-review')?.addEventListener('click', () => openDecisionModal(review.id, 'reject'));
-  $('#investigate-review')?.addEventListener('click', () => openDecisionModal(review.id, 'investigate'));
+  $('#approve-review')?.addEventListener('click', () => openDecisionModal(review, 'approve'));
+  $('#reject-review')?.addEventListener('click', () => openDecisionModal(review, 'reject'));
+  $('#investigate-review')?.addEventListener('click', () => openDecisionModal(review, 'investigate'));
 }
 
 async function loadReviews() {
@@ -691,7 +691,7 @@ async function requestMerchant(id) {
 
 async function submitDecisionModal() {
   if (!state.decisionModal) return;
-  const { id, decision } = state.decisionModal;
+  const { id, decision, review } = state.decisionModal;
   const meta = getRefundDecisionMeta(decision);
   const reason = $('#decision-reason')?.value.trim() ?? '';
   const validationError = validateRefundDecisionReason(decision, reason);
@@ -700,7 +700,7 @@ async function submitDecisionModal() {
     renderDecisionModal();
     return;
   }
-  const body = buildRefundDecisionPayload(decision, reason);
+  const body = buildRefundDecisionPayload(decision, reason, review);
   await adminRequest(`/admin/refund-reviews/${id}/resolve`, {
     method: 'POST',
     body: JSON.stringify(body),

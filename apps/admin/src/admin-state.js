@@ -83,9 +83,13 @@ export function validateRefundDecisionReason(decision, reason = '') {
   return '';
 }
 
-export function buildRefundDecisionPayload(decision, reason = '') {
+export function buildRefundDecisionPayload(decision, reason = '', context = {}) {
   const trimmed = String(reason ?? '').trim();
-  return trimmed ? { decision, reason: trimmed } : { decision };
+  const payload = trimmed ? { decision, reason: trimmed } : { decision };
+  for (const key of ['escrowId', 'consumerId', 'businessId', 'refundableAmount', 'merchantNotice', 'merchantResponse', 'merchantRespondBy', 'requestedAt']) {
+    if (context[key] !== undefined) payload[key] = context[key];
+  }
+  return payload;
 }
 
 export function getQueueFetchStatuses(status) {
