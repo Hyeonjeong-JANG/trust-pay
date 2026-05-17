@@ -588,6 +588,60 @@ describe('BusinessDashboardScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('BusinessEscrowDetail', { id: 'e-needs-response' });
   });
 
+  it('should surface completed refunds above the active merchant list', async () => {
+    const { api } = require('../../api/client');
+    const navigation = { navigate: jest.fn() };
+    api.getBusinessDashboard.mockResolvedValue({
+      totalReceived: 100,
+      totalPending: 0,
+      summary: {
+        receivedAmount: 100,
+        protectedPendingAmount: 0,
+        pendingApprovalAmount: 0,
+        activeEscrowCount: 0,
+        refundActionRequiredCount: 0,
+        refundMonitoringCount: 0,
+        refundCompletedCount: 1,
+        dueSettlementCount: 0,
+        dueSettlementAmount: 0,
+      },
+      escrows: [
+        {
+          id: 'e-refunded-business-home',
+          status: 'cancelled',
+          escrowType: 'prepaid',
+          totalAmount: 400,
+          monthlyAmount: 100,
+          months: 4,
+          consumer: { id: 'consumer-1', name: '김민수' },
+          entries: [
+            { id: 'en-1', amount: '100', status: 'released' },
+            { id: 'en-2', amount: '100', status: 'refunded', txHash: 'REFUND_2' },
+            { id: 'en-3', amount: '100', status: 'refunded', txHash: 'REFUND_3' },
+            { id: 'en-4', amount: '100', status: 'refunded', txHash: 'REFUND_4' },
+          ],
+          chargeRequests: [],
+          refundReviewRequests: [
+            {
+              id: 'review-refunded-business-home',
+              status: 'refunded',
+              refundableAmount: 300,
+              requestedAt: '2026-05-14T00:00:00.000Z',
+              resolvedAt: '2026-05-17T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+    });
+
+    const { findByText, queryByText } = renderWithProviders(<BusinessDashboardScreen route={{} as any} navigation={navigation as any} />);
+
+    expect(await findByText('환불 처리 완료')).toBeTruthy();
+    expect(await findByText('김민수 · 소비자에게 미사용분 환불 완료 ₩405,000')).toBeTruthy();
+    expect(await findByText('환불 완료 확인')).toBeTruthy();
+    expect(queryByText('김민수', { exact: true })).toBeNull();
+  });
+
   it('should provide pending QR actions and accessible search controls', async () => {
     const { api } = require('../../api/client');
     api.getBusinessDashboard.mockResolvedValue({

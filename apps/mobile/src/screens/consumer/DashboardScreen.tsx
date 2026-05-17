@@ -49,6 +49,11 @@ function getLatestRefundReview(requests?: RefundReviewRequest[]): RefundReviewRe
   return [...requests].sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())[0] ?? null;
 }
 
+function getRefundedAmount(escrow: EscrowWithBusiness, review?: RefundReviewRequest | null): number {
+  const refundedAmount = sumEntryAmounts(escrow.entries ?? [], 'refunded');
+  return refundedAmount > 0 ? refundedAmount : Number(review?.refundableAmount || 0);
+}
+
 const STATUS_KO: Record<string, string> = {
   active: '진행중',
   completed: '완료',
@@ -155,6 +160,13 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
     return null;
   }, [escrows]);
 
+  const latestRefundCompletedItem = useMemo(() => {
+    return ((escrows ?? []) as EscrowWithBusiness[])
+      .map((escrow) => ({ escrow, review: getLatestRefundReview(escrow.refundReviewRequests) }))
+      .filter(({ escrow, review }) => review?.status === 'refunded' || (escrow.status === 'cancelled' && getRefundedAmount(escrow, review) > 0))
+      .sort((a, b) => new Date(b.review?.resolvedAt || b.review?.requestedAt || 0).getTime() - new Date(a.review?.resolvedAt || a.review?.requestedAt || 0).getTime())[0] ?? null;
+  }, [escrows]);
+
   const hasSearchQuery = searchQuery.trim() !== '';
   const isFiltered = hasSearchQuery || statusFilter !== 'all';
   const hasPrepaidInFiltered = filteredEscrows.some((escrow) => escrow.escrowType === 'prepaid');
@@ -256,6 +268,25 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
                     <Text style={styles.approvalSecondaryText}>거절</Text>
                   </TouchableOpacity>
                 </View>
+              </View>
+            )}
+
+            {latestRefundCompletedItem && (
+              <View style={styles.refundCompleteCard}>
+                <Text style={styles.refundCompleteEyebrow}>TrustPay 환불 완료</Text>
+                <Text style={styles.refundCompleteTitle}>
+                  {`${latestRefundCompletedItem.escrow.business?.name ?? '사업자'} · 소비자 환불 완료 ${formatKrwFromRlusd(getRefundedAmount(latestRefundCompletedItem.escrow, latestRefundCompletedItem.review))}`}
+                </Text>
+                <Text style={styles.refundCompleteDesc}>미사용분 환불이 완료되었습니다. 상세에서 환불 TX 증빙을 확인할 수 있습니다.</Text>
+                <TouchableOpacity
+                  accessibilityLabel="환불 완료 확인"
+                  accessibilityRole="button"
+                  style={styles.refundCompleteAction}
+                  onPress={() => navigation.navigate('EscrowDetail', { id: latestRefundCompletedItem.escrow.id })}
+                  activeOpacity={0.82}
+                >
+                  <Text style={styles.refundCompleteActionText}>환불 완료 확인</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -547,6 +578,40 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.semibold,
   },
   buttonDisabled: { opacity: 0.5 },
+  refundCompleteCard: {
+    backgroundColor: colors.successLight,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    ...shadow.sm,
+  },
+  refundCompleteEyebrow: {
+    color: colors.success,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.xs,
+  },
+  refundCompleteTitle: {
+    color: colors.gray900,
+    fontSize: font.size.md,
+    fontWeight: font.weight.bold,
+    lineHeight: 22,
+  },
+  refundCompleteDesc: {
+    color: colors.gray600,
+    fontSize: font.size.sm,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+  },
+  refundCompleteAction: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.white,
+    borderRadius: radius.full,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  refundCompleteActionText: { color: colors.success, fontSize: font.size.sm, fontWeight: font.weight.bold },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',

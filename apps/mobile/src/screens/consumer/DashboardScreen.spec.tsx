@@ -290,6 +290,45 @@ describe('ConsumerDashboardScreen', () => {
     expect(await findByText('환불 검토 중: TrustPay 추가 확인 중')).toBeTruthy();
   });
 
+  it('should surface refunded escrows on the home screen even when the active filter is selected', async () => {
+    const { api } = require('../../api/client');
+    api.getConsumerEscrows.mockResolvedValue([
+      {
+        id: 'e-refunded-consumer-home',
+        totalAmount: 400,
+        monthlyAmount: 100,
+        months: 4,
+        escrowType: 'prepaid',
+        status: 'cancelled',
+        business: { name: '헤어살롱 루나' },
+        entries: [
+          { id: 'en-1', amount: '100', status: 'released' },
+          { id: 'en-2', amount: '100', status: 'refunded', txHash: 'REFUND_2' },
+          { id: 'en-3', amount: '100', status: 'refunded', txHash: 'REFUND_3' },
+          { id: 'en-4', amount: '100', status: 'refunded', txHash: 'REFUND_4' },
+        ],
+        refundReviewRequests: [
+          {
+            id: 'review-refunded',
+            status: 'refunded',
+            refundableAmount: 300,
+            requestedAt: '2026-05-14T00:00:00.000Z',
+            resolvedAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+      },
+    ]);
+
+    const { findByText, queryByText } = renderWithProviders(
+      <ConsumerDashboardScreen navigation={mockNavigation} route={{} as any} />,
+    );
+
+    expect(await findByText('TrustPay 환불 완료')).toBeTruthy();
+    expect(await findByText('헤어살롱 루나 · 소비자 환불 완료 ₩405,000')).toBeTruthy();
+    expect(await findByText('환불 완료 확인')).toBeTruthy();
+    expect(queryByText('헤어살롱 루나', { exact: true })).toBeNull();
+  });
+
   it('should surface a push-style on-site charge approval and approve it from home', async () => {
     const { api } = require('../../api/client');
     api.getConsumerEscrows.mockResolvedValue([

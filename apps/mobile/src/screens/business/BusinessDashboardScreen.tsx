@@ -90,6 +90,11 @@ function getPrepaidAmounts(escrow: EscrowWithConsumer) {
   };
 }
 
+function getRefundedAmount(escrow: EscrowWithConsumer, review?: RefundReviewRequest | null): number {
+  const refundedAmount = sumEntryAmounts(escrow.entries ?? [], 'refunded');
+  return refundedAmount > 0 ? refundedAmount : Number(review?.refundableAmount || 0);
+}
+
 function getEscrowSortTime(escrow: EscrowWithConsumer): number {
   return Math.max(
     new Date(escrow.updatedAt ?? 0).getTime() || 0,
@@ -180,7 +185,9 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
     .sort((a, b) => new Date(b.request.requestedAt).getTime() - new Date(a.request.requestedAt).getTime());
   const actionRequiredRefundReviewItems = refundReviewItems.filter(({ request }) => REFUND_REVIEW_ACTION_REQUIRED_STATUSES.has(request.status));
   const monitoringRefundReviewItems = refundReviewItems.filter(({ request }) => REFUND_REVIEW_MONITORING_STATUSES.has(request.status));
+  const refundCompletedItems = refundReviewItems.filter(({ escrow, request }) => request.status === 'refunded' || (escrow.status === 'cancelled' && getRefundedAmount(escrow, request) > 0));
   const latestActionRequiredRefundReviewItem = actionRequiredRefundReviewItems[0];
+  const latestRefundCompletedItem = refundCompletedItems[0];
   const summary = dashboard?.summary;
   const receivedAmount = summary?.receivedAmount ?? dashboard?.totalReceived ?? 0;
   const protectedPendingAmount = summary?.protectedPendingAmount ?? dashboard?.totalPending ?? 0;
@@ -340,6 +347,25 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
                 <Text style={styles.summaryLabel}>승인 대기</Text>
               </View>
             </View>
+
+            {latestRefundCompletedItem && (
+              <View style={styles.refundCompleteCard}>
+                <Text style={styles.refundCompleteEyebrow}>환불 처리 완료</Text>
+                <Text style={styles.refundCompleteTitle}>
+                  {`${latestRefundCompletedItem.escrow.consumer?.name ?? '손님'} · 소비자에게 미사용분 환불 완료 ${formatKrwFromRlusd(getRefundedAmount(latestRefundCompletedItem.escrow, latestRefundCompletedItem.request))}`}
+                </Text>
+                <Text style={styles.refundCompleteDesc}>TrustPay 최종 승인 후 소비자 환불 처리가 완료되었습니다.</Text>
+                <TouchableOpacity
+                  accessibilityLabel="환불 완료 확인"
+                  accessibilityRole="button"
+                  style={styles.refundCompleteAction}
+                  onPress={() => navigation.navigate('BusinessEscrowDetail', { id: latestRefundCompletedItem.escrow.id })}
+                  activeOpacity={0.82}
+                >
+                  <Text style={styles.refundCompleteActionText}>환불 완료 확인</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {latestActionRequiredRefundReviewItem && (
               <View style={styles.refundReviewCard}>
@@ -756,6 +782,39 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: spacing.xs,
   },
+  refundCompleteCard: {
+    backgroundColor: colors.successLight,
+    borderRadius: radius.lg,
+    marginBottom: spacing.xl,
+    padding: spacing.lg,
+  },
+  refundCompleteEyebrow: {
+    color: colors.success,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.xs,
+  },
+  refundCompleteTitle: {
+    color: colors.gray900,
+    fontSize: font.size.md,
+    fontWeight: font.weight.bold,
+    lineHeight: 22,
+  },
+  refundCompleteDesc: {
+    color: colors.gray600,
+    fontSize: font.size.sm,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+  },
+  refundCompleteAction: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.white,
+    borderRadius: radius.full,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  refundCompleteActionText: { color: colors.success, fontSize: font.size.sm, fontWeight: font.weight.bold },
   pendingPaymentBox: {
     backgroundColor: colors.primaryLight,
     borderRadius: radius.lg,
