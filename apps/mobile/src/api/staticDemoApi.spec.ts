@@ -917,6 +917,59 @@ describe('static Demo API fixture', () => {
     }
   });
 
+  it('approves merchant QR checkout from submitted details when persisted QR state is temporarily unavailable', async () => {
+    const originalFetch = globalThis.fetch;
+    mockBlobStorage.clear();
+    mockPublicBlobStorage.clear();
+    mockBlobUploadedAt.clear();
+    process.env.BLOB_READ_WRITE_TOKEN = 'test-token';
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('https://blob.test/')) {
+        const pathname = decodeURIComponent(new URL(url).pathname.slice(1));
+        const body = mockPublicBlobStorage.get(pathname);
+        return {
+          ok: body !== undefined,
+          status: body === undefined ? 404 : 200,
+          json: async () => JSON.parse(body || '{}'),
+          text: async () => body || '',
+        } as Response;
+      }
+      if (originalFetch) return originalFetch(input);
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const approveHandler = loadFreshHandler();
+      const approvalResponse = await callApiWith(approveHandler, 'POST', '/api/escrow', {
+        consumerId: '00000000-0000-4000-a000-000000000001',
+        businessId: '00000000-0000-4000-a000-000000000020',
+        paymentRequestCode: 'TP-123456',
+        totalAmount: 300,
+        months: 3,
+      });
+      const lookupHandler = loadFreshHandler();
+      const lookupResponse = await callApiWith(lookupHandler, 'GET', '/api/payment-requests?code=TP-123456');
+
+      expect(approvalResponse.statusCode).toBe(201);
+      expect(approvalResponse.body).toMatchObject({
+        id: 'demo-approved-TP-123456',
+        businessId: '00000000-0000-4000-a000-000000000020',
+        totalAmount: 300,
+        monthlyAmount: 100,
+        status: 'active',
+      });
+      expect(lookupResponse.statusCode).toBe(200);
+      expect(lookupResponse.body).toMatchObject({ code: 'TP-123456', status: 'used' });
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete process.env.BLOB_READ_WRITE_TOKEN;
+      mockBlobStorage.clear();
+      mockPublicBlobStorage.clear();
+      mockBlobUploadedAt.clear();
+    }
+  });
+
   it('persists QR approval across fresh serverless instances without relying on cookies', async () => {
     const originalFetch = globalThis.fetch;
     mockBlobStorage.clear();

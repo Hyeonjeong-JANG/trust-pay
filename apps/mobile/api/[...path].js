@@ -591,6 +591,44 @@ function createPaymentRequest(body) {
   return request;
 }
 
+function recoverPaymentRequestFromCheckout(code, body) {
+  const business = businesses.find((item) => item.id === body.businessId);
+  if (!business) return null;
+  const product = body.productId ? products.find((item) => item.id === body.productId) : null;
+  const escrowType = product?.escrowType || body.escrowType || 'monthly';
+  const totalAmount = Number(product?.totalAmount || body.totalAmount);
+  const months = product?.months || body.months || null;
+  const unitPrice = product?.unitPrice || body.unitPrice || null;
+  const validityMonths = product?.validityMonths || body.validityMonths || null;
+  const monthlyAmount = product?.monthlyAmount || body.monthlyAmount || (
+    escrowType === 'monthly' && Number.isFinite(totalAmount) && Number(months) > 0
+      ? Math.round((totalAmount / Number(months)) * 1_000_000) / 1_000_000
+      : null
+  );
+  if (!Number.isFinite(totalAmount) || totalAmount <= 0) return null;
+  return {
+    id: `payment-request-recovered-${Date.now()}`,
+    code,
+    businessId: business.id,
+    businessName: business.name,
+    businessCategory: business.category,
+    productId: product?.id || null,
+    productName: product?.name || null,
+    paymentModel: body.paymentModel || (escrowType === 'prepaid' ? 'voucher' : 'monthly'),
+    paymentAmount: product?.totalAmount || body.paymentAmount || totalAmount,
+    totalAmount,
+    monthlyAmount,
+    months,
+    escrowType,
+    unitPrice,
+    validityMonths,
+    validFrom: body.validFrom || null,
+    validUntil: body.validUntil || null,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
+}
+
 function nextPaymentRequestCode() {
   const usedNumbers = new Set();
   const maxExistingNumber = paymentRequests.reduce((max, request) => {
@@ -1784,9 +1822,13 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'POST' && path === '/escrow') {
     const paymentRequestCode = normalizePaymentRequestCode(body.paymentRequestCode);
-    const paymentRequest = paymentRequestCode
+    let paymentRequest = paymentRequestCode
       ? findPaymentRequestByCode(paymentRequestCode)
       : null;
+    if (paymentRequestCode && !paymentRequest) {
+      paymentRequest = recoverPaymentRequestFromCheckout(paymentRequestCode, body);
+      if (paymentRequest) paymentRequests = [paymentRequest, ...paymentRequests];
+    }
     if (paymentRequest && paymentRequest.businessId !== body.businessId) return send(res, 404, { message: 'Payment request not found' });
     if (paymentRequestCode && !paymentRequest) return send(res, 404, { message: 'Payment request not found' });
     if (paymentRequest && paymentRequest.status !== 'pending') return send(res, 400, { message: '이미 처리된 결제 QR입니다' });
