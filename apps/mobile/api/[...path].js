@@ -1071,8 +1071,18 @@ function getCookie(req, name) {
   return match ? decodeURIComponent(match.slice(prefix.length)) : '';
 }
 
-function setApprovedPaymentRequestCookie(res, code) {
-  res.setHeader('Set-Cookie', `${APPROVED_PAYMENT_REQUEST_COOKIE}=${encodeURIComponent(code)}; Path=/; Max-Age=3600; SameSite=Lax`);
+function getApprovedPaymentRequestContext(req) {
+  const raw = getCookie(req, APPROVED_PAYMENT_REQUEST_COOKIE);
+  const [rawCode, consumerId = null] = String(raw || '').split('|');
+  const code = normalizePaymentRequestCode(rawCode);
+  if (!code) return null;
+  const request = findPaymentRequestByCode(code);
+  return request ? { code, consumerId, request } : null;
+}
+
+function setApprovedPaymentRequestCookie(res, code, consumerId) {
+  const value = [normalizePaymentRequestCode(code), consumerId].filter(Boolean).join('|');
+  res.setHeader('Set-Cookie', `${APPROVED_PAYMENT_REQUEST_COOKIE}=${encodeURIComponent(value)}; Path=/; Max-Age=3600; SameSite=Lax`);
 }
 
 function isAdminRequest(req) {
@@ -1432,7 +1442,19 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'GET' && parts[0] === 'business' && parts[2] === 'dashboard') {
     const businessId = parts[1];
-    const scoped = escrows.filter((item) => item.businessId === businessId).map((escrow) => withRelations(escrow, 'merchant'));
+    const approvedPaymentRequest = getApprovedPaymentRequestContext(req);
+    const approvedEscrowId = approvedPaymentRequest ? `demo-approved-${approvedPaymentRequest.code}` : null;
+    const scopedEscrows = escrows.filter((item) => item.businessId === businessId);
+    if (
+      approvedPaymentRequest?.request.businessId === businessId
+      && !scopedEscrows.some((item) => item.id === approvedEscrowId)
+    ) {
+      scopedEscrows.unshift(createApprovedPaymentRequestEscrow(
+        approvedPaymentRequest.request,
+        approvedPaymentRequest.consumerId || CONSUMER_ID,
+      ));
+    }
+    const scoped = scopedEscrows.map((escrow) => withRelations(escrow, 'merchant'));
     return send(res, 200, {
       business: businesses.find((item) => item.id === businessId),
       totalReceived: scoped.reduce((sum, escrow) => {
@@ -1462,7 +1484,11 @@ module.exports = async function handler(req, res) {
       }, 0),
       activeEscrows: scoped.filter((item) => item.status === 'active').length,
       escrows: scoped,
-      pendingPaymentRequests: paymentRequests.filter((item) => item.businessId === businessId && item.status === 'pending'),
+      pendingPaymentRequests: paymentRequests.filter((item) => (
+        item.businessId === businessId
+        && item.status === 'pending'
+        && item.code !== approvedPaymentRequest?.code
+      )),
     });
   }
 
@@ -1476,10 +1502,12 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'GET' && parts[0] === 'escrow' && parts[1] === 'consumer') {
     const scoped = escrows.filter((item) => item.consumerId === parts[2]);
-    const approvedCode = normalizePaymentRequestCode(getCookie(req, APPROVED_PAYMENT_REQUEST_COOKIE));
-    const approvedRequest = findPaymentRequestByCode(approvedCode);
-    if (approvedRequest && !scoped.some((item) => item.id === `demo-approved-${approvedRequest.code}`)) {
-      scoped.unshift(createApprovedPaymentRequestEscrow(approvedRequest, parts[2]));
+    const approvedPaymentRequest = getApprovedPaymentRequestContext(req);
+    const isApprovedForConsumer = approvedPaymentRequest && (
+      !approvedPaymentRequest.consumerId || approvedPaymentRequest.consumerId === parts[2]
+    );
+    if (isApprovedForConsumer && !scoped.some((item) => item.id === `demo-approved-${approvedPaymentRequest.code}`)) {
+      scoped.unshift(createApprovedPaymentRequestEscrow(approvedPaymentRequest.request, parts[2]));
     }
     return send(res, 200, scoped.map((escrow) => withRelations(escrow, 'consumer')));
   }
@@ -1597,7 +1625,7 @@ module.exports = async function handler(req, res) {
     escrows = [escrow, ...escrows];
     if (paymentRequest) {
       paymentRequest.status = 'used';
-      setApprovedPaymentRequestCookie(res, paymentRequest.code);
+      setApprovedPaymentRequestCookie(res, paymentRequest.code, body.consumerId);
     }
     return send(res, 201, withRelations(escrow, 'consumer'));
   }

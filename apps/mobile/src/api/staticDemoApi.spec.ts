@@ -475,6 +475,14 @@ describe('static Demo API fixture', () => {
       undefined,
       { cookie: approvedCookie },
     );
+    const businessDashboardResponse = await callApiWith(
+      dashboardHandler,
+      'GET',
+      '/api/business/00000000-0000-4000-a000-000000000020/dashboard',
+      undefined,
+      { cookie: approvedCookie },
+    );
+    const businessDashboard = businessDashboardResponse.body as any;
 
     expect(createResponse.statusCode).toBe(201);
     expect(created.code).toMatch(/^TP-\d{6}$/);
@@ -482,7 +490,7 @@ describe('static Demo API fixture', () => {
     expect(lookupResponse.body).toMatchObject({ code: created.code, businessName: '파워짐 피트니스', status: 'pending' });
     expect(approvalResponse.statusCode).toBe(201);
     expect(approvalResponse.body).toMatchObject({ businessId: '00000000-0000-4000-a000-000000000020', status: 'active' });
-    expect(approvedCookie).toBe(`trustpay_demo_approved_qr=${created.code}`);
+    expect(approvedCookie).toBe(`trustpay_demo_approved_qr=${encodeURIComponent(`${created.code}|00000000-0000-4000-a000-000000000001`)}`);
     expect(consumerEscrowsResponse.statusCode).toBe(200);
     expect(consumerEscrowsResponse.body).toEqual(
       expect.arrayContaining([
@@ -490,6 +498,20 @@ describe('static Demo API fixture', () => {
           id: `demo-approved-${created.code}`,
           businessId: '00000000-0000-4000-a000-000000000020',
           totalAmount: 600,
+          status: 'active',
+        }),
+      ]),
+    );
+    expect(businessDashboardResponse.statusCode).toBe(200);
+    expect(businessDashboard.pendingPaymentRequests).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: created.code })]),
+    );
+    expect(businessDashboard.escrows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: `demo-approved-${created.code}`,
+          consumerId: '00000000-0000-4000-a000-000000000001',
+          businessId: '00000000-0000-4000-a000-000000000020',
           status: 'active',
         }),
       ]),
