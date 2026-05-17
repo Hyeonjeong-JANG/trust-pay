@@ -9,16 +9,23 @@ jest.mock('@vercel/blob', () => ({
   get: jest.fn(async () => {
     throw new Error('pathname get is unavailable for this linked Blob token');
   }),
-  list: jest.fn(async ({ prefix } = {}) => ({
-    blobs: Array.from(mockBlobStorage.keys())
-      .filter((pathname) => !prefix || pathname.startsWith(prefix))
-      .map((pathname) => ({
+  list: jest.fn(async ({ prefix, cursor, limit = 1000 } = {}) => {
+    const start = Number(cursor || 0);
+    const pathnames = Array.from(mockBlobStorage.keys())
+      .filter((pathname) => !prefix || pathname.startsWith(prefix));
+    const page = pathnames.slice(start, start + limit);
+    const next = start + page.length;
+    return {
+      blobs: page.map((pathname) => ({
         pathname,
         url: `https://blob.test/${pathname}`,
         downloadUrl: `https://blob.test/${pathname}`,
         uploadedAt: mockBlobUploadedAt.get(pathname),
       })),
-  })),
+      cursor: next < pathnames.length ? String(next) : undefined,
+      hasMore: next < pathnames.length,
+    };
+  }),
   put: jest.fn(async (pathname: string, body: string) => {
     mockBlobStorage.set(pathname, String(body));
     if (!mockPublicBlobStorage.has(pathname)) mockPublicBlobStorage.set(pathname, String(body));
@@ -801,6 +808,130 @@ describe('static Demo API fixture', () => {
             businessId: '00000000-0000-4000-a000-000000000020',
             status: 'active',
           }),
+        ]),
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete process.env.BLOB_READ_WRITE_TOKEN;
+      mockBlobStorage.clear();
+      mockPublicBlobStorage.clear();
+      mockBlobUploadedAt.clear();
+    }
+  });
+
+  it('loads the newest persisted demo state beyond the first Blob list page', async () => {
+    const originalFetch = globalThis.fetch;
+    mockBlobStorage.clear();
+    mockPublicBlobStorage.clear();
+    mockBlobUploadedAt.clear();
+    process.env.BLOB_READ_WRITE_TOKEN = 'test-token';
+
+    const baseState = {
+      version: 1,
+      savedAt: '2026-05-16T00:00:00.000Z',
+      consumers: [
+        {
+          id: '00000000-0000-4000-a000-000000000001',
+          name: '김민수',
+          phone: '010-2000-0001',
+          email: 'minsu@demo.com',
+          xrplAddress: 'rDemoConsumer1234567890ABCDEF',
+        },
+      ],
+      paymentRequests: [],
+      escrows: [],
+      chargeRequests: [],
+      refundReviewRequests: [],
+    };
+    for (let index = 0; index < 1000; index += 1) {
+      const pathname = `trustpay-demo-state/stale-${String(index).padStart(4, '0')}.json`;
+      mockBlobStorage.set(pathname, JSON.stringify(baseState));
+      mockPublicBlobStorage.set(pathname, JSON.stringify(baseState));
+      mockBlobUploadedAt.set(pathname, new Date(Date.UTC(2026, 4, 16, 0, 0, index)).toISOString());
+    }
+
+    const latestState = {
+      ...baseState,
+      savedAt: '2026-05-17T09:30:00.000Z',
+      paymentRequests: [
+        {
+          id: 'payment-request-approval-pagination',
+          code: 'TP-PAGED',
+          businessId: '00000000-0000-4000-a000-000000000020',
+          businessName: '파워짐 피트니스',
+          paymentModel: 'voucher',
+          paymentAmount: 100,
+          totalAmount: 150,
+          escrowType: 'prepaid',
+          unitPrice: 15,
+          validityMonths: 3,
+          validFrom: '2026-05-17',
+          validUntil: '2026-08-17',
+          status: 'used',
+          createdAt: '2026-05-17T09:00:00.000Z',
+        },
+      ],
+      escrows: [
+        {
+          id: 'demo-approved-TP-PAGED',
+          consumerId: '00000000-0000-4000-a000-000000000001',
+          businessId: '00000000-0000-4000-a000-000000000020',
+          consumerAddress: 'rDemoConsumer1234567890ABCDEF',
+          businessAddress: 'rDemoBusiness2GymABCDEF123456',
+          totalAmount: 150,
+          monthlyAmount: 15,
+          months: 10,
+          escrowType: 'prepaid',
+          unitPrice: 15,
+          validityMonths: 3,
+          validFrom: '2026-05-17',
+          validUntil: '2026-08-17',
+          currency: 'RLUSD',
+          issuer: 'rDemoIssuerRLUSD000000000001',
+          status: 'active',
+          createdAt: '2026-05-17T09:30:00.000Z',
+          updatedAt: '2026-05-17T09:30:00.000Z',
+          entries: [{ id: 'paged-entry-1', escrowId: 'demo-approved-TP-PAGED', month: 1, sequence: 1, amount: '15', status: 'pending', txHash: null }],
+        },
+      ],
+    };
+    const latestPathname = 'trustpay-demo-state/latest-approval.json';
+    mockBlobStorage.set(latestPathname, JSON.stringify(latestState));
+    mockPublicBlobStorage.set(latestPathname, JSON.stringify(latestState));
+    mockBlobUploadedAt.set(latestPathname, '2026-05-17T09:30:00.000Z');
+
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('https://blob.test/')) {
+        const pathname = decodeURIComponent(new URL(url).pathname.slice(1));
+        const body = mockPublicBlobStorage.get(pathname);
+        return {
+          ok: body !== undefined,
+          status: body === undefined ? 404 : 200,
+          json: async () => JSON.parse(body || '{}'),
+          text: async () => body || '',
+        } as Response;
+      }
+      if (originalFetch) return originalFetch(input);
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const apiHandler = loadFreshHandler();
+      const businessDashboardResponse = await callApiWith(
+        apiHandler,
+        'GET',
+        '/api/business/00000000-0000-4000-a000-000000000020/dashboard',
+      );
+      const dashboard = businessDashboardResponse.body as any;
+
+      expect(businessDashboardResponse.statusCode).toBe(200);
+      expect(dashboard.pendingPaymentRequests).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'TP-PAGED' })]),
+      );
+      expect(dashboard.escrows).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'demo-approved-TP-PAGED', escrowType: 'prepaid', status: 'active' }),
         ]),
       );
     } finally {

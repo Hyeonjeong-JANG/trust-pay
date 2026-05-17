@@ -1372,11 +1372,22 @@ function nextDemoStateBlobPath() {
   return `${DEMO_STATE_BLOB_PREFIX}/${Date.now()}-${Math.random().toString(36).slice(2)}.json`;
 }
 
+async function listDemoStateBlobs() {
+  const { list } = getBlobClient();
+  const blobs = [];
+  let cursor;
+  do {
+    const page = await list({ prefix: DEMO_STATE_BLOB_PREFIX, limit: 1000, ...(cursor ? { cursor } : {}) });
+    blobs.push(...(page.blobs || []));
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+  return blobs;
+}
+
 async function loadPersistentDemoState() {
   if (!isPersistentDemoStateEnabled()) return;
   try {
-    const { list } = getBlobClient();
-    const { blobs = [] } = await list({ prefix: DEMO_STATE_BLOB_PREFIX, limit: 1000 });
+    const blobs = await listDemoStateBlobs();
     const stateBlob = newestDemoStateBlob(blobs);
     if (!stateBlob) return;
     const stateUrl = new URL(stateBlob.downloadUrl || stateBlob.url);
