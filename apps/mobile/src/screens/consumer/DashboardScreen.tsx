@@ -96,6 +96,7 @@ export function ConsumerDashboardScreen({ navigation }: ConsumerTabProps<'Home'>
     queryFn: () => api.getConsumerEscrows(userId!),
     enabled: !!userId,
     retry: 2,
+    staleTime: 0,
   });
 
   const approveChargeMutation = useMutation({

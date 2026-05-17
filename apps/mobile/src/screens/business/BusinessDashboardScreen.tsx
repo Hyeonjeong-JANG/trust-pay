@@ -102,6 +102,7 @@ export function BusinessDashboardScreen({ navigation }: BusinessTabProps<'Dashbo
     queryFn: () => api.getBusinessDashboard(userId!),
     enabled: !!userId,
     retry: 2,
+    staleTime: 0,
     refetchInterval: 5000,
   });
 

@@ -109,9 +109,9 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
               ...(paymentRequest?.validUntil ? { validUntil: paymentRequest.validUntil } : {}),
             }),
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
-      queryClient.invalidateQueries({ queryKey: ['balance'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['consumerEscrows'] });
+      await queryClient.invalidateQueries({ queryKey: ['balance'] });
       showSuccessToast('보호 결제 시작 완료', '계좌 승인 후 선불금이 TrustPay 보호 상태로 전환됩니다.');
       navigation.navigate('ConsumerTabs', { screen: 'Home' });
     },
