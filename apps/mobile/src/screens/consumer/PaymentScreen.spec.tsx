@@ -170,7 +170,7 @@ describe('PaymentScreen', () => {
 
       expect(getByText('1회 이용금액 (원)')).toBeTruthy();
       expect(getByText('유효기간 (개월)')).toBeTruthy();
-      expect(getByText(/실제 사용금액만큼 사업자가 차감 요청/)).toBeTruthy();
+      expect(getByText(/실제 이용 시 차감하고자 하는 금액만큼 요청/)).toBeTruthy();
     },
   );
 
@@ -325,9 +325,16 @@ describe('PaymentScreen', () => {
       />,
     );
 
+    expect(await findByText('결제 금액 ₩90,000')).toBeTruthy();
+    expect(await findByText('실제 충전 금액 ₩100,000')).toBeTruthy();
     expect(await findByText('사용기간 2026-05-13 ~ 2026-08-13')).toBeTruthy();
     expect(await findByText('보호 금액권 잔액')).toBeTruthy();
     expect(await findByText('₩100,000')).toBeTruthy();
+    expect(await findByText(/결제 금액은 계좌 승인으로 결제되고, 실제 충전 금액이 TrustPay 보호 잔액으로 쌓입니다/)).toBeTruthy();
+    expect(await findByText(/사업자는 월마다가 아니라 실제 이용 시 차감하고자 하는 금액만큼 요청합니다/)).toBeTruthy();
+    expect(queryByText(/매월/)).toBeNull();
+    expect(queryByText(/월별 정산/)).toBeNull();
+    expect(queryByText(/개월로 나뉘어/)).toBeNull();
     expect(queryByText('10개 단위 x ₩10,000')).toBeNull();
     expect(queryByText('보호 단위')).toBeNull();
     expect(queryByText(/Token Escrow 단위/)).toBeNull();

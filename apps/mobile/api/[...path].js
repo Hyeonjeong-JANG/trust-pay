@@ -594,37 +594,10 @@ function normalizePaymentRequestCode(value) {
   return String(value || '').trim().toUpperCase();
 }
 
-function createStatelessDemoPaymentRequest(code) {
-  if (!/^TP-\d{6}$/.test(code)) return null;
-  const business = businesses.find((item) => item.id === BUSINESS_GYM_ID);
-  if (!business) return null;
-  return {
-    id: `stateless-${code}`,
-    code,
-    businessId: business.id,
-    businessName: business.name,
-    businessCategory: business.category,
-    productId: null,
-    productName: null,
-    paymentModel: 'monthly',
-    paymentAmount: 600,
-    totalAmount: 600,
-    monthlyAmount: 100,
-    months: 6,
-    escrowType: 'monthly',
-    unitPrice: null,
-    validityMonths: null,
-    validFrom: null,
-    validUntil: null,
-    status: 'pending',
-    createdAt: '2026-05-15T00:00:00.000Z',
-  };
-}
-
 function findPaymentRequestByCode(code) {
   const normalizedCode = normalizePaymentRequestCode(code);
   if (!normalizedCode) return null;
-  return paymentRequests.find((item) => item.code === normalizedCode) || createStatelessDemoPaymentRequest(normalizedCode);
+  return paymentRequests.find((item) => item.code === normalizedCode) || null;
 }
 
 function createApprovedPaymentRequestEscrow(paymentRequest, consumerId) {

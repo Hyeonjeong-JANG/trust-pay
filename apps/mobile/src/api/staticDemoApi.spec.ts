@@ -113,6 +113,13 @@ describe('static Demo API fixture', () => {
     expect(reviews[0]).toMatchObject({ status: 'platform_review' });
   });
 
+  it('rejects unknown merchant QR codes instead of fabricating monthly payment details', async () => {
+    const response = await callApi('GET', '/api/payment-requests?code=TP-999999');
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body).toMatchObject({ message: 'Payment request not found' });
+  });
+
   it('uses the public Testnet wallet addresses in demo balance and escrow payloads', async () => {
     const consumerBalanceResponse = await callApi('GET', '/api/consumer/00000000-0000-4000-a000-000000000001/balance');
     const businessBalanceResponse = await callApi('GET', '/api/business/00000000-0000-4000-a000-000000000020/balance');
@@ -612,105 +619,134 @@ describe('static Demo API fixture', () => {
   });
 
   it('resolves merchant-originated QR requests after a serverless cold start', async () => {
-    const createHandler = loadFreshHandler();
-    const lookupHandler = loadFreshHandler();
-    const approveHandler = loadFreshHandler();
-    const createResponse = await callApiWith(createHandler, 'POST', '/api/payment-requests', {
-      businessId: '00000000-0000-4000-a000-000000000020',
-      paymentAmount: 600,
-      totalAmount: 600,
-      months: 6,
-      paymentModel: 'monthly',
-      escrowType: 'monthly',
-    });
-    const created = createResponse.body as any;
-    const lookupResponse = await callApiWith(lookupHandler, 'GET', `/api/payment-requests?code=${created.code}`);
-    const approvalResponse = await callApiWith(approveHandler, 'POST', '/api/escrow', {
-      consumerId: '00000000-0000-4000-a000-000000000001',
-      businessId: '00000000-0000-4000-a000-000000000020',
-      paymentRequestCode: created.code,
-      totalAmount: 600,
-      months: 6,
-    });
-    const approvedCookie = String(approvalResponse.headers['Set-Cookie'] || approvalResponse.headers['set-cookie'] || '').split(';')[0];
-    const dashboardHandler = loadFreshHandler();
-    const consumerEscrowsResponse = await callApiWith(
-      dashboardHandler,
-      'GET',
-      '/api/escrow/consumer/00000000-0000-4000-a000-000000000001',
-      undefined,
-      { cookie: approvedCookie },
-    );
-    const businessDashboardResponse = await callApiWith(
-      dashboardHandler,
-      'GET',
-      '/api/business/00000000-0000-4000-a000-000000000020/dashboard',
-      undefined,
-      { cookie: approvedCookie },
-    );
-    const adminEscrowsResponse = await callApiWith(
-      dashboardHandler,
-      'GET',
-      '/api/admin/escrows',
-      undefined,
-      { cookie: approvedCookie, 'x-admin-id': 'admin', 'x-admin-secret': 'admin1234' },
-    );
-    const adminDashboardResponse = await callApiWith(
-      dashboardHandler,
-      'GET',
-      '/api/admin/dashboard',
-      undefined,
-      { cookie: approvedCookie, 'x-admin-id': 'admin', 'x-admin-secret': 'admin1234' },
-    );
-    const businessDashboard = businessDashboardResponse.body as any;
-    const adminEscrows = adminEscrowsResponse.body as any[];
-    const adminDashboard = adminDashboardResponse.body as any;
+    const originalFetch = globalThis.fetch;
+    mockBlobStorage.clear();
+    mockPublicBlobStorage.clear();
+    mockBlobUploadedAt.clear();
+    process.env.BLOB_READ_WRITE_TOKEN = 'test-token';
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('https://blob.test/')) {
+        const pathname = decodeURIComponent(new URL(url).pathname.slice(1));
+        const body = mockPublicBlobStorage.get(pathname);
+        return {
+          ok: body !== undefined,
+          status: body === undefined ? 404 : 200,
+          json: async () => JSON.parse(body || '{}'),
+          text: async () => body || '',
+        } as Response;
+      }
+      if (originalFetch) return originalFetch(input);
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
 
-    expect(createResponse.statusCode).toBe(201);
-    expect(created.code).toMatch(/^TP-\d{6}$/);
-    expect(lookupResponse.statusCode).toBe(200);
-    expect(lookupResponse.body).toMatchObject({ code: created.code, businessName: '파워짐 피트니스', status: 'pending' });
-    expect(approvalResponse.statusCode).toBe(201);
-    expect(approvalResponse.body).toMatchObject({ businessId: '00000000-0000-4000-a000-000000000020', status: 'active' });
-    expect(approvedCookie).toBe(`trustpay_demo_approved_qr=${encodeURIComponent(`${created.code}|00000000-0000-4000-a000-000000000001`)}`);
-    expect(consumerEscrowsResponse.statusCode).toBe(200);
-    expect(consumerEscrowsResponse.body).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: `demo-approved-${created.code}`,
-          businessId: '00000000-0000-4000-a000-000000000020',
-          totalAmount: 600,
-          status: 'active',
-        }),
-      ]),
-    );
-    expect(businessDashboardResponse.statusCode).toBe(200);
-    expect(businessDashboard.pendingPaymentRequests).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: created.code })]),
-    );
-    expect(businessDashboard.escrows).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: `demo-approved-${created.code}`,
-          consumerId: '00000000-0000-4000-a000-000000000001',
-          businessId: '00000000-0000-4000-a000-000000000020',
-          status: 'active',
-        }),
-      ]),
-    );
-    expect(adminEscrowsResponse.statusCode).toBe(200);
-    expect(adminEscrows).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: `demo-approved-${created.code}`,
-          consumerId: '00000000-0000-4000-a000-000000000001',
-          businessId: '00000000-0000-4000-a000-000000000020',
-          status: 'active',
-        }),
-      ]),
-    );
-    expect(adminDashboardResponse.statusCode).toBe(200);
-    expect(adminDashboard.escrows.active).toBeGreaterThanOrEqual(10);
+    try {
+      const createHandler = loadFreshHandler();
+      const lookupHandler = loadFreshHandler();
+      const approveHandler = loadFreshHandler();
+      const createResponse = await callApiWith(createHandler, 'POST', '/api/payment-requests', {
+        businessId: '00000000-0000-4000-a000-000000000020',
+        paymentAmount: 600,
+        totalAmount: 600,
+        months: 6,
+        paymentModel: 'monthly',
+        escrowType: 'monthly',
+      });
+      const created = createResponse.body as any;
+      const lookupResponse = await callApiWith(lookupHandler, 'GET', `/api/payment-requests?code=${created.code}`);
+      const approvalResponse = await callApiWith(approveHandler, 'POST', '/api/escrow', {
+        consumerId: '00000000-0000-4000-a000-000000000001',
+        businessId: '00000000-0000-4000-a000-000000000020',
+        paymentRequestCode: created.code,
+        totalAmount: 600,
+        months: 6,
+      });
+      const approvedCookie = String(approvalResponse.headers['Set-Cookie'] || approvalResponse.headers['set-cookie'] || '').split(';')[0];
+      const dashboardHandler = loadFreshHandler();
+      const consumerEscrowsResponse = await callApiWith(
+        dashboardHandler,
+        'GET',
+        '/api/escrow/consumer/00000000-0000-4000-a000-000000000001',
+        undefined,
+        { cookie: approvedCookie },
+      );
+      const businessDashboardResponse = await callApiWith(
+        dashboardHandler,
+        'GET',
+        '/api/business/00000000-0000-4000-a000-000000000020/dashboard',
+        undefined,
+        { cookie: approvedCookie },
+      );
+      const adminEscrowsResponse = await callApiWith(
+        dashboardHandler,
+        'GET',
+        '/api/admin/escrows',
+        undefined,
+        { cookie: approvedCookie, 'x-admin-id': 'admin', 'x-admin-secret': 'admin1234' },
+      );
+      const adminDashboardResponse = await callApiWith(
+        dashboardHandler,
+        'GET',
+        '/api/admin/dashboard',
+        undefined,
+        { cookie: approvedCookie, 'x-admin-id': 'admin', 'x-admin-secret': 'admin1234' },
+      );
+      const businessDashboard = businessDashboardResponse.body as any;
+      const adminEscrows = adminEscrowsResponse.body as any[];
+      const adminDashboard = adminDashboardResponse.body as any;
+
+      expect(createResponse.statusCode).toBe(201);
+      expect(created.code).toMatch(/^TP-\d{6}$/);
+      expect(lookupResponse.statusCode).toBe(200);
+      expect(lookupResponse.body).toMatchObject({ code: created.code, businessName: '파워짐 피트니스', status: 'pending' });
+      expect(approvalResponse.statusCode).toBe(201);
+      expect(approvalResponse.body).toMatchObject({ businessId: '00000000-0000-4000-a000-000000000020', status: 'active' });
+      expect(approvedCookie).toBe(`trustpay_demo_approved_qr=${encodeURIComponent(`${created.code}|00000000-0000-4000-a000-000000000001`)}`);
+      expect(consumerEscrowsResponse.statusCode).toBe(200);
+      expect(consumerEscrowsResponse.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: `demo-approved-${created.code}`,
+            businessId: '00000000-0000-4000-a000-000000000020',
+            totalAmount: 600,
+            status: 'active',
+          }),
+        ]),
+      );
+      expect(businessDashboardResponse.statusCode).toBe(200);
+      expect(businessDashboard.pendingPaymentRequests).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: created.code })]),
+      );
+      expect(businessDashboard.escrows).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: `demo-approved-${created.code}`,
+            consumerId: '00000000-0000-4000-a000-000000000001',
+            businessId: '00000000-0000-4000-a000-000000000020',
+            status: 'active',
+          }),
+        ]),
+      );
+      expect(adminEscrowsResponse.statusCode).toBe(200);
+      expect(adminEscrows).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: `demo-approved-${created.code}`,
+            consumerId: '00000000-0000-4000-a000-000000000001',
+            businessId: '00000000-0000-4000-a000-000000000020',
+            status: 'active',
+          }),
+        ]),
+      );
+      expect(adminDashboardResponse.statusCode).toBe(200);
+      expect(adminDashboard.escrows.active).toBeGreaterThanOrEqual(10);
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete process.env.BLOB_READ_WRITE_TOKEN;
+      mockBlobStorage.clear();
+      mockPublicBlobStorage.clear();
+      mockBlobUploadedAt.clear();
+    }
   });
 
   it('persists QR approval across fresh serverless instances without relying on cookies', async () => {

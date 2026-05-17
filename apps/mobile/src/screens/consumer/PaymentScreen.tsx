@@ -72,6 +72,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
   const unitPriceValue = parseKrwInput(unitPrice);
   const validityMonthsValue = Number(validityMonths);
   const effectiveEscrowType = paymentRequest?.escrowType ?? selectedProduct?.escrowType ?? escrowType;
+  const isVoucherRequest = paymentRequest?.paymentModel === 'voucher' || paymentRequest?.escrowType === 'prepaid';
   const effectiveAmount = paymentRequest?.totalAmount ?? selectedProduct?.totalAmount ?? krwToRlusd(amountValue);
   const effectiveMonths = paymentRequest?.months ?? selectedProduct?.months ?? monthsValue;
   const effectiveUnitPrice = paymentRequest?.unitPrice ?? selectedProduct?.unitPrice ?? krwToRlusd(unitPriceValue);
@@ -128,7 +129,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
     : formatRlusd(effectiveAmount);
   const approvalDescription = effectiveEscrowType === 'monthly'
     ? `승인하면 결제와 함께 1회차 ${formatKrw(monthlyAmountKrw)}이 즉시 차감/정산되고 남은 ${Math.max(Number(effectiveMonths || 0) - 1, 0)}회차는 TrustPay 보호 대기로 유지됩니다.`
-    : '승인하면 결제 금액이 TrustPay 보호 상태로 전환됩니다. 실제 이용 시 사업자 차감 요청과 소비자 승인을 거쳐 정산됩니다.';
+    : `승인하면 결제 금액 ${formatKrwFromRlusd(paymentRequest?.paymentAmount ?? effectiveAmount)}이 결제되고 실제 충전 금액 ${formatKrw(effectiveAmountKrw)}이 TrustPay 보호 잔액으로 쌓입니다. 실제 이용 시 사업자가 차감하고자 하는 금액만큼 요청합니다.`;
 
   return (
     <KeyboardAvoidingView
@@ -155,7 +156,9 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
             <Text style={styles.requestEyebrow}>사업자가 만든 결제 QR</Text>
             <Text style={styles.requestTitle}>QR 코드 {paymentRequest.code}</Text>
             <Text style={styles.requestDesc}>
-              {businessName}에서 생성한 결제 내용입니다. 금액을 확인한 뒤 계좌 승인으로 보호 결제를 시작하세요.
+              {isVoucherRequest
+                ? `${businessName}에서 생성한 기간 금액권입니다. 결제 금액과 실제 충전 금액을 확인한 뒤 계좌 승인으로 보호 결제를 시작하세요.`
+                : `${businessName}에서 생성한 결제 내용입니다. 금액을 확인한 뒤 계좌 승인으로 보호 결제를 시작하세요.`}
             </Text>
             <View style={styles.requestAmountGrid}>
               <Text style={styles.requestAmountText}>
@@ -168,7 +171,7 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
               )}
             </View>
             <Text style={styles.requestSettlementText}>
-              {paymentRequest.paymentModel === 'voucher'
+              {isVoucherRequest
                 ? `사용기간 ${paymentRequest.validFrom ?? '-'} ~ ${paymentRequest.validUntil ?? '-'}`
                 : `매월 ${formatKrwFromRlusd(paymentRequest.monthlyAmount ?? monthlyAmount)} 정산`}
             </Text>
@@ -325,9 +328,9 @@ export function PaymentScreen({ route, navigation }: ScreenProps<'Payment'>) {
           ) : (
             <>
               <Text style={styles.infoDesc}>
-                실제 사용금액만큼 사업자가 차감 요청하고, 소비자 승인 후 보호 금액권 잔액에서 정산됩니다
+                결제 금액은 계좌 승인으로 결제되고, 실제 충전 금액이 TrustPay 보호 잔액으로 쌓입니다. 사업자는 월마다가 아니라 실제 이용 시 차감하고자 하는 금액만큼 요청합니다
               </Text>
-              <Text style={styles.infoHint}>유효기간: {effectiveValidityMonths || '0'}개월 · 미사용 이용권은 만료 후 환불 대상입니다</Text>
+              <Text style={styles.infoHint}>소비자 승인 후 해당 금액만큼 보호 잔액에서 정산됩니다. 유효기간: {effectiveValidityMonths || '0'}개월</Text>
             </>
           )}
         </View>
