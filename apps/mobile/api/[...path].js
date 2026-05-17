@@ -592,11 +592,23 @@ function createPaymentRequest(body) {
 }
 
 function nextPaymentRequestCode() {
+  const usedNumbers = new Set();
   const maxExistingNumber = paymentRequests.reduce((max, request) => {
     const match = String(request.code || '').match(/^TP-(\d{6})$/);
-    return match ? Math.max(max, Number(match[1])) : max;
+    if (!match) return max;
+    const value = Number(match[1]);
+    usedNumbers.add(value);
+    return Math.max(max, value);
   }, 0);
-  return `TP-${String(maxExistingNumber + 1).padStart(6, '0')}`;
+  const timestampNumber = Math.floor(Date.now() % 1_000_000) || 1;
+  let nextNumber = isPersistentDemoStateEnabled()
+    ? Math.max(maxExistingNumber + 1, timestampNumber)
+    : maxExistingNumber + 1;
+  if (nextNumber > 999_999) nextNumber = timestampNumber;
+  while (usedNumbers.has(nextNumber)) {
+    nextNumber = nextNumber >= 999_999 ? 1 : nextNumber + 1;
+  }
+  return `TP-${String(nextNumber).padStart(6, '0')}`;
 }
 
 function normalizePaymentRequestCode(value) {
