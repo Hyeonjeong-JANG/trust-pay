@@ -63,6 +63,7 @@ const DASHBOARD_REFUND_REVIEW_STATUSES = new Set([...OPEN_REFUND_REVIEW_STATUSES
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const DEMO_STATE_VERSION = 1;
 const DEMO_STATE_BLOB_PATH = process.env.DEMO_STATE_BLOB_PATH || 'trustpay-demo-state.json';
+const DEMO_STATE_BLOB_PREFIX = (process.env.DEMO_STATE_BLOB_PREFIX || DEMO_STATE_BLOB_PATH.replace(/\.json$/, '')).replace(/\/+$/, '');
 const MERCHANT_VISIBLE_REFUND_REVIEW_STATUSES = new Set([
   'platform_review',
   'merchant_response_requested',
@@ -1337,15 +1338,31 @@ function snapshotPersistentDemoState() {
   };
 }
 
+function isDemoStateBlob(pathname) {
+  return pathname === DEMO_STATE_BLOB_PATH || pathname.startsWith(`${DEMO_STATE_BLOB_PREFIX}/`);
+}
+
+function newestDemoStateBlob(blobs) {
+  return blobs
+    .filter((blob) => isDemoStateBlob(blob.pathname))
+    .sort((a, b) => (
+      new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime()
+      || String(b.pathname).localeCompare(String(a.pathname))
+    ))[0];
+}
+
+function nextDemoStateBlobPath() {
+  return `${DEMO_STATE_BLOB_PREFIX}/${Date.now()}-${Math.random().toString(36).slice(2)}.json`;
+}
+
 async function loadPersistentDemoState() {
   if (!isPersistentDemoStateEnabled()) return;
   try {
     const { list } = getBlobClient();
-    const { blobs = [] } = await list({ prefix: DEMO_STATE_BLOB_PATH, limit: 10 });
-    const stateBlob = blobs.find((blob) => blob.pathname === DEMO_STATE_BLOB_PATH);
+    const { blobs = [] } = await list({ prefix: DEMO_STATE_BLOB_PREFIX, limit: 1000 });
+    const stateBlob = newestDemoStateBlob(blobs);
     if (!stateBlob) return;
     const stateUrl = new URL(stateBlob.downloadUrl || stateBlob.url);
-    stateUrl.searchParams.set('cache', '0');
     const response = await fetch(stateUrl);
     if (!response.ok) return;
     applyPersistentDemoState(await response.json());
@@ -1358,10 +1375,9 @@ async function persistDemoState() {
   if (!isPersistentDemoStateEnabled()) return;
   try {
     const { put } = getBlobClient();
-    await put(DEMO_STATE_BLOB_PATH, JSON.stringify(snapshotPersistentDemoState()), {
+    await put(nextDemoStateBlobPath(), JSON.stringify(snapshotPersistentDemoState()), {
       access: 'public',
       addRandomSuffix: false,
-      allowOverwrite: true,
       contentType: 'application/json; charset=utf-8',
     });
   } catch {

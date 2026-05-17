@@ -3,6 +3,7 @@ const vercelConfig = require('../../../../vercel.json');
 
 const mockBlobStorage = new Map<string, string>();
 const mockPublicBlobStorage = new Map<string, string>();
+const mockBlobUploadedAt = new Map<string, string>();
 
 jest.mock('@vercel/blob', () => ({
   get: jest.fn(async () => {
@@ -15,11 +16,13 @@ jest.mock('@vercel/blob', () => ({
         pathname,
         url: `https://blob.test/${pathname}`,
         downloadUrl: `https://blob.test/${pathname}`,
+        uploadedAt: mockBlobUploadedAt.get(pathname),
       })),
   })),
   put: jest.fn(async (pathname: string, body: string) => {
     mockBlobStorage.set(pathname, String(body));
     if (!mockPublicBlobStorage.has(pathname)) mockPublicBlobStorage.set(pathname, String(body));
+    mockBlobUploadedAt.set(pathname, new Date(Date.now() + mockBlobUploadedAt.size).toISOString());
     return { pathname, url: `https://blob.test/${pathname}` };
   }),
 }), { virtual: true });
@@ -603,15 +606,22 @@ describe('static Demo API fixture', () => {
     const originalFetch = globalThis.fetch;
     mockBlobStorage.clear();
     mockPublicBlobStorage.clear();
+    mockBlobUploadedAt.clear();
     process.env.BLOB_READ_WRITE_TOKEN = 'test-token';
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('https://blob.test/')) {
         const parsedUrl = new URL(url);
+        if (parsedUrl.searchParams.get('cache') === '0') {
+          return {
+            ok: false,
+            status: 400,
+            json: async () => ({}),
+            text: async () => 'cache=0 is only available for private stores',
+          } as Response;
+        }
         const pathname = decodeURIComponent(parsedUrl.pathname.slice(1));
-        const body = parsedUrl.searchParams.get('cache') === '0'
-          ? mockBlobStorage.get(pathname)
-          : mockPublicBlobStorage.get(pathname);
+        const body = mockPublicBlobStorage.get(pathname);
         return {
           ok: body !== undefined,
           status: body === undefined ? 404 : 200,
@@ -694,6 +704,7 @@ describe('static Demo API fixture', () => {
       delete process.env.BLOB_READ_WRITE_TOKEN;
       mockBlobStorage.clear();
       mockPublicBlobStorage.clear();
+      mockBlobUploadedAt.clear();
     }
   });
 
