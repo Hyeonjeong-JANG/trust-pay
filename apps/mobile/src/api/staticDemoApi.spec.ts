@@ -389,6 +389,35 @@ describe('static Demo API fixture', () => {
     });
   });
 
+  it('keeps usage charge approval state consistent across consumer, merchant, and admin views', async () => {
+    const requestResponse = await callApi('POST', '/api/escrow/00000000-0000-4000-a000-000000000500/charge-requests', {
+      menuName: '직접 입력 이용금액',
+      amount: 10,
+    });
+    const request = requestResponse.body as any;
+    const approveResponse = await callApi('POST', `/api/escrow/charge-requests/${request.id}/approve`);
+    const consumerEscrowsResponse = await callApi('GET', '/api/escrow/consumer/00000000-0000-4000-a000-000000000001');
+    const businessDashboardResponse = await callApi('GET', '/api/business/00000000-0000-4000-a000-000000000030/dashboard');
+    const adminEscrowsResponse = await callAdminApi('GET', '/api/admin/escrows');
+
+    const consumerEscrow = (consumerEscrowsResponse.body as any[]).find((escrow) => escrow.id === '00000000-0000-4000-a000-000000000500');
+    const businessEscrow = (businessDashboardResponse.body as any).escrows.find((escrow: any) => escrow.id === '00000000-0000-4000-a000-000000000500');
+    const adminEscrow = (adminEscrowsResponse.body as any[]).find((escrow) => escrow.id === '00000000-0000-4000-a000-000000000500');
+
+    expect(requestResponse.statusCode).toBe(201);
+    expect(approveResponse.statusCode).toBe(200);
+    expect(approveResponse.body).toMatchObject({ id: request.id, status: 'settled' });
+    const approvedEntryIds = JSON.parse(request.entryIds);
+    for (const escrow of [consumerEscrow, businessEscrow, adminEscrow]) {
+      expect(escrow.chargeRequests).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: request.id, status: 'settled' })]),
+      );
+      expect(escrow.entries.filter((entry: any) => approvedEntryIds.includes(entry.id))).toEqual(
+        expect.arrayContaining(approvedEntryIds.map((id: string) => expect.objectContaining({ id, status: 'released' }))),
+      );
+    }
+  });
+
   it('blocks demo monthly settlement while refund review is open', async () => {
     const response = await callApi('POST', '/api/escrow/00000000-0000-4000-a000-000000000700/finish', {
       entryMonth: 2,
@@ -482,7 +511,23 @@ describe('static Demo API fixture', () => {
       undefined,
       { cookie: approvedCookie },
     );
+    const adminEscrowsResponse = await callApiWith(
+      dashboardHandler,
+      'GET',
+      '/api/admin/escrows',
+      undefined,
+      { cookie: approvedCookie, 'x-admin-id': 'admin', 'x-admin-secret': 'admin1234' },
+    );
+    const adminDashboardResponse = await callApiWith(
+      dashboardHandler,
+      'GET',
+      '/api/admin/dashboard',
+      undefined,
+      { cookie: approvedCookie, 'x-admin-id': 'admin', 'x-admin-secret': 'admin1234' },
+    );
     const businessDashboard = businessDashboardResponse.body as any;
+    const adminEscrows = adminEscrowsResponse.body as any[];
+    const adminDashboard = adminDashboardResponse.body as any;
 
     expect(createResponse.statusCode).toBe(201);
     expect(created.code).toMatch(/^TP-\d{6}$/);
@@ -516,6 +561,19 @@ describe('static Demo API fixture', () => {
         }),
       ]),
     );
+    expect(adminEscrowsResponse.statusCode).toBe(200);
+    expect(adminEscrows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: `demo-approved-${created.code}`,
+          consumerId: '00000000-0000-4000-a000-000000000001',
+          businessId: '00000000-0000-4000-a000-000000000020',
+          status: 'active',
+        }),
+      ]),
+    );
+    expect(adminDashboardResponse.statusCode).toBe(200);
+    expect(adminDashboard.escrows.active).toBeGreaterThanOrEqual(10);
   });
 
   it('cancels merchant-originated QR payment requests before customer approval', async () => {
@@ -638,11 +696,26 @@ describe('static Demo API fixture', () => {
       { decision: 'approve' },
     );
     const review = response.body as any;
+    const consumerEscrowsResponse = await callApi('GET', '/api/escrow/consumer/00000000-0000-4000-a000-000000000002');
+    const businessDashboardResponse = await callApi('GET', '/api/business/00000000-0000-4000-a000-000000000010/dashboard');
+    const adminEscrowsResponse = await callAdminApi('GET', '/api/admin/escrows');
+    const adminRefundedReviewsResponse = await callAdminApi('GET', '/api/admin/refund-reviews?status=refunded');
+
+    const consumerEscrow = (consumerEscrowsResponse.body as any[]).find((escrow) => escrow.id === '00000000-0000-4000-a000-000000000400');
+    const businessEscrow = (businessDashboardResponse.body as any).escrows.find((escrow: any) => escrow.id === '00000000-0000-4000-a000-000000000400');
+    const adminEscrow = (adminEscrowsResponse.body as any[]).find((escrow) => escrow.id === '00000000-0000-4000-a000-000000000400');
+    const refundedReview = (adminRefundedReviewsResponse.body as any[]).find((item) => item.id === '00000000-0000-4000-a000-000000004003');
 
     expect(response.statusCode).toBe(200);
     expect(review.status).toBe('refunded');
     expect(review.escrow.status).toBe('cancelled');
     expect(review.escrow.entries.filter((entry: any) => entry.status === 'pending')).toHaveLength(0);
     expect(review.escrow.entries.filter((entry: any) => entry.status === 'refunded')).toHaveLength(22);
+    for (const escrow of [consumerEscrow, businessEscrow, adminEscrow]) {
+      expect(escrow.status).toBe('cancelled');
+      expect(escrow.entries.filter((entry: any) => entry.status === 'pending')).toHaveLength(0);
+      expect(escrow.entries.filter((entry: any) => entry.status === 'refunded')).toHaveLength(22);
+    }
+    expect(refundedReview).toMatchObject({ id: '00000000-0000-4000-a000-000000004003', status: 'refunded' });
   });
 });

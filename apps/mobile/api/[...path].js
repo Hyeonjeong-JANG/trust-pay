@@ -1085,6 +1085,31 @@ function setApprovedPaymentRequestCookie(res, code, consumerId) {
   res.setHeader('Set-Cookie', `${APPROVED_PAYMENT_REQUEST_COOKIE}=${encodeURIComponent(value)}; Path=/; Max-Age=3600; SameSite=Lax`);
 }
 
+function getContextualEscrows(req) {
+  const approvedPaymentRequest = getApprovedPaymentRequestContext(req);
+  if (!approvedPaymentRequest) return escrows;
+
+  const approvedEscrowId = `demo-approved-${approvedPaymentRequest.code}`;
+  if (escrows.some((item) => item.id === approvedEscrowId)) return escrows;
+
+  return [
+    createApprovedPaymentRequestEscrow(
+      approvedPaymentRequest.request,
+      approvedPaymentRequest.consumerId || CONSUMER_ID,
+    ),
+    ...escrows,
+  ];
+}
+
+function pendingPaymentRequestsForBusiness(req, businessId) {
+  const approvedPaymentRequest = getApprovedPaymentRequestContext(req);
+  return paymentRequests.filter((item) => (
+    item.businessId === businessId
+    && item.status === 'pending'
+    && item.code !== approvedPaymentRequest?.code
+  ));
+}
+
 function isAdminRequest(req) {
   const expectedId = process.env.ADMIN_ID || 'admin';
   const expectedSecret = process.env.ADMIN_API_SECRET || 'admin1234';
@@ -1119,39 +1144,39 @@ function paginateRows(rows, url) {
   return rows.slice((page - 1) * pageSize, page * pageSize);
 }
 
-function serializeAdminReview(review) {
-  const escrow = escrows.find((item) => item.id === review.escrowId);
+function serializeAdminReview(review, scopedEscrows = escrows) {
+  const escrow = scopedEscrows.find((item) => item.id === review.escrowId);
   return {
     ...review,
     escrow: escrow ? withRelations(escrow, 'consumer') : null,
   };
 }
 
-function adminBusinessRows() {
+function adminBusinessRows(scopedEscrows = escrows) {
   return businesses.map((business) => ({
     ...business,
     registrationVerificationStatus: 'demo_verified',
     _count: {
       products: products.filter((product) => product.businessId === business.id).length,
-      escrows: escrows.filter((escrow) => escrow.businessId === business.id).length,
+      escrows: scopedEscrows.filter((escrow) => escrow.businessId === business.id).length,
       refundReviewRequests: refundReviewRequests.filter((review) => review.businessId === business.id).length,
     },
   }));
 }
 
-function adminConsumerRows() {
+function adminConsumerRows(scopedEscrows = escrows) {
   return consumers.map((consumer) => ({
     ...consumer,
     _count: {
-      escrows: escrows.filter((escrow) => escrow.consumerId === consumer.id).length,
+      escrows: scopedEscrows.filter((escrow) => escrow.consumerId === consumer.id).length,
       chargeRequests: chargeRequests.filter((request) => request.consumerId === consumer.id).length,
       refundReviewRequests: refundReviewRequests.filter((review) => review.consumerId === consumer.id).length,
     },
   }));
 }
 
-function adminEscrowRows() {
-  return escrows.map((escrow) => ({
+function adminEscrowRows(scopedEscrows = escrows) {
+  return scopedEscrows.map((escrow) => ({
     ...withRelations(escrow, 'consumer'),
     refundReviewRequests: refundReviewRequests
       .filter((review) => review.escrowId === escrow.id)
@@ -1204,8 +1229,8 @@ function dashboardSlaMetrics(reviews) {
   };
 }
 
-function dashboardEscrowAmounts() {
-  return escrows.reduce((totals, escrow) => {
+function dashboardEscrowAmounts(scopedEscrows = escrows) {
+  return scopedEscrows.reduce((totals, escrow) => {
     const released = escrow.entries.filter((entry) => entry.status === 'released').reduce((sum, entry) => sum + asNumber(entry.amount), 0);
     const pending = escrow.entries.filter((entry) => entry.status === 'pending').reduce((sum, entry) => sum + asNumber(entry.amount), 0);
     const refunded = escrow.entries.filter((entry) => entry.status === 'refunded').reduce((sum, entry) => sum + asNumber(entry.amount), 0);
@@ -1247,7 +1272,7 @@ function dashboardRecentEvents(reviews) {
     .slice(0, 6);
 }
 
-function adminDashboard() {
+function adminDashboard(scopedEscrows = escrows) {
   const dashboardReviews = refundReviewRequests.filter((review) => DASHBOARD_REFUND_REVIEW_STATUSES.has(review.status));
   const slaMetrics = dashboardSlaMetrics(dashboardReviews);
   return {
@@ -1261,7 +1286,7 @@ function adminDashboard() {
     },
     businesses: { total: businesses.length },
     consumers: { total: consumers.length },
-    escrows: { active: escrows.filter((escrow) => escrow.status === 'active').length, ...dashboardEscrowAmounts() },
+    escrows: { active: scopedEscrows.filter((escrow) => escrow.status === 'active').length, ...dashboardEscrowAmounts(scopedEscrows) },
     recentEvents: dashboardRecentEvents(dashboardReviews),
   };
 }
@@ -1309,21 +1334,22 @@ module.exports = async function handler(req, res) {
 
   if (parts[0] === 'admin') {
     if (!isAdminRequest(req)) return send(res, 401, { message: '운영자 권한이 필요합니다' });
+    const scopedEscrows = getContextualEscrows(req);
 
     if (req.method === 'GET' && path === '/admin/dashboard') {
-      return send(res, 200, adminDashboard());
+      return send(res, 200, adminDashboard(scopedEscrows));
     }
 
     if (req.method === 'GET' && path === '/admin/businesses') {
-      return send(res, 200, paginateRows(adminBusinessRows(), url));
+      return send(res, 200, paginateRows(adminBusinessRows(scopedEscrows), url));
     }
 
     if (req.method === 'GET' && path === '/admin/consumers') {
-      return send(res, 200, paginateRows(adminConsumerRows(), url));
+      return send(res, 200, paginateRows(adminConsumerRows(scopedEscrows), url));
     }
 
     if (req.method === 'GET' && path === '/admin/escrows') {
-      return send(res, 200, paginateRows(adminEscrowRows(), url));
+      return send(res, 200, paginateRows(adminEscrowRows(scopedEscrows), url));
     }
 
     if (req.method === 'GET' && parts[1] === 'refund-reviews' && !parts[2]) {
@@ -1331,13 +1357,13 @@ module.exports = async function handler(req, res) {
       const reviews = refundReviewRequests
         .filter((review) => status ? review.status === status : OPEN_REFUND_REVIEW_STATUSES.includes(review.status))
         .sort((a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime())
-        .map(serializeAdminReview);
+        .map((review) => serializeAdminReview(review, scopedEscrows));
       return send(res, 200, paginateRows(reviews, url));
     }
 
     if (req.method === 'GET' && parts[1] === 'refund-reviews' && parts[2]) {
       const review = refundReviewRequests.find((item) => item.id === parts[2]);
-      return review ? send(res, 200, serializeAdminReview(review)) : send(res, 404, { message: 'Refund review not found' });
+      return review ? send(res, 200, serializeAdminReview(review, scopedEscrows)) : send(res, 404, { message: 'Refund review not found' });
     }
 
     if (req.method === 'POST' && parts[1] === 'refund-reviews' && parts[3] === 'request-merchant-response') {
@@ -1347,7 +1373,7 @@ module.exports = async function handler(req, res) {
       review.status = 'merchant_response_requested';
       review.merchantNotice = body.merchantNotice;
       review.merchantRespondBy = addBusinessDays(new Date(), 3).toISOString();
-      return send(res, 200, serializeAdminReview(review));
+      return send(res, 200, serializeAdminReview(review, scopedEscrows));
     }
 
     if (req.method === 'POST' && parts[1] === 'refund-reviews' && parts[3] === 'resolve') {
@@ -1370,7 +1396,7 @@ module.exports = async function handler(req, res) {
       }
       review.adminResolutionReason = body.reason;
       review.resolvedAt = body.decision === 'investigate' ? null : new Date().toISOString();
-      return send(res, 200, serializeAdminReview(review));
+      return send(res, 200, serializeAdminReview(review, scopedEscrows));
     }
   }
 
@@ -1442,18 +1468,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'GET' && parts[0] === 'business' && parts[2] === 'dashboard') {
     const businessId = parts[1];
-    const approvedPaymentRequest = getApprovedPaymentRequestContext(req);
-    const approvedEscrowId = approvedPaymentRequest ? `demo-approved-${approvedPaymentRequest.code}` : null;
-    const scopedEscrows = escrows.filter((item) => item.businessId === businessId);
-    if (
-      approvedPaymentRequest?.request.businessId === businessId
-      && !scopedEscrows.some((item) => item.id === approvedEscrowId)
-    ) {
-      scopedEscrows.unshift(createApprovedPaymentRequestEscrow(
-        approvedPaymentRequest.request,
-        approvedPaymentRequest.consumerId || CONSUMER_ID,
-      ));
-    }
+    const scopedEscrows = getContextualEscrows(req).filter((item) => item.businessId === businessId);
     const scoped = scopedEscrows.map((escrow) => withRelations(escrow, 'merchant'));
     return send(res, 200, {
       business: businesses.find((item) => item.id === businessId),
@@ -1484,11 +1499,7 @@ module.exports = async function handler(req, res) {
       }, 0),
       activeEscrows: scoped.filter((item) => item.status === 'active').length,
       escrows: scoped,
-      pendingPaymentRequests: paymentRequests.filter((item) => (
-        item.businessId === businessId
-        && item.status === 'pending'
-        && item.code !== approvedPaymentRequest?.code
-      )),
+      pendingPaymentRequests: pendingPaymentRequestsForBusiness(req, businessId),
     });
   }
 
@@ -1501,14 +1512,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'GET' && parts[0] === 'escrow' && parts[1] === 'consumer') {
-    const scoped = escrows.filter((item) => item.consumerId === parts[2]);
-    const approvedPaymentRequest = getApprovedPaymentRequestContext(req);
-    const isApprovedForConsumer = approvedPaymentRequest && (
-      !approvedPaymentRequest.consumerId || approvedPaymentRequest.consumerId === parts[2]
-    );
-    if (isApprovedForConsumer && !scoped.some((item) => item.id === `demo-approved-${approvedPaymentRequest.code}`)) {
-      scoped.unshift(createApprovedPaymentRequestEscrow(approvedPaymentRequest.request, parts[2]));
-    }
+    const scoped = getContextualEscrows(req).filter((item) => item.consumerId === parts[2]);
     return send(res, 200, scoped.map((escrow) => withRelations(escrow, 'consumer')));
   }
 
