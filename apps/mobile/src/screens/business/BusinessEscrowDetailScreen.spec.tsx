@@ -254,6 +254,8 @@ describe('BusinessEscrowDetailScreen', () => {
     const { api } = require('../../api/client');
     api.getEscrow.mockResolvedValue({
       id: 'e-prepaid-refund-response',
+      consumerId: 'consumer-1',
+      businessId: 'business-1',
       status: 'active',
       escrowType: 'prepaid',
       totalAmount: 150,
@@ -286,6 +288,13 @@ describe('BusinessEscrowDetailScreen', () => {
 
     await waitFor(() => expect(api.respondToRefundReviewRequest).toHaveBeenCalledWith('refund-review-response', {
       response: '현재 리모델링 중이며 다음 주부터 이용 가능합니다. 미사용분 환불 협의 가능합니다.',
+      escrowId: 'e-prepaid-refund-response',
+      consumerId: 'consumer-1',
+      businessId: 'business-1',
+      refundableAmount: 10,
+      merchantNotice: '고객이 장기 휴업을 주장했습니다. 영업 가능 여부와 이용권 처리 방안을 답변해주세요.',
+      merchantRespondBy: '2026-05-18T00:00:00.000Z',
+      requestedAt: '2026-05-14T00:00:00.000Z',
     }));
   });
 

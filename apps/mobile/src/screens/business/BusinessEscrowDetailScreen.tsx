@@ -168,8 +168,17 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
   });
 
   const refundReviewResponseMutation = useMutation({
-    mutationFn: ({ requestId, response }: { requestId: string; response: string }) =>
-      api.respondToRefundReviewRequest(requestId, { response }),
+    mutationFn: ({ requestId, response, review }: { requestId: string; response: string; review: RefundReviewRequest }) =>
+      api.respondToRefundReviewRequest(requestId, {
+        response,
+        escrowId: escrow?.id,
+        consumerId: escrow?.consumerId,
+        businessId: escrow?.businessId,
+        refundableAmount: review.refundableAmount,
+        merchantNotice: review.merchantNotice,
+        merchantRespondBy: review.merchantRespondBy ? String(review.merchantRespondBy) : null,
+        requestedAt: String(review.requestedAt),
+      }),
     onSuccess: () => {
       setMerchantResponse('');
       queryClient.invalidateQueries({ queryKey: ['escrow', id] });
@@ -269,7 +278,7 @@ export function BusinessEscrowDetailScreen({ route }: ScreenProps<'BusinessEscro
       showErrorToast('답변 제출 실패', '답변 내용을 10자 이상 입력해주세요.');
       return;
     }
-    refundReviewResponseMutation.mutate({ requestId: latestRefundReview.id, response });
+    refundReviewResponseMutation.mutate({ requestId: latestRefundReview.id, response, review: latestRefundReview });
   };
 
   return (

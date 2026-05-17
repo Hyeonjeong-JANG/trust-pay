@@ -1078,6 +1078,38 @@ function stripRefundReviewForMerchant(review) {
   return rest;
 }
 
+function recoverRefundReviewForMerchantResponse(id, body) {
+  const escrow = body.escrowId ? escrows.find((item) => item.id === body.escrowId) : null;
+  const businessId = body.businessId || escrow?.businessId;
+  const consumerId = body.consumerId || escrow?.consumerId;
+  if (!businessId || !consumerId) return null;
+  const refundableAmount = Number(body.refundableAmount);
+  const fallbackRefundableAmount = escrow?.entries
+    ?.filter((entry) => entry.status === 'pending')
+    .reduce((sum, entry) => sum + Number(entry.amount || escrow.monthlyAmount), 0);
+  return {
+    id,
+    escrowId: body.escrowId || escrow?.id || null,
+    consumerId,
+    businessId,
+    status: 'merchant_response_requested',
+    refundableAmount: Number.isFinite(refundableAmount) && refundableAmount > 0 ? refundableAmount : fallbackRefundableAmount || 0,
+    merchantRespondBy: body.merchantRespondBy || addBusinessDays(new Date(), 3).toISOString(),
+    businessClosureStatus: 'unavailable',
+    businessClosureSource: 'demo',
+    businessClosureCheckedAt: new Date().toISOString(),
+    investigationReason: DEMO_REFUND_INVESTIGATION_REASON,
+    consumerReason: null,
+    merchantNotice: body.merchantNotice || null,
+    merchantResponse: null,
+    merchantRespondedAt: null,
+    adminResolutionReason: null,
+    photoDataUrls: [],
+    requestedAt: body.requestedAt || new Date().toISOString(),
+    resolvedAt: null,
+  };
+}
+
 function parseEntryIds(request) {
   try {
     const parsed = JSON.parse(request.entryIds);
@@ -1746,7 +1778,11 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'POST' && parts[0] === 'escrow' && parts[1] === 'refund-review-requests' && parts[3] === 'merchant-response') {
     const session = getDemoSession(req);
-    const review = refundReviewRequests.find((item) => item.id === parts[2]);
+    let review = refundReviewRequests.find((item) => item.id === parts[2]);
+    if (!review) {
+      review = recoverRefundReviewForMerchantResponse(parts[2], body);
+      if (review) refundReviewRequests = [review, ...refundReviewRequests];
+    }
     if (!review) return send(res, 404, { message: 'Refund review not found' });
     if (!session || session.role !== 'business' || session.userId !== review.businessId) {
       return send(res, 403, { message: '해당 사업자만 환불 검토 답변을 제출할 수 있습니다' });

@@ -970,6 +970,73 @@ describe('static Demo API fixture', () => {
     }
   });
 
+  it('accepts merchant refund review responses from submitted context when persisted review state is temporarily unavailable', async () => {
+    const originalFetch = globalThis.fetch;
+    mockBlobStorage.clear();
+    mockPublicBlobStorage.clear();
+    mockBlobUploadedAt.clear();
+    process.env.BLOB_READ_WRITE_TOKEN = 'test-token';
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('https://blob.test/')) {
+        const pathname = decodeURIComponent(new URL(url).pathname.slice(1));
+        const body = mockPublicBlobStorage.get(pathname);
+        return {
+          ok: body !== undefined,
+          status: body === undefined ? 404 : 200,
+          json: async () => JSON.parse(body || '{}'),
+          text: async () => body || '',
+        } as Response;
+      }
+      if (originalFetch) return originalFetch(input);
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const responseHandler = loadFreshHandler();
+      const response = await callApiWith(
+        responseHandler,
+        'POST',
+        '/api/escrow/refund-review-requests/demo-refund-review-1779016302244/merchant-response',
+        {
+          response: '현재 리모델링 중이며 다음 주부터 이용 가능합니다. 미사용분 환불 협의 가능합니다.',
+          escrowId: '00000000-0000-4000-a000-000000000500',
+          consumerId: '00000000-0000-4000-a000-000000000001',
+          businessId: '00000000-0000-4000-a000-000000000020',
+          refundableAmount: 100,
+          merchantNotice: '영업 가능 여부와 이용권 처리 방안을 답변해주세요.',
+          merchantRespondBy: '2026-05-20T00:00:00.000Z',
+          requestedAt: '2026-05-17T10:00:00.000Z',
+        },
+        { authorization: 'Bearer demo-token-business-00000000-0000-4000-a000-000000000020' },
+      );
+      const lookupHandler = loadFreshHandler();
+      const detailResponse = await callApiWith(
+        lookupHandler,
+        'GET',
+        '/api/admin/refund-reviews/demo-refund-review-1779016302244',
+        undefined,
+        { 'x-admin-id': 'admin', 'x-admin-secret': 'admin1234' },
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toMatchObject({
+        id: 'demo-refund-review-1779016302244',
+        status: 'merchant_responded',
+        businessId: '00000000-0000-4000-a000-000000000020',
+        merchantResponse: '현재 리모델링 중이며 다음 주부터 이용 가능합니다. 미사용분 환불 협의 가능합니다.',
+      });
+      expect(detailResponse.statusCode).toBe(200);
+      expect(detailResponse.body).toMatchObject({ id: 'demo-refund-review-1779016302244', status: 'merchant_responded' });
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete process.env.BLOB_READ_WRITE_TOKEN;
+      mockBlobStorage.clear();
+      mockPublicBlobStorage.clear();
+      mockBlobUploadedAt.clear();
+    }
+  });
+
   it('persists QR approval across fresh serverless instances without relying on cookies', async () => {
     const originalFetch = globalThis.fetch;
     mockBlobStorage.clear();
