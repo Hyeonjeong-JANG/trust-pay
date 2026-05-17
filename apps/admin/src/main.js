@@ -1,4 +1,4 @@
-import { adminTabs, buildAdminAuthHeaders, buildDashboardAmountFlow, buildDashboardEvents, buildDashboardPipeline, buildDashboardSlaRisks, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js?v=trustpay-admin-20260515-ops-copy1';
+import { adminTabs, buildAdminAuthHeaders, buildDashboardAmountFlow, buildDashboardEvents, buildDashboardPipeline, buildDashboardSlaRisks, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getEscrowsForParticipant, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, getValidAdminTabId, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js?v=trustpay-admin-20260517-participant-drilldown1';
 
 const state = {
   apiBase: getApiBase(window.TRUSTPAY_ADMIN_API_BASE || '/api', window.location.hostname),
@@ -10,8 +10,10 @@ const state = {
   consumers: [],
   escrows: [],
   selectedId: null,
+  selectedBusinessId: null,
+  selectedConsumerId: null,
   status: 'needs_action',
-  activeTab: sessionStorage.getItem('trustpay-admin-tab') || 'dashboard',
+  activeTab: getValidAdminTabId(sessionStorage.getItem('trustpay-admin-tab') || 'dashboard'),
   decisionModal: null,
 };
 
@@ -39,6 +41,16 @@ async function adminRequest(path, options = {}) {
     return await res.json();
   } finally {
     clearTimeout(timeoutId);
+  }
+}
+
+async function fetchAdminEscrows() {
+  const pageSize = 100;
+  const escrows = [];
+  for (let page = 1; ; page += 1) {
+    const rows = await adminRequest(`/admin/escrows?page=${page}&pageSize=${pageSize}`);
+    escrows.push(...rows);
+    if (rows.length < pageSize) return escrows;
   }
 }
 
@@ -118,7 +130,6 @@ async function loadActiveTab() {
     if (state.activeTab === 'refunds') await loadReviews();
     if (state.activeTab === 'businesses') await loadBusinesses();
     if (state.activeTab === 'consumers') await loadConsumers();
-    if (state.activeTab === 'escrows') await loadEscrows();
   } catch (err) {
     setStatus(getAdminRequestErrorMessage(err), 'error');
   }
@@ -504,59 +515,19 @@ async function fetchReviewsForFilter(status) {
   return sortReviewsForQueue([...reviewsById.values()], status);
 }
 
-function renderBusinessList() {
-  const rows = state.businesses.map((business) => `
-    <article class="list-card">
-      <div>
-        <strong>${escapeHtml(business.name)}</strong>
-        <span>${escapeHtml(business.category)} · ${escapeHtml(business.registrationVerificationStatus)}</span>
-      </div>
-      <div class="list-meta">
-        <span>상품 ${business._count?.products ?? 0}</span>
-        <span>보호 결제 ${business._count?.escrows ?? 0}</span>
-        <span>환불 검토 ${business._count?.refundReviewRequests ?? 0}</span>
-      </div>
-    </article>
-  `).join('');
-  $('#content-body').innerHTML = `<section class="list-panel">${rows || '<div class="empty">등록된 가맹점이 없습니다.</div>'}</section>`;
+function getSelectedParticipant(participantType, participants) {
+  const selectedKey = participantType === 'business' ? 'selectedBusinessId' : 'selectedConsumerId';
+  if (!participants.some((participant) => participant.id === state[selectedKey])) {
+    state[selectedKey] = participants.find((participant) => Number(participant._count?.escrows || 0) > 0)?.id || participants[0]?.id || null;
+  }
+  return participants.find((participant) => participant.id === state[selectedKey]) || null;
 }
 
-async function loadBusinesses() {
-  renderLoading('가맹점 목록을 불러오는 중...');
-  state.businesses = await adminRequest('/admin/businesses');
-  renderBusinessList();
-  setStatus(`가맹점 ${state.businesses.length}곳`, 'ok');
-}
-
-function renderConsumerList() {
-  const rows = state.consumers.map((consumer) => `
-    <article class="list-card">
-      <div>
-        <strong>${escapeHtml(consumer.name)}</strong>
-        <span>${escapeHtml(consumer.phone || consumer.email || '연락처 없음')}</span>
-      </div>
-      <div class="list-meta">
-        <span>보호 결제 ${consumer._count?.escrows ?? 0}</span>
-        <span>결제요청 ${consumer._count?.chargeRequests ?? 0}</span>
-        <span>환불 검토 ${consumer._count?.refundReviewRequests ?? 0}</span>
-      </div>
-    </article>
-  `).join('');
-  $('#content-body').innerHTML = `<section class="list-panel">${rows || '<div class="empty">등록된 소비자가 없습니다.</div>'}</section>`;
-}
-
-async function loadConsumers() {
-  renderLoading('소비자 목록을 불러오는 중...');
-  state.consumers = await adminRequest('/admin/consumers');
-  renderConsumerList();
-  setStatus(`소비자 ${state.consumers.length}명`, 'ok');
-}
-
-function renderEscrowList() {
-  const rows = state.escrows.map((escrow) => {
+function renderEscrowRows(escrows) {
+  return escrows.map((escrow) => {
     const summary = summarizeEscrow(escrow);
     return `
-      <article class="list-card">
+      <article class="list-card scoped-escrow-card">
         <div>
           <span class="case-status">${escapeHtml(summary.status)}</span>
           <strong>${escapeHtml(summary.businessName)} · ${escapeHtml(summary.consumerName)}</strong>
@@ -569,14 +540,112 @@ function renderEscrowList() {
       </article>
     `;
   }).join('');
-  $('#content-body').innerHTML = `<section class="list-panel">${rows || '<div class="empty">표시할 보호 결제가 없습니다.</div>'}</section>`;
 }
 
-async function loadEscrows() {
-  renderLoading('보호 결제 목록을 불러오는 중...');
-  state.escrows = await adminRequest('/admin/escrows');
-  renderEscrowList();
-  setStatus(`보호 결제 ${state.escrows.length}건`, 'ok');
+function renderParticipantEscrowDetail(participant, participantType) {
+  if (!participant) {
+    return '<article class="detail participant-detail"><div class="empty detail-empty">확인할 항목을 선택하세요.</div></article>';
+  }
+  const scopedEscrows = getEscrowsForParticipant(state.escrows, participantType, participant.id);
+  const isBusiness = participantType === 'business';
+  const secondaryLabel = isBusiness ? '상품' : '결제요청';
+  const secondaryCount = isBusiness ? participant._count?.products : participant._count?.chargeRequests;
+  const rows = renderEscrowRows(scopedEscrows);
+  return `
+    <article class="detail participant-detail" id="${escapeHtml(participantType)}-escrow-detail">
+      <div class="detail-head">
+        <span class="case-status">관련 보호 결제</span>
+        <h2>${escapeHtml(participant.name)}</h2>
+        <p>${escapeHtml(isBusiness ? participant.category || '업종 미확인' : participant.phone || participant.email || '연락처 없음')}</p>
+      </div>
+      <div class="metric-grid">
+        <div><span>보호 결제</span><strong>${scopedEscrows.length.toLocaleString('ko-KR')}건</strong></div>
+        <div><span>환불 검토</span><strong>${Number(participant._count?.refundReviewRequests || 0).toLocaleString('ko-KR')}건</strong></div>
+        <div><span>${escapeHtml(secondaryLabel)}</span><strong>${Number(secondaryCount || 0).toLocaleString('ko-KR')}건</strong></div>
+        <div><span>선택 유형</span><strong>${escapeHtml(isBusiness ? '가맹점' : '소비자')}</strong></div>
+      </div>
+      <section class="scoped-escrow-section">
+        <h3>관련 보호 결제</h3>
+        <div class="list-panel scoped-escrow-list">${rows || '<div class="empty">이 항목의 보호 결제가 없습니다.</div>'}</div>
+      </section>
+    </article>
+  `;
+}
+
+function bindParticipantCards(participantType, renderList) {
+  for (const button of document.querySelectorAll(`[data-participant-type="${participantType}"]`)) {
+    button.addEventListener('click', () => {
+      if (participantType === 'business') state.selectedBusinessId = button.dataset.participantId;
+      if (participantType === 'consumer') state.selectedConsumerId = button.dataset.participantId;
+      renderList();
+    });
+  }
+}
+
+function renderBusinessList() {
+  const selected = getSelectedParticipant('business', state.businesses);
+  const rows = state.businesses.map((business) => `
+    <button type="button" class="list-card participant-card ${business.id === state.selectedBusinessId ? 'selected' : ''}" data-participant-type="business" data-participant-id="${escapeHtml(business.id)}">
+      <div>
+        <strong>${escapeHtml(business.name)}</strong>
+        <span>${escapeHtml(business.category)} · ${escapeHtml(business.registrationVerificationStatus)}</span>
+      </div>
+      <div class="list-meta">
+        <span>상품 ${business._count?.products ?? 0}</span>
+        <span>보호 결제 ${business._count?.escrows ?? 0}</span>
+        <span>환불 검토 ${business._count?.refundReviewRequests ?? 0}</span>
+      </div>
+    </button>
+  `).join('');
+  $('#content-body').innerHTML = state.businesses.length === 0
+    ? '<section class="list-panel"><div class="empty">등록된 가맹점이 없습니다.</div></section>'
+    : `<section class="workbench participant-workbench"><aside class="queue participant-list" aria-label="가맹점 목록">${rows}</aside>${renderParticipantEscrowDetail(selected, 'business')}</section>`;
+  bindParticipantCards('business', renderBusinessList);
+}
+
+async function loadBusinesses() {
+  renderLoading('가맹점 목록을 불러오는 중...');
+  const [businesses, escrows] = await Promise.all([
+    adminRequest('/admin/businesses'),
+    fetchAdminEscrows(),
+  ]);
+  state.businesses = businesses;
+  state.escrows = escrows;
+  renderBusinessList();
+  setStatus(`가맹점 ${state.businesses.length}곳`, 'ok');
+}
+
+function renderConsumerList() {
+  const selected = getSelectedParticipant('consumer', state.consumers);
+  const rows = state.consumers.map((consumer) => `
+    <button type="button" class="list-card participant-card ${consumer.id === state.selectedConsumerId ? 'selected' : ''}" data-participant-type="consumer" data-participant-id="${escapeHtml(consumer.id)}">
+      <div>
+        <strong>${escapeHtml(consumer.name)}</strong>
+        <span>${escapeHtml(consumer.phone || consumer.email || '연락처 없음')}</span>
+      </div>
+      <div class="list-meta">
+        <span>보호 결제 ${consumer._count?.escrows ?? 0}</span>
+        <span>결제요청 ${consumer._count?.chargeRequests ?? 0}</span>
+        <span>환불 검토 ${consumer._count?.refundReviewRequests ?? 0}</span>
+      </div>
+    </button>
+  `).join('');
+  $('#content-body').innerHTML = state.consumers.length === 0
+    ? '<section class="list-panel"><div class="empty">등록된 소비자가 없습니다.</div></section>'
+    : `<section class="workbench participant-workbench"><aside class="queue participant-list" aria-label="소비자 목록">${rows}</aside>${renderParticipantEscrowDetail(selected, 'consumer')}</section>`;
+  bindParticipantCards('consumer', renderConsumerList);
+}
+
+async function loadConsumers() {
+  renderLoading('소비자 목록을 불러오는 중...');
+  const [consumers, escrows] = await Promise.all([
+    adminRequest('/admin/consumers'),
+    fetchAdminEscrows(),
+  ]);
+  state.consumers = consumers;
+  state.escrows = escrows;
+  renderConsumerList();
+  setStatus(`소비자 ${state.consumers.length}명`, 'ok');
 }
 
 function renderSettings() {

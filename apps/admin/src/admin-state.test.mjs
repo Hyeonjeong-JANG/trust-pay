@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { adminTabs, buildAdminAuthHeaders, buildDashboardAmountFlow, buildDashboardEvents, buildDashboardPipeline, buildDashboardSlaRisks, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js';
+import { adminTabs, buildAdminAuthHeaders, buildDashboardAmountFlow, buildDashboardEvents, buildDashboardPipeline, buildDashboardSlaRisks, buildRefundDecisionPayload, buildReviewTimeline, escapeHtml, getAdminRequestErrorMessage, getApiBase, getEscrowsForParticipant, getQueueFetchStatuses, getRefundDecisionMeta, getReviewActionMode, getStatusLabel, getTabMeta, getValidAdminTabId, safeDataImageSrc, sortReviewsForQueue, summarizeDashboard, summarizeEscrow, summarizeReview, validateRefundDecisionReason, visibleQueueStatuses } from './admin-state.js';
 
 test('getApiBase resolves local and deployed admin API roots', () => {
   assert.equal(getApiBase('/api', 'localhost'), 'http://localhost:3000');
@@ -143,9 +143,11 @@ test('refund decision helper omits blank approval reasons and blocks short adver
 });
 
 test('adminTabs defines standard operations sections', () => {
-  assert.deepEqual(adminTabs.map((tab) => tab.id), ['dashboard', 'refunds', 'businesses', 'consumers', 'escrows', 'settings']);
+  assert.deepEqual(adminTabs.map((tab) => tab.id), ['dashboard', 'refunds', 'businesses', 'consumers', 'settings']);
   assert.equal(getTabMeta('businesses').label, '가맹점');
   assert.equal(getTabMeta('unknown').label, '대시보드');
+  assert.equal(getTabMeta('escrows').label, '대시보드');
+  assert.equal(getValidAdminTabId('escrows'), 'dashboard');
 });
 
 test('summarizeDashboard creates card-ready admin metrics', () => {
@@ -158,10 +160,40 @@ test('summarizeDashboard creates card-ready admin metrics', () => {
     { label: '진행 중인 환불 검토', value: '4건', tone: 'warning', tab: 'refunds', status: 'all', helper: '전체 보기' },
     { label: '사업자 답변 대기', value: '2건', tone: 'primary', tab: 'refunds', status: 'waiting_merchant', helper: '답변 대기 보기' },
     { label: '답변 도착', value: '1건', tone: 'success', tab: 'refunds', status: 'needs_action', helper: '답변 확인하기' },
-    { label: '활성 보호 결제', value: '5건', tone: 'neutral', tab: 'escrows', helper: '보호 결제 보기' },
+    { label: '활성 보호 결제', value: '5건', tone: 'neutral', tab: 'businesses', helper: '가맹점별 보기' },
     { label: '가맹점', value: '7곳', tone: 'neutral', tab: 'businesses', helper: '가맹점 보기' },
     { label: '소비자', value: '11명', tone: 'neutral', tab: 'consumers', helper: '소비자 보기' },
   ]);
+});
+
+test('getEscrowsForParticipant scopes and sorts escrows for business and consumer drill-downs', () => {
+  const escrows = [
+    { id: 'old-business', businessId: 'business-1', consumerId: 'consumer-1', createdAt: '2026-05-01T00:00:00.000Z' },
+    { id: 'new-business', business: { id: 'business-1' }, consumer: { id: 'consumer-2' }, createdAt: '2026-05-03T00:00:00.000Z' },
+    { id: 'other-business', businessId: 'business-2', consumerId: 'consumer-1', createdAt: '2026-05-02T00:00:00.000Z' },
+  ];
+
+  assert.deepEqual(getEscrowsForParticipant(escrows, 'business', 'business-1').map((escrow) => escrow.id), ['new-business', 'old-business']);
+  assert.deepEqual(getEscrowsForParticipant(escrows, 'consumer', 'consumer-1').map((escrow) => escrow.id), ['other-business', 'old-business']);
+});
+
+test('admin participant lists load protection payments for scoped drill-downs', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+
+  assert.match(js, /getEscrowsForParticipant/);
+  assert.match(js, /renderParticipantEscrowDetail/);
+  assert.match(js, /adminRequest\('\/admin\/businesses'\)[\s\S]*fetchAdminEscrows\(\)/);
+  assert.match(js, /adminRequest\('\/admin\/consumers'\)[\s\S]*fetchAdminEscrows\(\)/);
+  assert.doesNotMatch(js, /state\.activeTab === 'escrows'/);
+});
+
+test('admin participant drill-down fetches every escrow page', () => {
+  const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+
+  assert.match(js, /async function fetchAdminEscrows/);
+  assert.match(js, /pageSize = 100/);
+  assert.match(js, /adminRequest\(`\/admin\/escrows\?page=\$\{page\}&pageSize=\$\{pageSize\}`\)/);
+  assert.match(js, /if \(rows\.length < pageSize\) return escrows/);
 });
 
 test('admin dashboard metrics are clickable navigation targets', () => {

@@ -369,6 +369,14 @@ button:hover { background: var(--gray-200); transform: translateY(-1px); }
 .list-card strong, .list-card span { display: block; }
 .list-card strong { font-size: 16px; margin-top: 4px; }
 .list-card span { color: var(--gray-500); font-size: 13px; margin-top: 4px; }
+.participant-card {
+  background: var(--white);
+  margin-bottom: 12px;
+  text-align: left;
+  width: 100%;
+}
+.participant-card.selected { background: var(--primary-light); border-color: #bcd0ff; }
+.participant-card:hover { border-color: #bcd0ff; }
 .list-meta { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .list-meta span {
   background: var(--gray-100);
@@ -377,6 +385,10 @@ button:hover { background: var(--gray-200); transform: translateY(-1px); }
   font-weight: 700;
   padding: 6px 10px;
 }
+.scoped-escrow-section { margin-top: 24px; }
+.scoped-escrow-section h3 { margin: 0 0 12px; }
+.scoped-escrow-list { border: 0; box-shadow: none; margin-top: 0; padding: 0; }
+.scoped-escrow-card { background: var(--gray-50); }
 .quick-panel { margin-top: 16px; }
 .settings-panel code { background: var(--gray-100); border-radius: 6px; padding: 2px 6px; }
 .evidence-panel, .timeline-panel, .action-panel { border-top: 1px solid var(--gray-200); margin-top: 24px; padding-top: 22px; }

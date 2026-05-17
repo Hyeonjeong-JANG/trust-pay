@@ -9,6 +9,9 @@ const BUSINESS_GYM_ID = '00000000-0000-4000-a000-000000000020';
 const BUSINESS_SALON_ID = '00000000-0000-4000-a000-000000000030';
 const BUSINESS_LAUNDRY_ID = '00000000-0000-4000-a000-000000000040';
 const BUSINESS_ACADEMY_ID = '00000000-0000-4000-a000-000000000050';
+const DEMO_CONSUMER_TESTNET_ADDRESS = 'r3mmH7k7tsShoMBxhyvjWxmJtKnbqrEYK6';
+const DEMO_BUSINESS_TESTNET_ADDRESS = 'rwX7on8RojAX9uV3KqqENTWdmJKDwJe3aw';
+const DEMO_RLUSD_ISSUER_TESTNET_ADDRESS = 'rNabsmcozdd6jAjDQdBjTdGNomgxH3dySP';
 const PRODUCT_CAFE_PASS_ID = '00000000-0000-4000-a000-000000001010';
 const PRODUCT_GYM_MEMBERSHIP_ID = '00000000-0000-4000-a000-000000001020';
 const PRODUCT_SALON_PASS_ID = '00000000-0000-4000-a000-000000001030';
@@ -86,7 +89,7 @@ const consumers = [
     name: '김민수',
     phone: '010-2000-0001',
     email: 'minsu@demo.com',
-    xrplAddress: 'rDemoConsumer1234567890ABCDEF',
+    xrplAddress: DEMO_CONSUMER_TESTNET_ADDRESS,
   },
   {
     id: CONSUMER_SEOYEON_ID,
@@ -178,7 +181,7 @@ const businesses = [
     address: '서울시 서초구 서초대로 100',
     phone: '010-1000-0002',
     email: 'gym@demo.com',
-    xrplAddress: 'rDemoBusiness2GymABCDEF123456',
+    xrplAddress: DEMO_BUSINESS_TESTNET_ADDRESS,
     isActive: true,
   },
   {
@@ -991,7 +994,7 @@ function makeEscrow({ id, consumerId = CONSUMER_ID, businessId, productId = null
     validFrom,
     validUntil,
     currency: 'RLUSD',
-    issuer: 'rDemoIssuerRLUSD000000000001',
+    issuer: DEMO_RLUSD_ISSUER_TESTNET_ADDRESS,
     status,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -1317,6 +1320,18 @@ function replaceArrayContents(target, source) {
   if (Array.isArray(source)) target.splice(0, target.length, ...source);
 }
 
+function applyCanonicalDemoWalletAddresses() {
+  const consumer = consumers.find((item) => item.id === CONSUMER_ID);
+  if (consumer) consumer.xrplAddress = DEMO_CONSUMER_TESTNET_ADDRESS;
+  const business = businesses.find((item) => item.id === BUSINESS_GYM_ID);
+  if (business) business.xrplAddress = DEMO_BUSINESS_TESTNET_ADDRESS;
+  for (const escrow of escrows) {
+    if (escrow.consumerId === CONSUMER_ID) escrow.consumerAddress = DEMO_CONSUMER_TESTNET_ADDRESS;
+    if (escrow.businessId === BUSINESS_GYM_ID) escrow.businessAddress = DEMO_BUSINESS_TESTNET_ADDRESS;
+    if (escrow.currency === 'RLUSD' || escrow.issuer) escrow.issuer = DEMO_RLUSD_ISSUER_TESTNET_ADDRESS;
+  }
+}
+
 function applyPersistentDemoState(state) {
   if (!state || state.version !== DEMO_STATE_VERSION) return;
   replaceArrayContents(consumers, state.consumers);
@@ -1324,9 +1339,11 @@ function applyPersistentDemoState(state) {
   if (Array.isArray(state.escrows)) escrows = state.escrows;
   if (Array.isArray(state.chargeRequests)) chargeRequests = state.chargeRequests;
   if (Array.isArray(state.refundReviewRequests)) refundReviewRequests = state.refundReviewRequests;
+  applyCanonicalDemoWalletAddresses();
 }
 
 function snapshotPersistentDemoState() {
+  applyCanonicalDemoWalletAddresses();
   return {
     version: DEMO_STATE_VERSION,
     savedAt: new Date().toISOString(),

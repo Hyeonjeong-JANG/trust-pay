@@ -10,7 +10,6 @@ export const adminTabs = [
   { id: 'refunds', label: '환불 검토', description: '소비자 요청과 사업자 답변을 확인합니다.' },
   { id: 'businesses', label: '가맹점', description: '가입 가맹점과 인증 상태를 확인합니다.' },
   { id: 'consumers', label: '소비자', description: '소비자 계정과 이용 현황을 확인합니다.' },
-  { id: 'escrows', label: '보호 결제', description: '전체 보호 결제와 정산 상태를 확인합니다.' },
   { id: 'settings', label: '설정', description: '운영자 로그인과 API 연결 상태를 확인합니다.' },
 ];
 
@@ -188,8 +187,13 @@ export function buildReviewTimeline(review = {}) {
   return events;
 }
 
+export function getValidAdminTabId(tabId) {
+  return adminTabs.some((tab) => tab.id === tabId) ? tabId : adminTabs[0].id;
+}
+
 export function getTabMeta(tabId) {
-  return adminTabs.find((tab) => tab.id === tabId) ?? adminTabs[0];
+  const validTabId = getValidAdminTabId(tabId);
+  return adminTabs.find((tab) => tab.id === validTabId) ?? adminTabs[0];
 }
 
 export function buildAdminAuthHeaders(adminId, adminSecret) {
@@ -238,7 +242,7 @@ export function summarizeDashboard(dashboard = {}) {
     { label: '진행 중인 환불 검토', value: formatCount(dashboard.refundReviews?.open, '건'), tone: 'warning', tab: 'refunds', status: 'all', helper: '전체 보기' },
     { label: '사업자 답변 대기', value: formatCount(dashboard.refundReviews?.merchantResponseRequested, '건'), tone: 'primary', tab: 'refunds', status: 'waiting_merchant', helper: '답변 대기 보기' },
     { label: '답변 도착', value: formatCount(dashboard.refundReviews?.merchantResponded, '건'), tone: 'success', tab: 'refunds', status: 'needs_action', helper: '답변 확인하기' },
-    { label: '활성 보호 결제', value: formatCount(dashboard.escrows?.active, '건'), tone: 'neutral', tab: 'escrows', helper: '보호 결제 보기' },
+    { label: '활성 보호 결제', value: formatCount(dashboard.escrows?.active, '건'), tone: 'neutral', tab: 'businesses', helper: '가맹점별 보기' },
     { label: '가맹점', value: formatCount(dashboard.businesses?.total, '곳'), tone: 'neutral', tab: 'businesses', helper: '가맹점 보기' },
     { label: '소비자', value: formatCount(dashboard.consumers?.total, '명'), tone: 'neutral', tab: 'consumers', helper: '소비자 보기' },
   ];
@@ -343,4 +347,20 @@ export function summarizeEscrow(escrow) {
     progressText: `${releasedCount}/${entries.length} 정산`,
     refundText: `환불 검토 ${refundCount}건`,
   };
+}
+
+function getEscrowParticipantId(escrow = {}, participantType) {
+  if (participantType === 'consumer') return escrow.consumerId ?? escrow.consumer?.id;
+  return escrow.businessId ?? escrow.business?.id;
+}
+
+function getEscrowSortTime(escrow = {}) {
+  return new Date(escrow.updatedAt || escrow.createdAt || escrow.approvedAt || 0).getTime() || 0;
+}
+
+export function getEscrowsForParticipant(escrows = [], participantType, participantId) {
+  if (!participantId) return [];
+  return [...(escrows ?? [])]
+    .filter((escrow) => getEscrowParticipantId(escrow, participantType) === participantId)
+    .sort((a, b) => getEscrowSortTime(b) - getEscrowSortTime(a));
 }

@@ -106,6 +106,110 @@ describe('static Demo API fixture', () => {
     expect(reviews[0]).toMatchObject({ status: 'platform_review' });
   });
 
+  it('uses the public Testnet wallet addresses in demo balance and escrow payloads', async () => {
+    const consumerBalanceResponse = await callApi('GET', '/api/consumer/00000000-0000-4000-a000-000000000001/balance');
+    const businessBalanceResponse = await callApi('GET', '/api/business/00000000-0000-4000-a000-000000000020/balance');
+    const escrowsResponse = await callAdminApi('GET', '/api/admin/escrows');
+    const escrows = escrowsResponse.body as any[];
+    const publicDemoEscrow = escrows.find((escrow) => escrow.id === '00000000-0000-4000-a000-000000000100');
+
+    expect(consumerBalanceResponse.body).toMatchObject({ xrplAddress: 'r3mmH7k7tsShoMBxhyvjWxmJtKnbqrEYK6' });
+    expect(businessBalanceResponse.body).toMatchObject({ xrplAddress: 'rwX7on8RojAX9uV3KqqENTWdmJKDwJe3aw' });
+    expect(publicDemoEscrow).toMatchObject({
+      consumerAddress: 'r3mmH7k7tsShoMBxhyvjWxmJtKnbqrEYK6',
+      businessAddress: 'rwX7on8RojAX9uV3KqqENTWdmJKDwJe3aw',
+      issuer: 'rNabsmcozdd6jAjDQdBjTdGNomgxH3dySP',
+    });
+  });
+
+  it('keeps public Testnet wallet addresses after restoring persisted demo state', async () => {
+    const originalFetch = globalThis.fetch;
+    const legacyStatePath = 'trustpay-demo-state/legacy-wallets.json';
+    mockBlobStorage.clear();
+    mockPublicBlobStorage.clear();
+    mockBlobUploadedAt.clear();
+    process.env.BLOB_READ_WRITE_TOKEN = 'test-token';
+    const legacyState = JSON.stringify({
+      version: 1,
+      savedAt: '2026-05-16T00:00:00.000Z',
+      consumers: [
+        {
+          id: '00000000-0000-4000-a000-000000000001',
+          name: '김민수',
+          phone: '010-2000-0001',
+          email: 'minsu@demo.com',
+          xrplAddress: 'rDemoConsumer1234567890ABCDEF',
+        },
+      ],
+      paymentRequests: [],
+      escrows: [
+        {
+          id: 'legacy-wallet-escrow',
+          consumerId: '00000000-0000-4000-a000-000000000001',
+          businessId: '00000000-0000-4000-a000-000000000020',
+          consumerAddress: 'rDemoConsumer1234567890ABCDEF',
+          businessAddress: 'rDemoBusiness2GymABCDEF123456',
+          totalAmount: 100,
+          monthlyAmount: 100,
+          months: 1,
+          escrowType: 'monthly',
+          currency: 'RLUSD',
+          issuer: 'rDemoIssuerRLUSD000000000001',
+          status: 'active',
+          createdAt: '2026-05-16T00:00:00.000Z',
+          updatedAt: '2026-05-16T00:00:00.000Z',
+          entries: [],
+        },
+      ],
+      chargeRequests: [],
+      refundReviewRequests: [],
+    });
+    mockBlobStorage.set(legacyStatePath, legacyState);
+    mockPublicBlobStorage.set(legacyStatePath, legacyState);
+    mockBlobUploadedAt.set(legacyStatePath, '2026-05-16T00:00:00.000Z');
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('https://blob.test/')) {
+        const pathname = decodeURIComponent(new URL(url).pathname.slice(1));
+        const body = mockPublicBlobStorage.get(pathname);
+        return {
+          ok: body !== undefined,
+          status: body === undefined ? 404 : 200,
+          json: async () => JSON.parse(body || '{}'),
+          text: async () => body || '',
+        } as Response;
+      }
+      if (originalFetch) return originalFetch(input);
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const apiHandler = loadFreshHandler();
+      const consumerBalanceResponse = await callApiWith(apiHandler, 'GET', '/api/consumer/00000000-0000-4000-a000-000000000001/balance');
+      const escrowsResponse = await callApiWith(
+        apiHandler,
+        'GET',
+        '/api/admin/escrows',
+        undefined,
+        { 'x-admin-id': 'admin', 'x-admin-secret': 'admin1234' },
+      );
+      const legacyEscrow = (escrowsResponse.body as any[]).find((escrow) => escrow.id === 'legacy-wallet-escrow');
+
+      expect(consumerBalanceResponse.body).toMatchObject({ xrplAddress: 'r3mmH7k7tsShoMBxhyvjWxmJtKnbqrEYK6' });
+      expect(legacyEscrow).toMatchObject({
+        consumerAddress: 'r3mmH7k7tsShoMBxhyvjWxmJtKnbqrEYK6',
+        businessAddress: 'rwX7on8RojAX9uV3KqqENTWdmJKDwJe3aw',
+        issuer: 'rNabsmcozdd6jAjDQdBjTdGNomgxH3dySP',
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete process.env.BLOB_READ_WRITE_TOKEN;
+      mockBlobStorage.clear();
+      mockPublicBlobStorage.clear();
+      mockBlobUploadedAt.clear();
+    }
+  });
+
   it('serves demo admin refund cases for every queue filter', async () => {
     const dashboardResponse = await callAdminApi('GET', '/api/admin/dashboard');
     const dashboard = dashboardResponse.body as any;
