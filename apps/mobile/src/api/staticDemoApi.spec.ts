@@ -2,8 +2,27 @@ const handler = require('../../api/[...path].js');
 const vercelConfig = require('../../../../vercel.json');
 
 const mockBlobStorage = new Map<string, string>();
+const mockPublicBlobStorage = new Map<string, string>();
 
 jest.mock('@vercel/blob', () => ({
+  get: jest.fn(async (pathname: string) => {
+    const body = mockBlobStorage.get(pathname);
+    if (!body) return null;
+    return {
+      stream: {
+        [Symbol.asyncIterator]() {
+          let done = false;
+          return {
+            next: async () => {
+              if (done) return { done: true, value: undefined };
+              done = true;
+              return { done: false, value: body };
+            },
+          };
+        },
+      },
+    };
+  }),
   list: jest.fn(async ({ prefix } = {}) => ({
     blobs: Array.from(mockBlobStorage.keys())
       .filter((pathname) => !prefix || pathname.startsWith(prefix))
@@ -15,6 +34,7 @@ jest.mock('@vercel/blob', () => ({
   })),
   put: jest.fn(async (pathname: string, body: string) => {
     mockBlobStorage.set(pathname, String(body));
+    if (!mockPublicBlobStorage.has(pathname)) mockPublicBlobStorage.set(pathname, String(body));
     return { pathname, url: `https://blob.test/${pathname}` };
   }),
 }), { virtual: true });
@@ -597,12 +617,13 @@ describe('static Demo API fixture', () => {
   it('persists QR approval across fresh serverless instances without relying on cookies', async () => {
     const originalFetch = globalThis.fetch;
     mockBlobStorage.clear();
+    mockPublicBlobStorage.clear();
     process.env.BLOB_READ_WRITE_TOKEN = 'test-token';
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('https://blob.test/')) {
         const pathname = decodeURIComponent(new URL(url).pathname.slice(1));
-        const body = mockBlobStorage.get(pathname);
+        const body = mockPublicBlobStorage.get(pathname);
         return {
           ok: body !== undefined,
           status: body === undefined ? 404 : 200,
@@ -684,6 +705,7 @@ describe('static Demo API fixture', () => {
       globalThis.fetch = originalFetch;
       delete process.env.BLOB_READ_WRITE_TOKEN;
       mockBlobStorage.clear();
+      mockPublicBlobStorage.clear();
     }
   });
 
